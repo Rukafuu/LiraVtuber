@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Virtual Environment
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Credentials and Sensitive Files
+.env
+src/config/service_account.json
+*.pem
+*.key
+*.p12
+
+# Local Data and Audio
+data/*.db
+data/*.db-journal
+data/*.sqlite
+data/*.mp3
+data/*.wav
+data/*.wav.bak
+data/last_response.mp3
+data/temp/
+data/cache/
+
+# Log files
+*.log
+logs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project Specific
+!data/.gitkeep

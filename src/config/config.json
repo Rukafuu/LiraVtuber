@@ -1,0 +1,30 @@
+{
+    "_comment_geral": "================= CONFIGURACOES GERAIS =================",
+    "user_role_name": "Nakamura",
+    "assistant_role_name": "Hana",
+    
+    "_comment_llm": "============== CONFIGURACOES DO CEREBRO (LLM) ================",
+    "_comment_llm_opcoes": "Opcoes validas para LLM_PROVIDER: 'groq', 'google_cloud'",
+    "LLM_PROVIDER": "google_cloud",
+    
+    "LLM_SETTINGS": {
+        "groq": {
+            "_comment": "Modelos Groq suportados: llama-3.3-70b-versatile, mixtral-8x7b-32768, etc.",
+            "modelo": "openai/gpt-oss-120b"
+        },
+        "google_cloud": {
+            "_comment": "Modelos Google suportados: gemini-2.5-pro, gemini-2.5-flash, etc.",
+            "modelo": "gemini-3.1-flash-lite-preview"
+        }
+    },
+
+    "_comment_tts": "================= CONFIGURACOES DE VOZ (TTS) =================",
+    "TTS_PROVIDER": "google",
+    "GOOGLE_TTS_VOICE": "pt-BR-Neural2-C",
+    "GOOGLE_TTS_LANG": "pt-BR",
+    "GOOGLE_TTS_RATE": 1.25,
+    "GOOGLE_TTS_PITCH": 1.4,
+
+    "_comment_sistema": "================ CONFIGURACOES DE SISTEMA ===================",
+    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe"
+}

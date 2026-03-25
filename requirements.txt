@@ -1,0 +1,12 @@
+﻿azure-cognitiveservices-speech==1.48.2
+edge-tts==7.2.8
+google-cloud-texttospeech==2.34.0
+google-generativeai==0.8.6
+groq==1.0.0
+keyboard==0.13.5
+numpy==2.2.6
+PyAudio==0.2.14
+pygame==2.6.1
+python-dotenv==1.2.1
+sounddevice==0.5.5
+tavily-python==0.7.23
