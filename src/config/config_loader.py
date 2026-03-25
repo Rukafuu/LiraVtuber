@@ -8,6 +8,9 @@ load_dotenv()
 ENV_KEYS = (
     "GROQ_API_KEY",
     "GEMINI_API_KEY",
+    "CEREBRAS_API_KEY",
+    "OPENROUTER_API_KEY",
+    "TAVILY_API_KEY",
     "GOOGLE_APPLICATION_CREDENTIALS",
 )
 

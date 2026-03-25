@@ -1,20 +1,35 @@
 {
-    "_comment_geral": "================= CONFIGURACOES GERAIS =================",
+    "_comentario": "═══════════════════════════════════════════════════════",
+    "_titulo": "Hana — Configuração Master (settings.json)",
+    "_nota": "Chaves secretas (API keys) ficam no .env, NÃO aqui.",
+    "_comentario_fim": "═══════════════════════════════════════════════════════",
+    
     "user_role_name": "Nakamura",
     "assistant_role_name": "Hana",
-    
-    "_comment_llm": "============== CONFIGURACOES DO CEREBRO (LLM) ================",
-    "_comment_llm_opcoes": "Opcoes validas para LLM_PROVIDER: 'groq', 'google_cloud'",
+
+    "___SECAO_LLM___": "══════════ CÉREBRO ══════════",
     "LLM_PROVIDER": "google_cloud",
-    
-    "LLM_SETTINGS": {
+    "LLM_TEMPERATURE": 0.85,
+
+    "LLM_PROVIDERS": {
         "groq": {
-            "_comment": "Modelos Groq suportados: llama-3.3-70b-versatile, mixtral-8x7b-32768, etc.",
-            "modelo": "openai/gpt-oss-120b"
+            "modelo": "llama-3.3-70b-versatile",
+            "modelo_chat": "llama-3.3-70b-versatile",
+            "modelo_vision": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "modelo_web": "groq/compound-mini"
+        },
+        "cerebras": {
+            "modelo": "qwen-3-235b-a22b-instruct-2507"
+        },
+        "openrouter": {
+            "modelo": "x-ai/grok-4.1-fast",
+            "modelo_chat": "x-ai/grok-4.1-fast",
+            "modelo_vision": "x-ai/grok-4.1-fast"
         },
         "google_cloud": {
-            "_comment": "Modelos Google suportados: gemini-2.5-pro, gemini-2.5-flash, etc.",
-            "modelo": "gemini-3.1-flash-lite-preview"
+            "modelo": "gemini-3.1-flash-lite-preview",
+            "modelo_vision": "gemini-3.1-flash-lite-preview",
+            "modelo_chat": "gemini-3.1-flash-lite-preview"
         }
     },
 
@@ -26,5 +41,7 @@
     "GOOGLE_TTS_PITCH": 1.4,
 
     "_comment_sistema": "================ CONFIGURACOES DE SISTEMA ===================",
-    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe"
+    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe",
+    "VISAO_ATIVA": true,
+    "VISAO_MONITOR": 1
 }

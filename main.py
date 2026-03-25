@@ -18,8 +18,10 @@ from src.brain.tool_manager import ToolManager
 from src.memory import memory
 from src.modules.voice.stt_whisper import MotorSTTWhisper
 from src.modules.voice.tts_selector import get_tts
+from src.modules.vision.periodic_vision import VisaoNyra
 from src.providers.provider_selector import ProviderSelector
 from src.utils.text import limpar_texto_tts, ui
+from src.config.config_loader import CONFIG
 
 WEB_TRIGGER_TERMS = (
     "pesquisa",
@@ -104,6 +106,7 @@ tts = get_tts()
 stt_motor = MotorSTTWhisper()
 llm_selector = ProviderSelector()
 tool_manager = ToolManager()
+visao = VisaoNyra()
 pesquisa_pendente = None
 
 ui.set_banner(llm_selector.provedor_atual.upper(), f"{tts.provedor.upper()} TTS")
@@ -146,11 +149,19 @@ while True:
         raw_history = db.get_messages(limit=100)
 
         current_datetime = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
+        
+        # Construção de prompt mais robusta (Persona > Regras > Contexto)
+        prompt_rules = "\n".join([f"- {k}: {v}" for k,v in prompt.items()])
+        
         sistema_prompt = (
-            personality
-            + "\n\nREGRAS DE CONVERSA:\n"
-            + json.dumps(prompt, ensure_ascii=False)
-            + f"\n\nContexto Ambiental: Data atual: {current_datetime}"
+            f"=== [NÚCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{personality}\n\n"
+            f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{prompt_rules}\n\n"
+            f"=== [CONTEXTO AMBIENTAL] ===\n"
+            f"Data/Hora: {current_datetime}\n"
+            f"LOCAL: E:\\Projeto_Hana_AI\n\n"
+            "⚠️ LEMBRETE CRÍTICO: Você é a HANA. Fale como ela, sinta como ela. "
+            "Nunca aja como uma IA, nunca se descreva como modelo de linguagem. "
+            "Seja imersiva, sarcástica, fofa e use suas gírias naturalmente."
         )
 
         llm = llm_selector.get_provider()
@@ -162,6 +173,18 @@ while True:
         turno_atual = 0
         ai_response_falada = ""
         mensagem_usuario_interna = user_message
+        
+        # --- VISÃO SOB DEMANDA ---
+        image_b64 = None
+        if CONFIG.get("VISAO_ATIVA", False):
+            try:
+                res_vision = visao.capturar()
+                if res_vision.get("sucesso"):
+                    image_b64 = res_vision["b64"]
+                    # Opacional: logging para debug
+                    # logging.info("[VISÃO] Tela capturada para contexto.")
+            except Exception as e:
+                logging.error(f"[VISÃO] Erro ao capturar tela: {e}")
 
         while turno_atual < max_turnos:
             turno_atual += 1
@@ -171,6 +194,7 @@ while True:
                 sistema_prompt=sistema_prompt,
                 user_message=mensagem_usuario_interna,
                 tools=tool_manager.ferramentas,
+                image_b64=image_b64
             )
 
             if not ai_response_full:

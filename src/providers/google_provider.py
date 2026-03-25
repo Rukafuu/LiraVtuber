@@ -1,73 +1,69 @@
 """
 Provider LLM: Google Gemini
-Conecta-se à API do Google Generative AI.
 """
 
 import os
-import logging
-from dotenv import load_dotenv
 import google.generativeai as genai
 from src.brain.base_llm import BaseLLM
-from src.utils.text import ui
-
-logger = logging.getLogger(__name__)
+from src.config.config_loader import CONFIG
 
 class GoogleProvider(BaseLLM):
     def __init__(self):
+        self.provedor = "google_cloud"
+        prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
+        self.modelo_chat = prov_cfg.get("modelo", "gemini-1.5-pro")
         super().__init__()
-        load_dotenv()
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        
-        # Carrega o modelo de forma dinâmica pelo config.json
-        from src.config.config_loader import CONFIG
-        self.modelo = CONFIG.get("LLM_SETTINGS", {}).get("google_cloud", {}).get("modelo", "gemini-2.5-pro")
-        
-        if not self.api_key:
-            logger.error("[GOOGLE LLM] GEMINI_API_KEY não encontrada no .env!")
-        else:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(self.modelo)
-            self.config_valida = True
-            logger.info("[GOOGLE LLM] Provider inicializado com sucesso.")
 
-    def gerar_resposta(self, chat_history: list, sistema_prompt: str, user_message: str, tools: list = None) -> str:
-        if not self.config_valida:
+    def _criar_cliente(self):
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
             return None
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel(self.modelo_chat)
 
-        # Montar mensagens no formato do Google Generative AI
-        # O Gemini tem regras estritas de histórico "user" e "model"
+    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None):
+        # Gemini tem formato diferente de mensagens
+        modelo_exec = modelo
+        if image_b64:
+            prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
+            modelo_exec = prov_cfg.get("modelo_vision", modelo)
+        
         google_history = []
-        for msg in chat_history:
-            role = "user" if msg["role"] == "Nakamura" else "model"
+        user_msg_content = mensagens[-1]["content"]
+        
+        # Converter histórico
+        for msg in mensagens[:-1]:
+            role = "user" if msg["role"] == "user" else "model"
             google_history.append({"role": role, "parts": [msg["content"]]})
 
-        try:
-            ui.print_pensando("GEMINI-2.5")
-            
-            # Inicializa chat com o histórico
-            chat = self.client.start_chat(history=google_history)
-            
-            # Formata o prompt do usuário incluindo o sistema para forçar obediência
-            # (No Gemini livre, o system_instruction pode ser passado no construtor)
-            self.client = genai.GenerativeModel(
-                model_name=self.modelo,
-                system_instruction=sistema_prompt
-            )
-            chat = self.client.start_chat(history=google_history)
+        # Se houver imagem, o conteúdo do usuário é uma lista [texto, imagem]
+        full_user_content = [user_msg_content]
+        if image_b64:
+            import base64
+            from io import BytesIO
+            from PIL import Image
+            img_data = base64.b64decode(image_b64)
+            img_pil = Image.open(BytesIO(img_data))
+            full_user_content.append(img_pil)
 
-            response = chat.send_message(user_message, stream=True)
-
-            print(f"{ui.C_NYRA}[HANA]{ui.C_RST}: ", end="", flush=True)
-            ai_response_full = ""
-            for chunk in response:
-                content = chunk.text
-                ai_response_full += content
-                print(content, end="", flush=True)
-            print()
-
-            return ai_response_full
-
-        except Exception as e:
-            logger.error(f"[GOOGLE LLM] Erro de API: {e}")
-            ui.print_info_livre("Hana: (Os servidores do Google estão rindo de mim. Falha na conexão...)")
-            return None
+        chat = self.cliente.start_chat(history=google_history)
+        
+        # Recriar o modelo com o ID de visão se necessário
+        if image_b64 and modelo_exec != modelo:
+            model_vision = genai.GenerativeModel(modelo_exec)
+            response = model_vision.generate_content([user_msg_content, img_pil])
+        else:
+            response = chat.send_message(full_user_content)
+        
+        class MockResponse:
+            class MockChoice:
+                class MockMessage:
+                    def __init__(self, content):
+                        self.content = content
+                        self.tool_calls = None
+                def __init__(self, content):
+                    self.message = self.MockMessage(content)
+            def __init__(self, text):
+                self.choices = [self.MockChoice(text)]
+        
+        return MockResponse(response.text)

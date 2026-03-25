@@ -28,6 +28,12 @@ class ProviderSelector:
             elif prov == "google_cloud":
                 from src.providers.google_provider import GoogleProvider
                 self.instancias[prov] = GoogleProvider()
+            elif prov == "cerebras":
+                from src.providers.cerebras_provider import CerebrasProvider
+                self.instancias[prov] = CerebrasProvider()
+            elif prov == "openrouter":
+                from src.providers.openrouter_provider import OpenRouterProvider
+                self.instancias[prov] = OpenRouterProvider()
             else:
                 logger.error(f"[PROVIDER SELECTOR] Provedor '{prov}' não suportado. Fallback para Groq.")
                 from src.providers.groq_provider import GroqProvider
