@@ -33,6 +33,7 @@ data/*.wav.bak
 data/last_response.mp3
 data/temp/
 data/cache/
+temp/ultima_visao.png
 
 # Log files
 *.log

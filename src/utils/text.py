@@ -78,6 +78,7 @@ def limpar_texto_tts(texto: str) -> str:
     # Removemos: *, `, ~, (), [], {}, ^, aspas, e outros símbolos estranhos
     for char in ['*', '**', '** **', '`', '~', '(', ')', '[', ']', '{', '}', '^', '«', '»', '"', "'", '‹', '›', '„', '“', '”']:
         texto_limpo = texto_limpo.replace(char, '')
+        texto_limpo = texto_limpo.replace('_', '').replace('__', '').replace('___', '')
 
     # 10. Normaliza espaços múltiplos e linhas em branco
     texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()

@@ -1,16 +1,13 @@
 {
     "_comentario": "═══════════════════════════════════════════════════════",
-    "_titulo": "Hana — Configuração Master (settings.json)",
+    "_titulo": "Hana — Configuração Master (config.json)",
     "_nota": "Chaves secretas (API keys) ficam no .env, NÃO aqui.",
     "_comentario_fim": "═══════════════════════════════════════════════════════",
-    
     "user_role_name": "Nakamura",
     "assistant_role_name": "Hana",
-
-    "___SECAO_LLM___": "══════════ CÉREBRO ══════════",
-    "LLM_PROVIDER": "google_cloud",
+    "___SECAO_LLM___": "══════════ CÉREBRO (TERMINAL) ══════════",
+    "LLM_PROVIDER": "openrouter",
     "LLM_TEMPERATURE": 0.85,
-
     "LLM_PROVIDERS": {
         "groq": {
             "modelo": "llama-3.3-70b-versatile",
@@ -32,16 +29,33 @@
             "modelo_chat": "gemini-3.1-flash-lite-preview"
         }
     },
-
+    "_comment_chat": "================= CHAT DA GUI (PROVEDOR INDEPENDENTE) =================",
+    "CHAT": {
+        "LLM_PROVIDER": "openrouter",
+        "LLM_MODEL": "x-ai/grok-4.1-fast",
+        "LLM_TEMPERATURE": 0.85,
+        "usa_mesmo_prompt_terminal": true
+    },
     "_comment_tts": "================= CONFIGURACOES DE VOZ (TTS) =================",
     "TTS_PROVIDER": "google",
     "GOOGLE_TTS_VOICE": "pt-BR-Neural2-C",
     "GOOGLE_TTS_LANG": "pt-BR",
     "GOOGLE_TTS_RATE": 1.25,
     "GOOGLE_TTS_PITCH": 1.4,
-
-    "_comment_sistema": "================ CONFIGURACOES DE SISTEMA ===================",
-    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe",
+    "_comment_toggles": "================= TOGGLES DE MÓDULOS =================",
+    "TTS_ATIVO": true,
+    "STT_ATIVO": true,
     "VISAO_ATIVA": true,
-    "VISAO_MONITOR": 1
+    "VISAO_MONITOR": 1,
+    "VTUBESTUDIO_ATIVO": false,
+    "Modo_discord": false,
+    "_comment_gui": "================= GUI (PERSONALIZAÇÃO VISUAL) =================",
+    "GUI": {
+        "accent_color": "#f472b6",
+        "bg_opacity": 1.0,
+        "ptt_key": "F2",
+        "ptt_enabled": false
+    },
+    "_comment_sistema": "================ CONFIGURACOES DE SISTEMA ===================",
+    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe"
 }

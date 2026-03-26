@@ -93,13 +93,10 @@ def resposta_recusa_pesquisa(texto: str) -> bool:
     )
 
 
-with open("src/config/persona.txt", "r", encoding="utf-8") as f:
-    personality = f.read()
-
-with open("src/config/prompt.json", "r", encoding="utf-8") as f:
-    prompt = json.load(f)
-
 load_dotenv()
+
+# Persona e prompt são lidos dentro do loop para hot-reload da GUI
+_ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
 
 db = memory("data/hana_memory.db")
 tts = get_tts()
@@ -113,7 +110,23 @@ ui.set_banner(llm_selector.provedor_atual.upper(), f"{tts.provedor.upper()} TTS"
 
 while True:
     try:
+        # Hot-reload: recarrega config.json se a GUI alterou algo
+        if CONFIG.reload():
+            # Hot-swap de provedor LLM se mudou
+            novo_prov = CONFIG.get("LLM_PROVIDER", "groq")
+            if novo_prov != _ultimo_provedor:
+                llm_selector = ProviderSelector()
+                _ultimo_provedor = novo_prov
+                logging.info(f"[MAIN] Provedor LLM trocado para: {novo_prov}")
+
         ui.novo_turno()
+
+        # Verifica toggle STT
+        if not CONFIG.get("STT_ATIVO", True):
+            import time
+            time.sleep(1)
+            continue
+
         user_message = stt_motor.transcrever()
 
         if not user_message or user_message.strip() == "":
@@ -148,9 +161,21 @@ while True:
 
         raw_history = db.get_messages(limit=100)
 
+        # Lê persona e prompt a cada turno (hot-reload da GUI)
+        try:
+            with open("src/config/persona.txt", "r", encoding="utf-8") as f:
+                personality = f.read()
+        except Exception:
+            personality = ""
+
+        try:
+            with open("src/config/prompt.json", "r", encoding="utf-8") as f:
+                prompt = json.load(f)
+        except Exception:
+            prompt = {}
+
         current_datetime = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
         
-        # Construção de prompt mais robusta (Persona > Regras > Contexto)
         prompt_rules = "\n".join([f"- {k}: {v}" for k,v in prompt.items()])
         
         sistema_prompt = (
@@ -274,10 +299,12 @@ while True:
         if not ai_response_falada:
             continue
 
-        texto_limpo_tts = limpar_texto_tts(ai_response_falada)
-        if texto_limpo_tts.strip():
-            ui.print_falando(tts.provedor)
-            tts.falar(texto_limpo_tts)
+        # Verifica toggle TTS antes de falar
+        if CONFIG.get("TTS_ATIVO", True):
+            texto_limpo_tts = limpar_texto_tts(ai_response_falada)
+            if texto_limpo_tts.strip():
+                ui.print_falando(tts.provedor)
+                tts.falar(texto_limpo_tts)
 
         base_user_msg = mensagem_usuario_interna.split("\n\n[FERRAMENTA")[0]
         db.add_message("Nakamura", base_user_msg)
