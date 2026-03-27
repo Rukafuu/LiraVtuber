@@ -6,7 +6,7 @@
     "user_role_name": "Nakamura",
     "assistant_role_name": "Hana",
     "___SECAO_LLM___": "══════════ CÉREBRO (TERMINAL) ══════════",
-    "LLM_PROVIDER": "openrouter",
+    "LLM_PROVIDER": "google_cloud",
     "LLM_TEMPERATURE": 0.85,
     "LLM_PROVIDERS": {
         "groq": {
@@ -51,7 +51,7 @@
     "Modo_discord": false,
     "_comment_gui": "================= GUI (PERSONALIZAÇÃO VISUAL) =================",
     "GUI": {
-        "accent_color": "#f472b6",
+        "accent_color": "#3b82f6",
         "bg_opacity": 1.0,
         "ptt_key": "F2",
         "ptt_enabled": false

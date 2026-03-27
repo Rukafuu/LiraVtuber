@@ -1,60 +1,81 @@
 """
-Provider LLM: Google Gemini
+Provider LLM: Google Gemini (SDK novo — google.genai)
 """
 
 import os
-import google.generativeai as genai
+import logging
+from google import genai
+from google.genai import types
 from src.brain.base_llm import BaseLLM
 from src.config.config_loader import CONFIG
+
+logger = logging.getLogger(__name__)
 
 class GoogleProvider(BaseLLM):
     def __init__(self):
         self.provedor = "google_cloud"
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-        self.modelo_chat = prov_cfg.get("modelo", "gemini-1.5-pro")
+        self.modelo_chat = prov_cfg.get("modelo", "gemini-2.5-flash-preview-04-17")
         super().__init__()
 
     def _criar_cliente(self):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
+            logger.error("[GOOGLE] GEMINI_API_KEY não encontrada.")
             return None
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel(self.modelo_chat)
+        client = genai.Client(api_key=api_key)
+        logger.info(f"[GOOGLE] Cliente inicializado com modelo: {self.modelo_chat}")
+        return client
 
     def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None):
-        # Gemini tem formato diferente de mensagens
+        # Determina o modelo (visão ou padrão)
         modelo_exec = modelo
         if image_b64:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
             modelo_exec = prov_cfg.get("modelo_vision", modelo)
-        
-        google_history = []
-        user_msg_content = mensagens[-1]["content"]
-        
-        # Converter histórico
-        for msg in mensagens[:-1]:
-            role = "user" if msg["role"] == "user" else "model"
-            google_history.append({"role": role, "parts": [msg["content"]]})
 
-        # Se houver imagem, o conteúdo do usuário é uma lista [texto, imagem]
-        full_user_content = [user_msg_content]
-        if image_b64:
+        # Monta o histórico no formato do novo SDK
+        contents = []
+        system_instruction = None
+
+        for msg in mensagens:
+            role = msg["role"]
+            content_text = msg["content"]
+
+            if role == "system":
+                system_instruction = content_text
+                continue
+
+            gemini_role = "user" if role == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=gemini_role,
+                    parts=[types.Part.from_text(text=content_text)]
+                )
+            )
+
+        # Se houver imagem, adiciona ao último conteúdo do user
+        if image_b64 and contents:
             import base64
-            from io import BytesIO
-            from PIL import Image
-            img_data = base64.b64decode(image_b64)
-            img_pil = Image.open(BytesIO(img_data))
-            full_user_content.append(img_pil)
+            img_bytes = base64.b64decode(image_b64)
+            image_part = types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+            # Adiciona a imagem ao último content do user
+            contents[-1].parts.append(image_part)
 
-        chat = self.cliente.start_chat(history=google_history)
-        
-        # Recriar o modelo com o ID de visão se necessário
-        if image_b64 and modelo_exec != modelo:
-            model_vision = genai.GenerativeModel(modelo_exec)
-            response = model_vision.generate_content([user_msg_content, img_pil])
-        else:
-            response = chat.send_message(full_user_content)
-        
+        # Configuração de geração
+        gen_config = types.GenerateContentConfig(
+            temperature=self.temperatura,
+            system_instruction=system_instruction,
+        )
+
+        # Chamada à API
+        response = self.cliente.models.generate_content(
+            model=modelo_exec,
+            contents=contents,
+            config=gen_config,
+        )
+
+        # Adapta para o formato MockResponse esperado pelo BaseLLM
         class MockResponse:
             class MockChoice:
                 class MockMessage:
@@ -65,5 +86,5 @@ class GoogleProvider(BaseLLM):
                     self.message = self.MockMessage(content)
             def __init__(self, text):
                 self.choices = [self.MockChoice(text)]
-        
+
         return MockResponse(response.text)

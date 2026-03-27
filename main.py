@@ -1,12 +1,29 @@
 import datetime
 import json
 import logging
+import os
 import re
 import sys
+import warnings
+
+# === SILENCIAR AVISOS E LOGS BARULHENTOS (antes de qualquer import) ===
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+os.environ["TOKENIZERS_PARALLELISM"] = "false"      # Silencia warning do tokenizers
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"     # Remove barras de progresso do HuggingFace
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"        # Só mostra erros do transformers
 
 from dotenv import load_dotenv
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Silencia loggers específicos barulhentos
+for _noisy in ["httpx", "httpcore", "chromadb", "sentence_transformers",
+               "huggingface_hub", "urllib3", "opentelemetry", "google"]:
+    logging.getLogger(_noisy).setLevel(logging.ERROR)
+
+# Mantém apenas os logs da própria Hana visíveis
+logging.getLogger("src").setLevel(logging.INFO)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -15,7 +32,7 @@ except Exception:
     pass
 
 from src.brain.tool_manager import ToolManager
-from src.memory import memory
+from src.memory.memory_manager import HanaMemoryManager
 from src.modules.voice.stt_whisper import MotorSTTWhisper
 from src.modules.voice.tts_selector import get_tts
 from src.modules.vision.periodic_vision import VisaoNyra
@@ -98,15 +115,22 @@ load_dotenv()
 # Persona e prompt são lidos dentro do loop para hot-reload da GUI
 _ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
 
-db = memory("data/hana_memory.db")
 tts = get_tts()
 stt_motor = MotorSTTWhisper()
 llm_selector = ProviderSelector()
-tool_manager = ToolManager()
+memory_manager = HanaMemoryManager("data/hana_memory.db")
+tool_manager = ToolManager(memory_manager=memory_manager)
 visao = VisaoNyra()
 pesquisa_pendente = None
 
-ui.set_banner(llm_selector.provedor_atual.upper(), f"{tts.provedor.upper()} TTS")
+# Obtém o modelo LLM atual para exibir no banner
+_llm_model = CONFIG.get("LLM_PROVIDERS", {}).get(_ultimo_provedor, {}).get("modelo", "desconhecido")
+ui.set_banner(
+    stt_info="GROQ WHISPER",
+    tts_info=f"{tts.provedor.upper()} TTS",
+    provider_info=llm_selector.provedor_atual.upper(),
+    model_info=_llm_model
+)
 
 while True:
     try:
@@ -154,12 +178,14 @@ while True:
                 if texto_limpo_tts.strip():
                     ui.print_falando(tts.provedor)
                     tts.falar(texto_limpo_tts)
-
-                db.add_message("Nakamura", user_message)
-                db.add_message("Hana", ai_response_falada)
+                
+                memory_manager.add_interaction("Nakamura", user_message)
+                memory_manager.add_interaction("Hana", ai_response_falada)
                 continue
 
-        raw_history = db.get_messages(limit=100)
+        # --- MEMÓRIA HÍBRIDA (CONTEXTO LONGO E FATOS) ---
+        mem_context = memory_manager.get_context(user_message)
+        raw_history = memory_manager.get_messages(limit=100)
 
         # Lê persona e prompt a cada turno (hot-reload da GUI)
         try:
@@ -183,7 +209,8 @@ while True:
             f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{prompt_rules}\n\n"
             f"=== [CONTEXTO AMBIENTAL] ===\n"
             f"Data/Hora: {current_datetime}\n"
-            f"LOCAL: E:\\Projeto_Hana_AI\n\n"
+            f"LOCAL: E:\\Projeto_Hana_AI\n"
+            f"{mem_context}\n\n"
             "⚠️ LEMBRETE CRÍTICO: Você é a HANA. Fale como ela, sinta como ela. "
             "Nunca aja como uma IA, nunca se descreva como modelo de linguagem. "
             "Seja imersiva, sarcástica, fofa e use suas gírias naturalmente."
@@ -307,8 +334,8 @@ while True:
                 tts.falar(texto_limpo_tts)
 
         base_user_msg = mensagem_usuario_interna.split("\n\n[FERRAMENTA")[0]
-        db.add_message("Nakamura", base_user_msg)
-        db.add_message("Hana", ai_response_falada)
+        memory_manager.add_interaction("Nakamura", base_user_msg)
+        memory_manager.add_interaction("Hana", ai_response_falada)
 
     except KeyboardInterrupt:
         print("\n")

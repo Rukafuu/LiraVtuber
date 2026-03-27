@@ -124,12 +124,13 @@ class HanaControlCenter(ctk.CTk):
         menus = [
             ("🖥  Monitor Geral",     4,  "geral"),
             ("🧠  Cérebro",           5,  "llm"),
-            ("💬  Terminal Chat",     6,  "chat"),
-            ("📝  Persona",          7,  "persona"),
-            ("⚙  Prompts",           8,  "prompts"),
-            ("🔌  Conexões",         9,  "conexoes"),
-            ("🎨  Personalização",   10, "personalizacao"),
-            ("📋  Logs",             11, "logs"),
+            ("💾  Memória",           6,  "memoria"),
+            ("💬  Terminal Chat",     7,  "chat"),
+            ("📝  Persona",          8,  "persona"),
+            ("⚙  Prompts",           9,  "prompts"),
+            ("🔌  Conexões",         10, "conexoes"),
+            ("🎨  Personalização",   11, "personalizacao"),
+            ("📋  Logs",             12, "logs"),
         ]
         for texto, row, key in menus:
             btn = ctk.CTkButton(
@@ -171,6 +172,7 @@ class HanaControlCenter(ctk.CTk):
 
         from src.gui.frames.tab_geral import TabGeral
         from src.gui.frames.tab_llm import TabLLM
+        from src.gui.frames.tab_memoria import TabMemoria
         from src.gui.frames.tab_chat import TabChat
         from src.gui.frames.tab_persona import TabPersona
         from src.gui.frames.tab_prompts import TabPrompts
@@ -181,6 +183,7 @@ class HanaControlCenter(ctk.CTk):
         tab_classes = {
             "geral":          TabGeral,
             "llm":            TabLLM,
+            "memoria":        TabMemoria,
             "chat":           TabChat,
             "persona":        TabPersona,
             "prompts":        TabPrompts,

@@ -78,7 +78,7 @@ def limpar_texto_tts(texto: str) -> str:
     # Removemos: *, `, ~, (), [], {}, ^, aspas, e outros símbolos estranhos
     for char in ['*', '**', '** **', '`', '~', '(', ')', '[', ']', '{', '}', '^', '«', '»', '"', "'", '‹', '›', '„', '“', '”']:
         texto_limpo = texto_limpo.replace(char, '')
-        texto_limpo = texto_limpo.replace('_', '').replace('__', '').replace('___', '')
+        texto_limpo = texto_limpo.replace('_', '').replace('__', '').replace('___', '').replace('#', '').replace('##', '').replace('###', '')
 
     # 10. Normaliza espaços múltiplos e linhas em branco
     texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
@@ -196,13 +196,15 @@ class ConsoleUI:
         sys.stdout.write(f"\r\033[K{self.GRAY}{self.prefix} {hora} ℹ️ {msg}{self.C_RST}\n")
         sys.stdout.flush()
 
-    def set_banner(self, stt_info: str, tts_info: str):
-        """Imprime o banner de boot da Hana com STT e TTS atuais."""
+    def set_banner(self, stt_info: str, tts_info: str, provider_info: str = "", model_info: str = ""):
+        """Imprime o banner de boot da Hana com STT, TTS, Provider e Modelo."""
         border = f"{self.BOLD}{self.C_NYRA}======================================================={self.C_RST}"
         
         print("\n" + border)
         print(f" {self.C_SYS}✨ HANA ONLINE E PRONTA PARA OUVIR ✨{self.C_RST}")
         print(f" {self.GRAY}STT: {self.BOLD}{stt_info}{self.C_RST}{self.GRAY} | TTS: {self.BOLD}{tts_info}{self.C_RST}")
+        if provider_info:
+            print(f" {self.GRAY}PROVEDOR: {self.BOLD}{provider_info}{self.C_RST}{self.GRAY} | LLM: {self.BOLD}{model_info}{self.C_RST}")
         print(f" {self.GRAY}Pressiona e segura a tecla configurada para falar.")
         print(f" Diz/Digite 'Desligar sistema' para encerrar.{self.C_RST}")
         print(border + "\n")

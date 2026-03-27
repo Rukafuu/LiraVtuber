@@ -32,12 +32,41 @@ FERRAMENTAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "anotar_fato",
+            "description": (
+                "Memoriza um fato importante sobre o usuario ou o mundo para nunca esquecer. "
+                "Use isso quando o usuario pedir para 'lembrar', 'anotar', 'decorar' ou "
+                "quando ele mencionar algo pessoal relevante (ex: nome do pet, aniversario, preferencias)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sujeito": {
+                        "type": "string",
+                        "description": "O sujeito do fato (ex: 'Nakamura', 'Gato do Nakamura').",
+                    },
+                    "relacao": {
+                        "type": "string",
+                        "description": "A acao ou relacao (ex: 'gosta_de', 'mora_em', 'tem_nome').",
+                    },
+                    "objeto": {
+                        "type": "string",
+                        "description": "O valor ou objeto do fato (ex: 'Morango', 'Sushi', 'Sao Paulo').",
+                    }
+                },
+                "required": ["sujeito", "relacao", "objeto"],
+            },
+        },
+    },
 ]
 
 
 class ToolManager:
-    def __init__(self):
-        pass
+    def __init__(self, memory_manager=None):
+        self.memory_manager = memory_manager
 
     @property
     def ferramentas(self) -> list:
@@ -46,6 +75,9 @@ class ToolManager:
     def executar_tool(self, nome_tool: str, args: dict) -> tuple:
         if nome_tool == "pesquisar_na_web":
             return self._despachar_pesquisa(args)
+        
+        if nome_tool == "anotar_fato":
+            return self._despachar_anotacao(args)
 
         logger.warning(f"[TOOL MANAGER] Tool desconhecida: {nome_tool}")
         return ("Menu_Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
@@ -97,3 +129,25 @@ class ToolManager:
                 f"Erro na API Tavily: {str(e)}",
                 "A pesquisa na web falhou.",
             )
+
+    def _despachar_anotacao(self, args: dict) -> tuple:
+        """Executa a persistência de um fato no sistema de memória."""
+        s = args.get("sujeito", "")
+        r = args.get("relacao", "")
+        o = args.get("objeto", "")
+        
+        if not (s and r and o):
+            return ("Dados incompletos para anotar o fato.", "Ops, não entendi o que você quer que eu anote.")
+            
+        if self.memory_manager:
+            try:
+                self.memory_manager.add_fact(s, r, o)
+                msg_cons = f"Fato gravado: {s} --[{r}]--> {o}"
+                logger.info(f"[TOOL] {msg_cons}")
+                return (msg_cons, f"Entendido! Anotei aqui que {s} {r} {o} e não vou mais esquecer.")
+            except Exception as e:
+                logger.error(f"[TOOL] Erro ao gravar fato: {e}")
+                return (f"Erro técnico ao salvar memória: {e}", "Tive um problema ao tentar guardar essa informação.")
+        else:
+            logger.warning("[TOOL] MemoryManager não configurado no ToolManager.")
+            return ("MemoryManager indisponível.", "Não consigo guardar isso na memória permanente agora.")

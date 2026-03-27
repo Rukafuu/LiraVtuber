@@ -34,6 +34,8 @@ data/last_response.mp3
 data/temp/
 data/cache/
 temp/ultima_visao.png
+ideias_para_atualização/
+data/memory/
 
 # Log files
 *.log
