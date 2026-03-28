@@ -9,20 +9,18 @@ import warnings
 # === SILENCIAR AVISOS E LOGS BARULHENTOS (antes de qualquer import) ===
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-os.environ["TOKENIZERS_PARALLELISM"] = "false"      # Silencia warning do tokenizers
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"     # Remove barras de progresso do HuggingFace
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"        # Só mostra erros do transformers
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Silencia loggers específicos barulhentos
 for _noisy in ["httpx", "httpcore", "chromadb", "sentence_transformers",
                "huggingface_hub", "urllib3", "opentelemetry", "google"]:
     logging.getLogger(_noisy).setLevel(logging.ERROR)
 
-# Mantém apenas os logs da própria Hana visíveis
 logging.getLogger("src").setLevel(logging.INFO)
 
 try:
@@ -36,52 +34,28 @@ from src.memory.memory_manager import HanaMemoryManager
 from src.modules.voice.stt_whisper import MotorSTTWhisper
 from src.modules.voice.tts_selector import get_tts
 from src.modules.vision.periodic_vision import VisaoNyra
+from src.modules.vision.image_gen import HanaImageGen
+from src.modules.emotion_engine import EmotionEngine
+from src.modules.vts_controller import VTSController
 from src.providers.provider_selector import ProviderSelector
 from src.utils.text import limpar_texto_tts, ui
+from src.utils.sentence_divider import SentenceDivider
 from src.config.config_loader import CONFIG
 
 WEB_TRIGGER_TERMS = (
-    "pesquisa",
-    "pesquisar",
-    "pesquise",
-    "buscar",
-    "busca",
-    "busque",
-    "procure",
-    "procurar",
-    "olha na web",
-    "olha na internet",
-    "na web",
-    "na internet",
-    "na net",
-    "online",
-    "google",
+    "pesquisa", "pesquisar", "pesquise", "buscar", "busca", "busque",
+    "procure", "procurar", "olha na web", "olha na internet",
+    "na web", "na internet", "na net", "online", "google",
 )
 
 WEB_CONFIRM_YES = (
-    "sim",
-    "pode",
-    "pode pesquisar",
-    "pesquisa",
-    "pesquise",
-    "procura",
-    "procure",
-    "busca",
-    "busque",
-    "ok",
-    "claro",
+    "sim", "pode", "pode pesquisar", "pesquisa", "pesquise",
+    "procura", "procure", "busca", "busque", "ok", "claro",
 )
 
 WEB_CONFIRM_NO = (
-    "nao",
-    "não",
-    "nao precisa",
-    "não precisa",
-    "deixa",
-    "deixa pra la",
-    "deixa pra lá",
-    "sem pesquisar",
-    "sem pesquisa",
+    "nao", "não", "nao precisa", "não precisa", "deixa",
+    "deixa pra la", "deixa pra lá", "sem pesquisar", "sem pesquisa",
 )
 
 
@@ -112,7 +86,6 @@ def resposta_recusa_pesquisa(texto: str) -> bool:
 
 load_dotenv()
 
-# Persona e prompt são lidos dentro do loop para hot-reload da GUI
 _ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
 
 tts = get_tts()
@@ -123,7 +96,26 @@ tool_manager = ToolManager(memory_manager=memory_manager)
 visao = VisaoNyra()
 pesquisa_pendente = None
 
-# Obtém o modelo LLM atual para exibir no banner
+# === Motor de Emoções ===
+emotion_engine = EmotionEngine()
+
+# === Gerador de Imagens ===
+image_gen = HanaImageGen()
+
+# === Controlador VTube Studio ===
+vts_controller = None
+if CONFIG.get("VTUBESTUDIO_ATIVO", False):
+    vts_cfg = CONFIG.get("VTUBE_STUDIO", {})
+    if isinstance(vts_cfg, dict):
+        vts_controller = VTSController(
+            host=vts_cfg.get("host", "localhost"),
+            port=vts_cfg.get("port", 8001),
+            emotion_map=vts_cfg.get("emotion_map", {})
+        )
+        emotion_engine.registrar_callback_emocao(vts_controller.trigger_emotion)
+        vts_controller.start()
+
+# Banner
 _llm_model = CONFIG.get("LLM_PROVIDERS", {}).get(_ultimo_provedor, {}).get("modelo", "desconhecido")
 ui.set_banner(
     stt_info="GROQ WHISPER",
@@ -134,18 +126,32 @@ ui.set_banner(
 
 while True:
     try:
-        # Hot-reload: recarrega config.json se a GUI alterou algo
+        # Hot-reload
         if CONFIG.reload():
-            # Hot-swap de provedor LLM se mudou
             novo_prov = CONFIG.get("LLM_PROVIDER", "groq")
             if novo_prov != _ultimo_provedor:
                 llm_selector = ProviderSelector()
                 _ultimo_provedor = novo_prov
                 logging.info(f"[MAIN] Provedor LLM trocado para: {novo_prov}")
 
-        ui.novo_turno()
+            # Hot-reload VTube Studio
+            if CONFIG.get("VTUBESTUDIO_ATIVO", False) and vts_controller is None:
+                vts_cfg = CONFIG.get("VTUBE_STUDIO", {})
+                if isinstance(vts_cfg, dict):
+                    vts_controller = VTSController(
+                        host=vts_cfg.get("host", "localhost"),
+                        port=vts_cfg.get("port", 8001),
+                        emotion_map=vts_cfg.get("emotion_map", {})
+                    )
+                    emotion_engine.registrar_callback_emocao(vts_controller.trigger_emotion)
+                    vts_controller.start()
+            elif not CONFIG.get("VTUBESTUDIO_ATIVO", False) and vts_controller is not None:
+                vts_controller.stop()
+                vts_controller = None
 
-        # Verifica toggle STT
+        ui.novo_turno()
+        emotion_engine.novo_turno()
+
         if not CONFIG.get("STT_ATIVO", True):
             import time
             time.sleep(1)
@@ -178,16 +184,15 @@ while True:
                 if texto_limpo_tts.strip():
                     ui.print_falando(tts.provedor)
                     tts.falar(texto_limpo_tts)
-                
+
                 memory_manager.add_interaction("Nakamura", user_message)
                 memory_manager.add_interaction("Hana", ai_response_falada)
                 continue
 
-        # --- MEMÓRIA HÍBRIDA (CONTEXTO LONGO E FATOS) ---
+        # --- MEMÓRIA HÍBRIDA ---
         mem_context = memory_manager.get_context(user_message)
         raw_history = memory_manager.get_messages(limit=100)
 
-        # Lê persona e prompt a cada turno (hot-reload da GUI)
         try:
             with open("src/config/persona.txt", "r", encoding="utf-8") as f:
                 personality = f.read()
@@ -201,8 +206,18 @@ while True:
             prompt = {}
 
         current_datetime = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
+        prompt_rules = "\n".join([f"- {k}: {v}" for k, v in prompt.items()])
+
+        # --- FERRAMENTAS DE IMAGEM (NOVO) ---
+        # Novo técnica de XML que roubei do Evertson
+        # <pensamento>seu raciocínio interno antes de falar</pensamento>
+        # <salvar_memoria>fato importante que você quer lembrar para sempre</salvar_memoria>
+        # <gerar_imagem>prompt detalhado em inglês para gerar uma imagem DO ZERO</gerar_imagem>
+        # <editar_imagem>prompt em inglês descrevendo a edição na ÚLTIMA imagem gerada</editar_imagem>
+        # <ferramenta_web>consulta em inglês para pesquisar na internet</ferramenta_web>
+
+        # Ainda falta adicionar a parte de web search
         
-        prompt_rules = "\n".join([f"- {k}: {v}" for k,v in prompt.items()])
         
         sistema_prompt = (
             f"=== [NÚCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{personality}\n\n"
@@ -213,7 +228,27 @@ while True:
             f"{mem_context}\n\n"
             "⚠️ LEMBRETE CRÍTICO: Você é a HANA. Fale como ela, sinta como ela. "
             "Nunca aja como uma IA, nunca se descreva como modelo de linguagem. "
-            "Seja imersiva, sarcástica, fofa e use suas gírias naturalmente."
+            "Seja imersiva, sarcástica, fofa e use suas gírias naturalmente.\n\n"
+            "=== [FORMATO DE SAÍDA] ===\n"
+            "Use [EMOTION:NOME] para sinalizar suas emoções (HAPPY, SAD, ANGRY, SHY, SURPRISED, SMUG, NEUTRAL, LOVE, SCARED, CONFUSED).\n\n"
+            "=== [HABILIDADES ESPECIAIS: TAGS XML] ===\n"
+            "Você pode executar ações silenciosas usando tags XML. Elas NÃO serão lidas em voz alta.\n"
+            "IMPORTANTE: Coloque as tags SEPARADAS do texto falado, de preferência no final da resposta.\n\n"
+            "Tags disponíveis:\n"
+            "<pensamento>seu raciocínio interno antes de falar</pensamento>\n"
+            "<salvar_memoria>fato importante que você quer lembrar para sempre</salvar_memoria>\n"
+            "<gerar_imagem>prompt detalhado em inglês para gerar uma imagem DO ZERO</gerar_imagem>\n"
+            "<editar_imagem>prompt em inglês descrevendo a edição na ÚLTIMA imagem gerada</editar_imagem>\n\n"
+            "Exemplo de resposta com geração:\n"
+            "<pensamento>O mestre quer que eu decore o nome do gato dele</pensamento>\n"
+            "[EMOTION:HAPPY] Anotado, mestre! Já gravei no meu cérebro que seu gato se chama Mimi, fufu.\n"
+            "<salvar_memoria>O gato do Nakamura se chama Mimi</salvar_memoria>\n\n"
+            "Exemplo de edição (SOMENTE após já ter uma imagem gerada):\n"
+            "[EMOTION:HAPPY] Pronto, editei a imagem como você pediu!\n"
+            "<editar_imagem>change the background to a beautiful sunset with orange sky</editar_imagem>\n\n"
+            "REGRA: Só use <gerar_imagem> quando o mestre PEDIR uma imagem explicitamente.\n"
+            "REGRA: Só use <editar_imagem> quando o mestre pedir para ALTERAR/EDITAR uma imagem já existente.\n"
+            "REGRA: Use <salvar_memoria> PROATIVAMENTE quando o mestre contar algo pessoal importante."
         )
 
         llm = llm_selector.get_provider()
@@ -221,11 +256,6 @@ while True:
             ui.print_info_livre("Erro: O provedor LLM não conseguiu ser inicializado.")
             continue
 
-        max_turnos = 3
-        turno_atual = 0
-        ai_response_falada = ""
-        mensagem_usuario_interna = user_message
-        
         # --- VISÃO SOB DEMANDA ---
         image_b64 = None
         if CONFIG.get("VISAO_ATIVA", False):
@@ -233,108 +263,89 @@ while True:
                 res_vision = visao.capturar()
                 if res_vision.get("sucesso"):
                     image_b64 = res_vision["b64"]
-                    # Opacional: logging para debug
-                    # logging.info("[VISÃO] Tela capturada para contexto.")
             except Exception as e:
                 logging.error(f"[VISÃO] Erro ao capturar tela: {e}")
 
-        while turno_atual < max_turnos:
-            turno_atual += 1
+        # ==============================================================
+        # STREAMING DIRETO — Uma única chamada à LLM
+        # O stream aparece no terminal em tempo real (visual rápido).
+        # A voz sai INTEIRA no final — sem cortes.
+        # ==============================================================
+        ui.print_pensando(llm.provedor.upper())
 
-            ai_response_full = llm.gerar_resposta(
-                chat_history=raw_history,
-                sistema_prompt=sistema_prompt,
-                user_message=mensagem_usuario_interna,
-                tools=tool_manager.ferramentas,
-                image_b64=image_b64
-            )
+        full_raw_response = []
+        full_tts_text = []  # Acumula TUDO para falar uma vez só
+        divider = SentenceDivider(faster_first_response=True)
 
-            if not ai_response_full:
-                break
+        token_stream = llm.gerar_resposta_stream(
+            chat_history=raw_history,
+            sistema_prompt=sistema_prompt,
+            user_message=user_message,
+            image_b64=image_b64
+        )
 
-            tool_name = None
-            tool_args = {}
-            texto_sujo = ai_response_full
+        for chunk in divider.process_stream(token_stream):
+            if chunk.is_thought:
+                # Pensamento interno — NÃO fala, mostra na GUI
+                emotion_engine.processar_pensamento(chunk.thought)
+                full_raw_response.append(chunk.raw)
+            else:
+                # Processar emoções (dispara VTS em tempo real)
+                for emo in chunk.emotions:
+                    emotion_engine.processar_emocao(emo)
 
-            try:
-                if ai_response_full.strip().startswith("{") and '"acao": "tool_call"' in ai_response_full:
-                    dados = json.loads(ai_response_full)
-                    if dados.get("tools"):
-                        primeira_tool = dados["tools"][0]
-                        tool_name = primeira_tool["function"]["name"]
-                        tool_args = json.loads(primeira_tool["function"]["arguments"] or "{}")
-                        texto_sujo = dados.get("texto", "")
-            except Exception as e:
-                logging.warning(f"[MAIN] Falha ao interpretar tool_call em JSON: {e}")
+                # Imprimir no terminal em tempo real (visual rápido)
+                print(f"{ui.C_NYRA}[HANA]{ui.C_RST}: {chunk.text}")
+                full_raw_response.append(chunk.raw)
 
-            if not tool_name:
-                match_call = re.search(
-                    r'<execute_tool\s+name=["\'](\w+)["\'](.*?)/>',
-                    texto_sujo,
-                    re.DOTALL | re.IGNORECASE,
-                )
-                if match_call:
-                    tool_name = match_call.group(1)
-                    resto = match_call.group(2)
-                    for m in re.finditer(r'([a-zA-Z_0-9]+)\s*=\s*["\'](.*?)["\']', resto):
-                        tool_args[m.group(1)] = m.group(2)
-                    texto_sujo = texto_sujo[: match_call.start()] + texto_sujo[match_call.end() :]
-                else:
-                    match_func = re.search(
-                        r"<function=(\w+)>(.*?)</function>",
-                        texto_sujo,
-                        re.DOTALL | re.IGNORECASE,
-                    )
-                    if match_func:
-                        tool_name = match_func.group(1)
-                        try:
-                            tool_args = json.loads(match_func.group(2).strip())
-                        except Exception as e:
-                            logging.warning(
-                                f"[MAIN] Falha ao interpretar argumentos da tool em tag <function>: {e}"
-                            )
-                        texto_sujo = texto_sujo[: match_func.start()] + texto_sujo[match_func.end() :]
+                # Acumular texto limpo para TTS
+                texto_tts = limpar_texto_tts(chunk.text)
+                if texto_tts.strip():
+                    full_tts_text.append(texto_tts.strip())
 
-            if tool_name:
-                if tool_name == "pesquisar_na_web" and not usuario_pediu_pesquisa(user_message):
-                    pesquisa_pendente = {
-                        "mensagem_original": user_message,
-                        "query": tool_args.get("query", ""),
-                    }
-                    ai_response_falada = (
-                        "Posso pesquisar na web para confirmar isso, mas prefiro sua permissão antes. "
-                        "Se quiser, diga 'pode pesquisar'. Se preferir, eu sigo sem pesquisar."
-                    )
-                    break
+        # ── FALA ÚNICA: Junta tudo e fala uma vez só ──
+        texto_final_tts = " ".join(full_tts_text)
+        if texto_final_tts.strip() and CONFIG.get("TTS_ATIVO", True):
+            ui.print_falando(tts.provedor)
+            tts.falar(texto_final_tts)
 
-                ui.print_executando(tool_name)
-                resultado_sis, resumo_tts = tool_manager.executar_tool(tool_name, tool_args)
+        ai_response_falada = " ".join(full_raw_response)
 
-                if resumo_tts and turno_atual == 1:
-                    ui.print_falando(tts.provedor)
-                    tts.falar(limpar_texto_tts(resumo_tts))
+        # ==============================================================
+        # PÓS-PROCESSAMENTO: Parser XML de ações silenciosas
+        # Processa tags embutidas na resposta da Hana.
+        # ==============================================================
 
-                mensagem_usuario_interna = (
-                    f"{mensagem_usuario_interna}\n\n"
-                    f"[FERRAMENTA {tool_name} EXECUTADA - RESULTADO]:\n{resultado_sis}"
-                )
-                continue
+        # 1. <salvar_memoria>conteúdo</salvar_memoria>
+        for match in re.finditer(r'<salvar_memoria>(.*?)</salvar_memoria>', ai_response_falada, re.DOTALL):
+            conteudo = match.group(1).strip()
+            if conteudo:
+                try:
+                    memory_manager.rag.add_memory(conteudo, metadata={"role": "hana", "source": "xml_tag"})
+                    memory_manager.graph.add_fact("hana_nota", "deve_lembrar", conteudo[:200])
+                    logging.info(f"[XML] 💾 Memória salva: {conteudo[:80]}...")
+                except Exception as e:
+                    logging.error(f"[XML] Erro ao salvar memória: {e}")
 
-            ai_response_falada = texto_sujo
-            break
+        # 2. <gerar_imagem>prompt</gerar_imagem>
+        for match in re.finditer(r'<gerar_imagem>(.*?)</gerar_imagem>', ai_response_falada, re.DOTALL):
+            prompt_img = match.group(1).strip()
+            if prompt_img:
+                logging.info(f"[XML] 🎨 Gerando imagem: {prompt_img[:80]}...")
+                image_gen.generate_and_show(prompt_img)
+
+        # 3. <editar_imagem>prompt de edição</editar_imagem>
+        for match in re.finditer(r'<editar_imagem>(.*?)</editar_imagem>', ai_response_falada, re.DOTALL):
+            prompt_edit = match.group(1).strip()
+            if prompt_edit:
+                logging.info(f"[XML] ✏️ Editando imagem: {prompt_edit[:80]}...")
+                image_gen.edit_and_show(prompt_edit)
 
         if not ai_response_falada:
             continue
 
-        # Verifica toggle TTS antes de falar
-        if CONFIG.get("TTS_ATIVO", True):
-            texto_limpo_tts = limpar_texto_tts(ai_response_falada)
-            if texto_limpo_tts.strip():
-                ui.print_falando(tts.provedor)
-                tts.falar(texto_limpo_tts)
-
-        base_user_msg = mensagem_usuario_interna.split("\n\n[FERRAMENTA")[0]
-        memory_manager.add_interaction("Nakamura", base_user_msg)
+        # Salva na memória
+        memory_manager.add_interaction("Nakamura", user_message)
         memory_manager.add_interaction("Hana", ai_response_falada)
 
     except KeyboardInterrupt:

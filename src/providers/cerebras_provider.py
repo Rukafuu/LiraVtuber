@@ -47,3 +47,17 @@ class CerebrasProvider(BaseLLM):
             kwargs["tools"] = ferramentas
             # Cerebras pode não suportar tool_choice em todos os modelos
         return self.cliente.chat.completions.create(**kwargs)
+
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+        """Stream de tokens via Cerebras SDK."""
+        stream = self.cliente.chat.completions.create(
+            model=modelo,
+            messages=mensagens,
+            temperature=self.temperatura,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
+

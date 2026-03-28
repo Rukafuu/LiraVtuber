@@ -49,3 +49,5 @@ logs/
 
 # Project Specific
 !data/.gitkeep
+temp/ultima_visao.png
+data/vts_token.txt

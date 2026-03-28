@@ -24,8 +24,8 @@
             "modelo_vision": "x-ai/grok-4.1-fast"
         },
         "google_cloud": {
-            "modelo": "gemini-3.1-flash-lite-preview",
-            "modelo_vision": "gemini-3.1-flash-lite-preview",
+            "modelo": "gemini-3.1-pro-preview",
+            "modelo_vision": "gemini-3.1-pro-preview",
             "modelo_chat": "gemini-3.1-flash-lite-preview"
         }
     },
@@ -47,8 +47,23 @@
     "STT_ATIVO": true,
     "VISAO_ATIVA": true,
     "VISAO_MONITOR": 1,
-    "VTUBESTUDIO_ATIVO": false,
+    "VTUBESTUDIO_ATIVO": true,
     "Modo_discord": false,
+    "_comment_vts": "================= VTUBE STUDIO (LIVE2D) =================",
+    "VTUBE_STUDIO": {
+        "host": "localhost",
+        "port": 8001,
+        "emotion_map": {
+            "HAPPY": "happy",
+            "SAD": "sad",
+            "ANGRY": "angry",
+            "SHY": "shy",
+            "SURPRISED": "surprised",
+            "SMUG": "smug",
+            "NEUTRAL": "neutral",
+            "LOVE": "8"
+        }
+    },
     "_comment_gui": "================= GUI (PERSONALIZAÇÃO VISUAL) =================",
     "GUI": {
         "accent_color": "#3b82f6",

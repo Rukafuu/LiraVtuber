@@ -71,7 +71,7 @@ class HanaControlCenter(ctk.CTk):
             border_width=0
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(12, weight=1)
+        self.sidebar.grid_rowconfigure(15, weight=1)
         self.sidebar.grid_propagate(False)
 
         # ── Foto de Perfil da Hana ──
@@ -125,12 +125,14 @@ class HanaControlCenter(ctk.CTk):
             ("🖥  Monitor Geral",     4,  "geral"),
             ("🧠  Cérebro",           5,  "llm"),
             ("💾  Memória",           6,  "memoria"),
-            ("💬  Terminal Chat",     7,  "chat"),
-            ("📝  Persona",          8,  "persona"),
-            ("⚙  Prompts",           9,  "prompts"),
-            ("🔌  Conexões",         10, "conexoes"),
-            ("🎨  Personalização",   11, "personalizacao"),
-            ("📋  Logs",             12, "logs"),
+            ("💭  Mente da Hana",    7,  "emocoes"),
+            ("🎭  VTube Studio",     8,  "vtube"),
+            ("💬  Terminal Chat",     9,  "chat"),
+            ("📝  Persona",          10, "persona"),
+            ("⚙  Prompts",           11, "prompts"),
+            ("🔌  Conexões",         12, "conexoes"),
+            ("🎨  Personalização",   13, "personalizacao"),
+            ("📋  Logs",             14, "logs"),
         ]
         for texto, row, key in menus:
             btn = ctk.CTkButton(
@@ -173,6 +175,8 @@ class HanaControlCenter(ctk.CTk):
         from src.gui.frames.tab_geral import TabGeral
         from src.gui.frames.tab_llm import TabLLM
         from src.gui.frames.tab_memoria import TabMemoria
+        from src.gui.frames.tab_emocoes import TabEmocoes
+        from src.gui.frames.tab_vtube import TabVTube
         from src.gui.frames.tab_chat import TabChat
         from src.gui.frames.tab_persona import TabPersona
         from src.gui.frames.tab_prompts import TabPrompts
@@ -184,6 +188,8 @@ class HanaControlCenter(ctk.CTk):
             "geral":          TabGeral,
             "llm":            TabLLM,
             "memoria":        TabMemoria,
+            "emocoes":        TabEmocoes,
+            "vtube":          TabVTube,
             "chat":           TabChat,
             "persona":        TabPersona,
             "prompts":        TabPrompts,

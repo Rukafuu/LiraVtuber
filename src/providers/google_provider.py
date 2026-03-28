@@ -88,3 +88,44 @@ class GoogleProvider(BaseLLM):
                 self.choices = [self.MockChoice(text)]
 
         return MockResponse(response.text)
+
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+        """Stream de tokens via Google GenAI SDK."""
+        modelo_exec = modelo
+        if image_b64:
+            prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
+            modelo_exec = prov_cfg.get("modelo_vision", modelo)
+
+        contents = []
+        system_instruction = None
+        for msg in mensagens:
+            role = msg["role"]
+            content_text = msg["content"]
+            if role == "system":
+                system_instruction = content_text
+                continue
+            gemini_role = "user" if role == "user" else "model"
+            contents.append(
+                types.Content(role=gemini_role, parts=[types.Part.from_text(text=content_text)])
+            )
+
+        if image_b64 and contents:
+            import base64
+            img_bytes = base64.b64decode(image_b64)
+            image_part = types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+            contents[-1].parts.append(image_part)
+
+        gen_config = types.GenerateContentConfig(
+            temperature=self.temperatura,
+            system_instruction=system_instruction,
+        )
+
+        # Usa stream
+        for chunk in self.cliente.models.generate_content_stream(
+            model=modelo_exec,
+            contents=contents,
+            config=gen_config,
+        ):
+            if chunk.text:
+                yield chunk.text
+

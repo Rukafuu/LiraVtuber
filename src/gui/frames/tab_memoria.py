@@ -293,6 +293,52 @@ class TabMemoria(ctk.CTkFrame):
         except Exception:
             pass
 
+    # ─── HISTÓRICO SQLITE ───
+
+    def _carregar_historico(self):
+        """Carrega as últimas mensagens do SQLite e exibe no painel."""
+        for widget in self.hist_scroll.winfo_children():
+            widget.destroy()
+
+        if not getattr(self, '_sqlite_path', None):
+            lbl = ctk.CTkLabel(self.hist_scroll, text="Banco de dados não encontrado.", font=FONT_SMALL, text_color=COLORS["text_muted"])
+            lbl.pack(pady=20)
+            self.lbl_hist_count.configure(text="0 mensagens")
+            return
+
+        try:
+            import sqlite3
+            conn = sqlite3.connect(self._sqlite_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT role, content, timestamp FROM messages ORDER BY id DESC LIMIT 50")
+            rows = cursor.fetchall()
+            conn.close()
+
+            self.lbl_hist_count.configure(text=f"{len(rows)} mensagens")
+
+            if not rows:
+                lbl = ctk.CTkLabel(self.hist_scroll, text="Nenhuma mensagem no histórico.", font=FONT_SMALL, text_color=COLORS["text_muted"])
+                lbl.pack(pady=20)
+                return
+
+            for role, content, ts in rows:
+                row = ctk.CTkFrame(self.hist_scroll, fg_color=COLORS["bg_card"], corner_radius=6)
+                row.pack(fill="x", padx=4, pady=2)
+
+                color = COLORS["purple_neon"] if role and role.lower() == "hana" else COLORS["blue_neon"]
+                display_role = role or "?"
+                preview = (content or "")[:120].replace("\n", " ")
+
+                lbl_role = ctk.CTkLabel(row, text=f"[{display_role}]", font=FONT_MONO, text_color=color, width=90, anchor="w")
+                lbl_role.pack(side="left", padx=(10, 5), pady=5)
+
+                lbl_msg = ctk.CTkLabel(row, text=preview, font=FONT_SMALL, text_color=COLORS["text_secondary"], anchor="w")
+                lbl_msg.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
+
+        except Exception as e:
+            lbl = ctk.CTkLabel(self.hist_scroll, text=f"Erro ao carregar: {e}", font=FONT_SMALL, text_color=COLORS["red"])
+            lbl.pack(pady=20)
+
     # ─── BUSCA RAG ───
 
     def _buscar_rag(self):

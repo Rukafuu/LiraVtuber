@@ -76,3 +76,31 @@ class OpenRouterProvider(BaseLLM):
             kwargs["tool_choice"] = tool_choice
             
         return self.cliente.chat.completions.create(**kwargs)
+
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+        """Stream de tokens via OpenRouter (OpenAI-compatible)."""
+        modelo_exec = modelo
+        if image_b64:
+            prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
+            modelo_exec = prov_cfg.get("modelo_vision", modelo)
+            ultima_msg = mensagens[-1]
+            mensagens[-1] = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": ultima_msg["content"]},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}}
+                ]
+            }
+
+        stream = self.cliente.chat.completions.create(
+            model=modelo_exec,
+            messages=mensagens,
+            temperature=self.temperatura,
+            max_tokens=8192,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
+
