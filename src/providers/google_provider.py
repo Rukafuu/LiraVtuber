@@ -27,10 +27,10 @@ class GoogleProvider(BaseLLM):
         logger.info(f"[GOOGLE] Cliente inicializado com modelo: {self.modelo_chat}")
         return client
 
-    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None):
+    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None, arquivos_multimidia: list = None):
         # Determina o modelo (visão ou padrão)
         modelo_exec = modelo
-        if image_b64:
+        if image_b64 or arquivos_multimidia:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
             modelo_exec = prov_cfg.get("modelo_vision", modelo)
 
@@ -54,18 +54,34 @@ class GoogleProvider(BaseLLM):
                 )
             )
 
-        # Se houver imagem, adiciona ao último conteúdo do user
+        # Se houver imagem base64, adiciona ao último conteúdo do user
         if image_b64 and contents:
             import base64
             img_bytes = base64.b64decode(image_b64)
             image_part = types.Part.from_bytes(data=img_bytes, mime_type="image/png")
-            # Adiciona a imagem ao último content do user
             contents[-1].parts.append(image_part)
 
-        # Configuração de geração
+        # Se houver arquivos multimidia (PDF, MP4, etc.), faz upload nativo
+        if arquivos_multimidia and contents:
+            for filepath in arquivos_multimidia:
+                if os.path.exists(filepath):
+                    try:
+                        logger.info(f"[GOOGLE] Uploading mídia para o Gemini: {filepath}")
+                        uploaded_file = self.cliente.files.upload(file=filepath)
+                        file_part = types.Part.from_uri(file_uri=uploaded_file.uri, mime_type=uploaded_file.mime_type)
+                        contents[-1].parts.append(file_part)
+                    except Exception as e:
+                        logger.error(f"[GOOGLE] Erro ao fazer upload de {filepath}: {e}")
+
+        # Configuração de geração com Google Search Grounding
+        tools_list = []
+        if not image_b64 and not arquivos_multimidia:
+            tools_list.append(types.Tool(google_search=types.GoogleSearch()))
+
         gen_config = types.GenerateContentConfig(
             temperature=self.temperatura,
             system_instruction=system_instruction,
+            tools=tools_list if tools_list else None,
         )
 
         # Chamada à API
@@ -89,10 +105,10 @@ class GoogleProvider(BaseLLM):
 
         return MockResponse(response.text)
 
-    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
         """Stream de tokens via Google GenAI SDK."""
         modelo_exec = modelo
-        if image_b64:
+        if image_b64 or arquivos_multimidia:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
             modelo_exec = prov_cfg.get("modelo_vision", modelo)
 
@@ -115,9 +131,25 @@ class GoogleProvider(BaseLLM):
             image_part = types.Part.from_bytes(data=img_bytes, mime_type="image/png")
             contents[-1].parts.append(image_part)
 
+        if arquivos_multimidia and contents:
+            for filepath in arquivos_multimidia:
+                if os.path.exists(filepath):
+                    try:
+                        logger.info(f"[GOOGLE STREAM] Uploading mídia para o Gemini: {filepath}")
+                        uploaded_file = self.cliente.files.upload(file=filepath)
+                        file_part = types.Part.from_uri(file_uri=uploaded_file.uri, mime_type=uploaded_file.mime_type)
+                        contents[-1].parts.append(file_part)
+                    except Exception as e:
+                        logger.error(f"[GOOGLE STREAM] Erro ao fazer upload de {filepath}: {e}")
+
+        tools_list = []
+        if not image_b64 and not arquivos_multimidia:
+            tools_list.append(types.Tool(google_search=types.GoogleSearch()))
+
         gen_config = types.GenerateContentConfig(
             temperature=self.temperatura,
             system_instruction=system_instruction,
+            tools=tools_list if tools_list else None,
         )
 
         # Usa stream

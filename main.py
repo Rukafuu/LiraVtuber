@@ -42,47 +42,6 @@ from src.utils.text import limpar_texto_tts, ui
 from src.utils.sentence_divider import SentenceDivider
 from src.config.config_loader import CONFIG
 
-WEB_TRIGGER_TERMS = (
-    "pesquisa", "pesquisar", "pesquise", "buscar", "busca", "busque",
-    "procure", "procurar", "olha na web", "olha na internet",
-    "na web", "na internet", "na net", "online", "google",
-)
-
-WEB_CONFIRM_YES = (
-    "sim", "pode", "pode pesquisar", "pesquisa", "pesquise",
-    "procura", "procure", "busca", "busque", "ok", "claro",
-)
-
-WEB_CONFIRM_NO = (
-    "nao", "não", "nao precisa", "não precisa", "deixa",
-    "deixa pra la", "deixa pra lá", "sem pesquisar", "sem pesquisa",
-)
-
-
-def _normalize_text(texto: str) -> str:
-    return (texto or "").strip().lower()
-
-
-def usuario_pediu_pesquisa(texto: str) -> bool:
-    texto_normalizado = _normalize_text(texto)
-    return any(trigger in texto_normalizado for trigger in WEB_TRIGGER_TERMS)
-
-
-def resposta_confirma_pesquisa(texto: str) -> bool:
-    texto_normalizado = _normalize_text(texto)
-    return any(
-        texto_normalizado == item or texto_normalizado.startswith(f"{item} ")
-        for item in WEB_CONFIRM_YES
-    )
-
-
-def resposta_recusa_pesquisa(texto: str) -> bool:
-    texto_normalizado = _normalize_text(texto)
-    return any(
-        texto_normalizado == item or texto_normalizado.startswith(f"{item} ")
-        for item in WEB_CONFIRM_NO
-    )
-
 
 load_dotenv()
 
@@ -94,7 +53,6 @@ llm_selector = ProviderSelector()
 memory_manager = HanaMemoryManager("data/hana_memory.db")
 tool_manager = ToolManager(memory_manager=memory_manager)
 visao = VisaoNyra()
-pesquisa_pendente = None
 
 # === Motor de Emoções ===
 emotion_engine = EmotionEngine()
@@ -168,27 +126,6 @@ while True:
             ui.print_info_livre("Hana: Desligando... Até logo Nakamura-sama!")
             break
 
-        if pesquisa_pendente:
-            if resposta_confirma_pesquisa(user_message):
-                user_message = (
-                    f"{pesquisa_pendente['mensagem_original']}\n\n"
-                    f"[USUARIO AUTORIZOU PESQUISA NA WEB]\n"
-                    f"Consulta sugerida: {pesquisa_pendente['query']}"
-                )
-                pesquisa_pendente = None
-            elif resposta_recusa_pesquisa(user_message):
-                ai_response_falada = "Certo. Vou responder sem pesquisar na web."
-                pesquisa_pendente = None
-
-                texto_limpo_tts = limpar_texto_tts(ai_response_falada)
-                if texto_limpo_tts.strip():
-                    ui.print_falando(tts.provedor)
-                    tts.falar(texto_limpo_tts)
-
-                memory_manager.add_interaction("Nakamura", user_message)
-                memory_manager.add_interaction("Hana", ai_response_falada)
-                continue
-
         # --- MEMÓRIA HÍBRIDA ---
         mem_context = memory_manager.get_context(user_message)
         raw_history = memory_manager.get_messages(limit=100)
@@ -215,9 +152,6 @@ while True:
         # <gerar_imagem>prompt detalhado em inglês para gerar uma imagem DO ZERO</gerar_imagem>
         # <editar_imagem>prompt em inglês descrevendo a edição na ÚLTIMA imagem gerada</editar_imagem>
         # <ferramenta_web>consulta em inglês para pesquisar na internet</ferramenta_web>
-
-        # Ainda falta adicionar a parte de web search
-        
         
         sistema_prompt = (
             f"=== [NÚCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{personality}\n\n"
@@ -238,7 +172,8 @@ while True:
             "<pensamento>seu raciocínio interno antes de falar</pensamento>\n"
             "<salvar_memoria>fato importante que você quer lembrar para sempre</salvar_memoria>\n"
             "<gerar_imagem>prompt detalhado em inglês para gerar uma imagem DO ZERO</gerar_imagem>\n"
-            "<editar_imagem>prompt em inglês descrevendo a edição na ÚLTIMA imagem gerada</editar_imagem>\n\n"
+            "<editar_imagem>prompt em inglês descrevendo a edição na ÚLTIMA imagem gerada</editar_imagem>\n"
+            "<analisar_youtube>URL do vídeo do YouTube que você precisa analisar/ler</analisar_youtube>\n\n"
             "Exemplo de resposta com geração:\n"
             "<pensamento>O mestre quer que eu decore o nome do gato dele</pensamento>\n"
             "[EMOTION:HAPPY] Anotado, mestre! Já gravei no meu cérebro que seu gato se chama Mimi, fufu.\n"
@@ -340,6 +275,19 @@ while True:
             if prompt_edit:
                 logging.info(f"[XML] ✏️ Editando imagem: {prompt_edit[:80]}...")
                 image_gen.edit_and_show(prompt_edit)
+
+        # 4. <analisar_youtube>url</analisar_youtube>
+        for match in re.finditer(r'<analisar_youtube>(.*?)</analisar_youtube>', ai_response_falada, re.DOTALL):
+            url = match.group(1).strip()
+            if url:
+                ui.print_executando("analisar_youtube")
+                resultado_sis, resumo_tts = tool_manager.executar_tool("analisar_youtube", {"url": url})
+                if resumo_tts:
+                    ui.print_falando(tts.provedor)
+                    tts.falar(limpar_texto_tts(resumo_tts))
+                if resultado_sis:
+                    # Injeta a legenda gigante no banco / contexto
+                    memory_manager.add_interaction("System", resultado_sis)
 
         if not ai_response_falada:
             continue

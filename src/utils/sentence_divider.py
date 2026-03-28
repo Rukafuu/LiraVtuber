@@ -82,7 +82,7 @@ class SentenceDivider:
             # 1. Detectar abertura de <thought> ou <pensamento>
             thought_open = -1
             thought_tag_len = 0
-            for tag in ("<thought>", "<pensamento>"):
+            for tag in ("<thought>", "<pensamento>", "<think>"):
                 idx = self._buffer.find(tag)
                 if idx != -1 and (thought_open == -1 or idx < thought_open):
                     thought_open = idx
@@ -104,7 +104,7 @@ class SentenceDivider:
             if self._inside_thought:
                 thought_close = -1
                 close_tag_len = 0
-                for ctag in ("</thought>", "</pensamento>"):
+                for ctag in ("</thought>", "</pensamento>", "</think>"):
                     idx = self._buffer.find(ctag)
                     if idx != -1 and (thought_close == -1 or idx < thought_close):
                         thought_close = idx
@@ -188,11 +188,16 @@ class SentenceDivider:
         clean_text = re.sub(r'\[EMOTION:\w+\]', '', raw_text).strip()
         
         # Remover tags XML de ações silenciosas (elas serão processadas no main.py)
+        clean_text = re.sub(r'<(pensamento|thought|think)>.*?</\1>', '', clean_text, flags=re.DOTALL | re.IGNORECASE).strip()
         clean_text = re.sub(r'<salvar_memoria>.*?</salvar_memoria>', '', clean_text, flags=re.DOTALL).strip()
         clean_text = re.sub(r'<gerar_imagem>.*?</gerar_imagem>', '', clean_text, flags=re.DOTALL).strip()
         clean_text = re.sub(r'<editar_imagem>.*?</editar_imagem>', '', clean_text, flags=re.DOTALL).strip()
+        clean_text = re.sub(r'<analisar_youtube>.*?</analisar_youtube>', '', clean_text, flags=re.DOTALL).strip()
         clean_text = re.sub(r'<bypass>.*?</bypass>', '', clean_text, flags=re.DOTALL).strip()
         clean_text = re.sub(r'<resumo_imagem>.*?</resumo_imagem>', '', clean_text, flags=re.DOTALL).strip()
+
+        # Remover citações do Google Search Grounding [INDEX_X.Y]
+        clean_text = re.sub(r'\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]', '', clean_text).strip()
         
         # Remover 【...】 (marcadores fantasma existentes)
         display_raw = raw_text

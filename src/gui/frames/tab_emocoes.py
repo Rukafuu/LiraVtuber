@@ -1,9 +1,11 @@
 """
 Tab Emoções — Aba "Mente da Hana".
 Mostra humor atual, último pensamento, histórico de emoções.
+Lê o estado via IPC (arquivo JSON) para funcionar em processo separado.
 """
 
 import customtkinter as ctk
+import json
 import time
 import sys
 import os
@@ -12,15 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.gui.design import COLORS, FONT_TITLE, FONT_BODY, FONT_SMALL, FONT_MONO
 
-
-# Referência global para o emotion engine (será setado pelo main ou pela GUI)
-_emotion_engine_ref = None
-
-
-def set_emotion_engine(engine):
-    """Permite que o main.py injete a referência do EmotionEngine."""
-    global _emotion_engine_ref
-    _emotion_engine_ref = engine
+STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "emotion_state.json")
 
 
 class TabEmocoes(ctk.CTkFrame):
@@ -30,6 +24,8 @@ class TabEmocoes(ctk.CTkFrame):
         super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
+
+        self._last_update_ts = 0.0  # Timestamp da ultima leitura do JSON
 
         # ─── HEADER ───
         header = ctk.CTkLabel(self, text="💭  Mente da Hana", font=FONT_TITLE, text_color=COLORS["text_primary"])
@@ -107,44 +103,74 @@ class TabEmocoes(ctk.CTkFrame):
         lbl.pack(anchor="w", padx=15, pady=(12, 0))
         return card
 
+    def _ler_estado_json(self) -> dict | None:
+        """Lê o estado emocional do arquivo JSON (IPC com main.py)."""
+        try:
+            abspath = os.path.abspath(STATE_FILE)
+            if not os.path.exists(abspath):
+                return None
+            with open(abspath, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            # Só atualiza se o timestamp mudou
+            updated_at = state.get("updated_at", 0)
+            if updated_at <= self._last_update_ts:
+                return None  # Nada novo
+            self._last_update_ts = updated_at
+            return state
+        except Exception:
+            return None
+
     def _atualizar(self):
-        """Refresh automático a cada 1.5 segundo."""
-        global _emotion_engine_ref
+        """Refresh automático a cada 1.5 segundo via IPC JSON."""
+        emoji_map = {
+            "HAPPY": "😄", "SAD": "😔", "ANGRY": "😡", "SHY": "😳",
+            "SURPRISED": "😲", "SMUG": "😏", "NEUTRAL": "😐",
+            "LOVE": "😍", "SCARED": "😨", "CONFUSED": "🤔"
+        }
 
-        if _emotion_engine_ref is not None:
-            engine = _emotion_engine_ref
-
-            emoji_map = {
-                "HAPPY": "😄", "SAD": "😔", "ANGRY": "😡", "SHY": "😳",
-                "SURPRISED": "😲", "SMUG": "😏", "NEUTRAL": "😐",
-                "LOVE": "😍", "SCARED": "😨", "CONFUSED": "🤔"
-            }
+        state = self._ler_estado_json()
+        if state is not None:
+            mood = state.get("mood", 0.0)
+            emo = state.get("current_emotion", "NEUTRAL")
+            turno = state.get("turno", 0)
+            thought = state.get("last_thought", "")
+            history = state.get("history", [])
 
             # Humor
-            self._mood_emoji.configure(text=engine.get_mood_emoji())
-            self._mood_label.configure(text=engine.get_mood_label())
-            self._mood_bar.set((engine.mood + 1.0) / 2.0)  # Normaliza -1..1 para 0..1
-            self._mood_value.configure(text=f"Mood: {engine.mood:.2f}")
+            if mood > 0.6:
+                mood_emoji, mood_label = "😄", "Muito Feliz"
+            elif mood > 0.2:
+                mood_emoji, mood_label = "😊", "Feliz"
+            elif mood > -0.2:
+                mood_emoji, mood_label = "😐", "Neutra"
+            elif mood > -0.6:
+                mood_emoji, mood_label = "😔", "Triste"
+            else:
+                mood_emoji, mood_label = "😡", "Irritada"
 
-            # Ajustar cor da barra com base no humor
-            if engine.mood > 0.3:
+            self._mood_emoji.configure(text=mood_emoji)
+            self._mood_label.configure(text=mood_label)
+            self._mood_bar.set((mood + 1.0) / 2.0)
+            self._mood_value.configure(text=f"Mood: {mood:.2f}")
+
+            # Cor da barra
+            if mood > 0.3:
                 self._mood_bar.configure(progress_color=COLORS["green"])
-            elif engine.mood > -0.3:
+            elif mood > -0.3:
                 self._mood_bar.configure(progress_color=COLORS["purple_neon"])
             else:
                 self._mood_bar.configure(progress_color=COLORS["red"])
 
             # Emoção ativa
-            emo = engine.current_emotion
             self._emotion_emoji.configure(text=emoji_map.get(emo, "❓"))
             self._emotion_label.configure(text=emo)
-            self._emotion_turno.configure(text=f"Turno: {engine._turno}")
+            self._emotion_turno.configure(text=f"Turno: {turno}")
 
             # Pensamento
-            if engine.last_thought:
+            if thought:
                 self._thought_box.configure(state="normal")
                 self._thought_box.delete("1.0", "end")
-                self._thought_box.insert("1.0", f"💭 {engine.last_thought}")
+                self._thought_box.insert("1.0", f"💭 {thought}")
                 self._thought_box.configure(state="disabled")
 
             # Histórico (limpa e recria)
@@ -152,10 +178,11 @@ class TabEmocoes(ctk.CTkFrame):
                 lbl.destroy()
             self._history_labels.clear()
 
-            for i, event in enumerate(reversed(engine.history[-20:])):
-                ts = time.strftime("%H:%M:%S", time.localtime(event.timestamp))
-                emoji = emoji_map.get(event.emotion, "❓")
-                text = f"{ts}  {emoji} {event.emotion}  (Turno {event.turno})"
+            for i, event in enumerate(reversed(history[-20:])):
+                ts = time.strftime("%H:%M:%S", time.localtime(event.get("timestamp", 0)))
+                e_name = event.get("emotion", "NEUTRAL")
+                emoji = emoji_map.get(e_name, "❓")
+                text = f"{ts}  {emoji} {e_name}  (Turno {event.get('turno', 0)})"
 
                 lbl = ctk.CTkLabel(
                     self._history_scroll, text=text,

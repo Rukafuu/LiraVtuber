@@ -5,12 +5,16 @@ Parseia tags [EMOTION:X] do texto da LLM, mantém estado de humor,
 e emite callbacks para o VTube Studio e GUI.
 """
 
+import json
 import logging
+import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
+
+STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "emotion_state.json")
 
 
 @dataclass
@@ -63,6 +67,23 @@ class EmotionEngine:
         """Incrementa o turno (chamado pelo main.py)."""
         self._turno += 1
 
+    def _persist_state(self):
+        """Salva o estado atual em JSON para IPC com a GUI."""
+        try:
+            state = {
+                "mood": self.mood,
+                "current_emotion": self.current_emotion,
+                "last_thought": self.last_thought,
+                "turno": self._turno,
+                "history": [asdict(e) for e in self.history[-20:]],
+                "updated_at": time.time(),
+            }
+            os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+            with open(STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"[EMOTION ENGINE] Erro ao persistir estado: {e}")
+
     def processar_emocao(self, emotion_name: str):
         """
         Processa uma emoção detectada no texto da LLM.
@@ -94,6 +115,9 @@ class EmotionEngine:
 
         logger.info(f"[EMOTION ENGINE] Emoção: {emotion_upper} | Humor: {self.mood:.2f}")
 
+        # Persiste para a GUI
+        self._persist_state()
+
         # Dispara callbacks
         for cb in self._on_emotion_callbacks:
             try:
@@ -105,6 +129,9 @@ class EmotionEngine:
         """Armazena o último pensamento e dispara callbacks."""
         self.last_thought = thought
         logger.debug(f"[EMOTION ENGINE] Pensamento: {thought[:60]}...")
+
+        # Persiste para a GUI
+        self._persist_state()
 
         for cb in self._on_thought_callbacks:
             try:

@@ -339,15 +339,32 @@ class TabChat(ctk.CTkFrame):
         self._scroll_to_bottom()
 
     def _render_rich_text(self, parent, texto: str):
-        """Renderiza texto com formatação rica (negrito, quebras, emojis, código)."""
+        """Renderiza texto com formatação rica (negrito, quebras, emojis, código, oculta tags XML)."""
         if not texto:
             return
+
+        # Oculta XML do subconsciente (pensamento, gerar_imagem, etc)
+        texto_limpo = re.sub(
+            r'<(pensamento|thought|think|gerar_imagem|editar_imagem|salvar_memoria|analisar_youtube|bypass|resumo_imagem)>.*?</\1>',
+            '', texto, flags=re.DOTALL | re.IGNORECASE
+        )
+
+        # Oculta marcador [EMOTION:XXX]
+        texto_limpo = re.sub(r'\[EMOTION.*?\]\s*', '', texto_limpo, flags=re.IGNORECASE)
+
+        # Oculta citações do Google Search Grounding [INDEX_X.Y]
+        texto_limpo = re.sub(r'\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]', '', texto_limpo)
+
+        texto_limpo = texto_limpo.strip()
+        if not texto_limpo:
+            # Se for SÓ tag (ex: ela não falou nada, só pensou), colocamos um mini indicador
+            texto_limpo = "*(Processando internamente...)*"
 
         # Detecta blocos de código
         code_pattern = re.compile(r'```(\w*)\n?(.*?)```', re.DOTALL)
         bold_pattern = re.compile(r'\*\*(.*?)\*\*')
 
-        parts = code_pattern.split(texto)
+        parts = code_pattern.split(texto_limpo)
 
         i = 0
         while i < len(parts):
@@ -375,12 +392,17 @@ class TabChat(ctk.CTkFrame):
                 # Texto normal — processa negrito e quebras
                 segment = parts[i]
                 if segment.strip():
-                    # Substitui **texto** por versão em maiúscula como indicador visual
-                    display_text = bold_pattern.sub(r'⟨\1⟩', segment).strip()
+                    # Aplica formatação rica
+                    # Substitui **texto** por texto com fonte negrito
+                    display_text = segment.strip()
+                    
+                    # Vamos manter simples por enquanto: apenas tira os asteriscos ou formata como negrito 
+                    # usando font customizada nos segmentos divididos. Para simplificar e evitar crash, usa texto puro sem **
+                    display_text = display_text.replace("**", "")
 
                     corpo = ctk.CTkLabel(
                         parent, text=display_text,
-                        font=FONT_BODY, text_color=COLORS["text_primary"],
+                        font=ctk.CTkFont(family=FONT_BODY[0], size=FONT_BODY[1], weight="bold" if "**" in segment else "normal"), text_color=COLORS["text_primary"],
                         wraplength=600, justify="left", anchor="w",
                     )
                     corpo.pack(fill="x", padx=12, pady=(4, 4))
@@ -457,6 +479,7 @@ class TabChat(ctk.CTkFrame):
                 # Processa anexos de arquivo (texto)
                 mensagem_final = texto
                 image_b64 = None
+                arquivos_multimidia = []
 
                 if anexos_envio:
                     textos_extras = []
@@ -470,17 +493,16 @@ class TabChat(ctk.CTkFrame):
                                     image_b64 = base64.b64encode(bf.read()).decode("utf-8")
                             except Exception:
                                 pass
-                        elif ext == 'pdf':
-                            try:
-                                import PyPDF2
-                                with open(path, "rb") as bf:
-                                    leitor = PyPDF2.PdfReader(bf)
-                                    txt = ""
-                                    for pag in leitor.pages:
-                                        txt += (pag.extract_text() or "") + "\n"
-                                    textos_extras.append(f"[ARQUIVO: {os.path.basename(path)}]\n{txt}")
-                            except ImportError:
-                                textos_extras.append(f"[ERRO: PyPDF2 não instalado para {os.path.basename(path)}]")
+                        elif ext in ('pdf', 'mp4', 'mp3', 'wav', 'ogg', 'avi', 'mov', 'webm', 'mkv', 'm4a', 'flac', 'aac'):
+                            prov_sel = self.combo_chat_prov.get()
+                            if prov_sel != "google_cloud":
+                                self.after(0, lambda p=path: self._adicionar_msg("system", "Hana", f"❌ Apenas modelos do Google suportam leitura nativa de PDFs ou Vídeos/Áudio pesados. Envio bloqueado: {os.path.basename(p)}"))
+                                self.after(0, lambda: self.btn_enviar.configure(state="normal", text="Enviar  ➤"))
+                                self.after(0, lambda: self.lbl_chat_status.configure(text="❌ Erro Multimodal", text_color=COLORS["red"]))
+                                return
+                            else:
+                                arquivos_multimidia.append(path)
+                                textos_extras.append(f"📎 [Arquivo Anexado: {os.path.basename(path)}]")
                         else:
                             try:
                                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -495,12 +517,13 @@ class TabChat(ctk.CTkFrame):
                     self._anexos = []
                     self.after(0, self.frame_anexo.grid_forget)
 
-                # Chama a LLM
+                # Chama a LLM passando os objetos corretamente
                 resposta = llm.gerar_resposta(
                     chat_history=raw_history,
                     sistema_prompt=sistema_prompt,
                     user_message=mensagem_final,
-                    image_b64=image_b64
+                    image_b64=image_b64,
+                    arquivos_multimidia=arquivos_multimidia if arquivos_multimidia else None
                 )
 
                 if not resposta:
@@ -518,12 +541,13 @@ class TabChat(ctk.CTkFrame):
                     text_color=COLORS["green"]
                 ))
 
-                # Salva no SQLite (memória compartilhada)
+                # Salva no SQLite (memória compartilhada) — NÃO salva respostas vazias
                 try:
                     from src.memory import memory
                     db = memory("data/hana_memory.db")
                     db.add_message("Nakamura", texto)
-                    db.add_message("Hana", resposta)
+                    if resposta and resposta != "(sem resposta)":
+                        db.add_message("Hana", resposta)
                 except Exception:
                     pass
 
@@ -544,6 +568,8 @@ class TabChat(ctk.CTkFrame):
             title="Anexar arquivo(s)",
             filetypes=[
                 ("Imagens", "*.png *.jpg *.jpeg *.webp *.gif *.bmp"),
+                ("Áudio", "*.mp3 *.wav *.ogg *.m4a *.flac *.aac"),
+                ("Vídeo", "*.mp4 *.avi *.mov *.webm *.mkv"),
                 ("Documentos", "*.pdf *.doc *.docx"),
                 ("Código", "*.py *.js *.ts *.html *.css *.java *.c *.cpp"),
                 ("Textos", "*.txt *.md *.json *.csv *.xml *.yaml *.yml *.log"),
@@ -567,7 +593,12 @@ class TabChat(ctk.CTkFrame):
         for fp in self._anexos:
             nome = os.path.basename(fp)
             ext = nome.lower().split('.')[-1]
-            icone = {"py": "🐍", "js": "⚡", "ts": "⚡", "pdf": "📕", "json": "📋", "txt": "📝", "md": "📝"}.get(ext, "📄")
+            icone = {
+                "py": "🐍", "js": "⚡", "ts": "⚡", "pdf": "📕", "json": "📋",
+                "txt": "📝", "md": "📝",
+                "mp3": "🎵", "wav": "🎵", "ogg": "🎵", "m4a": "🎵", "flac": "🎵", "aac": "🎵",
+                "mp4": "🎬", "avi": "🎬", "mov": "🎬", "webm": "🎬", "mkv": "🎬",
+            }.get(ext, "📄")
             if ext in ('png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp') and HAS_PIL:
                 try:
                     img = PILImage.open(fp)

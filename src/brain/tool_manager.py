@@ -1,37 +1,12 @@
 import logging
 import os
-
-from tavily import TavilyClient
+import re
 
 from src.config.config_loader import CONFIG
 
 logger = logging.getLogger(__name__)
 
 FERRAMENTAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "pesquisar_na_web",
-            "description": (
-                "Busca fatos em tempo real na internet. Use esta ferramenta somente quando "
-                "o usuario pedir explicitamente para pesquisar, buscar, verificar online ou "
-                "consultar a web. Se houver duvida, pergunte antes e nao pesquise automaticamente."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": (
-                            "O termo de pesquisa otimizado em Ingles (Software/Hardware) "
-                            "ou Portugues (Assuntos Globais)."
-                        ),
-                    }
-                },
-                "required": ["query"],
-            },
-        },
-    },
     {
         "type": "function",
         "function": {
@@ -73,62 +48,14 @@ class ToolManager:
         return FERRAMENTAS
 
     def executar_tool(self, nome_tool: str, args: dict) -> tuple:
-        if nome_tool == "pesquisar_na_web":
-            return self._despachar_pesquisa(args)
-        
         if nome_tool == "anotar_fato":
             return self._despachar_anotacao(args)
 
+        if nome_tool == "analisar_youtube":
+            return self._despachar_youtube(args)
+
         logger.warning(f"[TOOL MANAGER] Tool desconhecida: {nome_tool}")
         return ("Menu_Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
-
-    def _despachar_pesquisa(self, args: dict) -> tuple:
-        query = args.get("query", "")
-        logger.info(f"[TOOL] Pesquisa: {query}")
-
-        api_key = os.getenv("TAVILY_API_KEY") or CONFIG.get("TAVILY_API_KEY")
-        if not api_key:
-            logger.error("[TOOL] TAVILY_API_KEY nao encontrada.")
-            return (
-                "Erro: TAVILY_API_KEY nao configurada.",
-                "Nao consigo pesquisar sem a TAVILY_API_KEY.",
-            )
-
-        try:
-            client = TavilyClient(api_key=api_key)
-            resposta = client.search(
-                query=query,
-                search_depth="advanced",
-                include_raw_content=True,
-                max_results=3,
-            )
-
-            resultados = []
-            for item in resposta.get("results", []):
-                titulo = item.get("title", "Sem titulo")
-                url = item.get("url", "#")
-                conteudo = item.get("raw_content") or item.get("content") or "Conteudo indisponivel."
-                bloco = f"--- FONTE: {titulo} ({url}) ---\n{conteudo}\n"
-                resultados.append(bloco)
-
-            if not resultados:
-                return (
-                    "Nenhum resultado encontrado.",
-                    "Procurei, mas nao encontrei nada relevante.",
-                )
-
-            string_gigante = "\n".join(resultados)
-            max_chars = 15000
-            if len(string_gigante) > max_chars:
-                string_gigante = string_gigante[:max_chars] + "\n\n...[TRUNCADO]..."
-
-            return (string_gigante, f"Pesquisando na web sobre {query}.")
-        except Exception as e:
-            logger.error(f"[TOOL] Erro na pesquisa Tavily: {e}")
-            return (
-                f"Erro na API Tavily: {str(e)}",
-                "A pesquisa na web falhou.",
-            )
 
     def _despachar_anotacao(self, args: dict) -> tuple:
         """Executa a persistência de um fato no sistema de memória."""
@@ -151,3 +78,60 @@ class ToolManager:
         else:
             logger.warning("[TOOL] MemoryManager não configurado no ToolManager.")
             return ("MemoryManager indisponível.", "Não consigo guardar isso na memória permanente agora.")
+
+    def _despachar_youtube(self, args: dict) -> tuple:
+        """Puxa a legenda completa de um vídeo do YouTube via youtube-transcript-api."""
+        import urllib.parse
+        url = args.get("url", "")
+        if not url:
+            return ("URL vazio.", "Você me passou um link do YouTube vazio.")
+
+        # Extrai o ID do vídeo usando regex/parse
+        try:
+            parsed = urllib.parse.urlparse(url)
+            video_id = None
+            if "youtube.com" in parsed.netloc:
+                video_id = urllib.parse.parse_qs(parsed.query).get("v", [None])[0]
+                if not video_id:
+                    # Tenta /shorts/ID, /live/ID, /embed/ID
+                    path_match = re.match(r'/(?:shorts|live|embed)/([a-zA-Z0-9_-]+)', parsed.path)
+                    if path_match:
+                        video_id = path_match.group(1)
+            elif "youtu.be" in parsed.netloc:
+                video_id = parsed.path.lstrip("/")
+            else:
+                return ("Link inválido.", "Isso não parece um link válido do YouTube.")
+            
+            if not video_id:
+                return ("ID de vídeo não encontrado no link.", "Não encontrei qual é o vídeo nesse link.")
+        except Exception as e:
+            logger.error(f"[TOOL YOUTUBE] Erro ao parsear URL: {e}")
+            return (f"Erro parse: {e}", "O formato do link está meio estranho.")
+
+        logger.info(f"[TOOL YOUTUBE] Puxando legendas para ID: {video_id}")
+        
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt', 'en', 'es'])
+            
+            # Montar a string crua
+            textos = [f"[{item['start']:.1f}s] {item['text']}" for item in transcript_list]
+            texto_completo = "\n".join(textos)
+            
+            bloco_retorno = (
+                f"--- TRANSCRIÇÃO YOUTUBE ({video_id}) ---\n"
+                f"{texto_completo}\n"
+                f"--- FIM DA TRANSCRIÇÃO ---\n"
+            )
+            
+            # Limitar tamanho caso a legenda seja monstruosa (ex: 4 horas) - 200k chars ~ 50k tokens
+            if len(bloco_retorno) > 200000:
+                bloco_retorno = bloco_retorno[:200000] + "\n\n...[TRUNCADO: VÍDEO MUITO LONGO]..."
+
+            return (bloco_retorno, "Prontinho, já li a transcrição do vídeo inteiro.")
+            
+        except ImportError:
+            return ("Biblioteca youtube_transcript_api nã instalada.", "Preciso que me instalem a biblioteca para baixar vídeos.")
+        except Exception as e:
+            logger.error(f"[TOOL YOUTUBE] Erro ao baixar legenda: {e}")
+            return (f"Erro Youtube API: {e}", "Não consegui ler as legendas desse vídeo. Talvez ele não tenha legendas automáticas ou seja privado.")

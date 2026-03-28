@@ -23,17 +23,33 @@ class BaseLLM(ABC):
         pass
 
     @abstractmethod
-    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None):
+    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None, arquivos_multimidia: list = None):
         """Executa a chamada real à API (OpenAI style ou similar)."""
         pass
 
-    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
         """
         Executa a chamada à API em modo stream.
         Retorna um iterável que emite deltas de texto (tokens).
         Override nos providers que suportam streaming.
         """
         return None  # Providers que não implementam retornam None
+
+    @staticmethod
+    def _merge_consecutive_roles(messages: list) -> list:
+        """Mescla mensagens consecutivas do mesmo role para evitar erro 400 do Gemini."""
+        if not messages:
+            return messages
+        merged = [messages[0]]
+        for msg in messages[1:]:
+            if msg["role"] == merged[-1]["role"] and msg["role"] != "system":
+                merged[-1] = {
+                    "role": merged[-1]["role"],
+                    "content": merged[-1]["content"] + "\n\n" + msg["content"]
+                }
+            else:
+                merged.append(msg)
+        return merged
 
     def _build_messages(self, chat_history: list, sistema_prompt: str, user_message: str):
         """Monta a lista de mensagens no formato da API."""
@@ -42,9 +58,9 @@ class BaseLLM(ABC):
             role = "user" if msg["role"] == "Nakamura" else "assistant"
             messages.append({"role": role, "content": msg["content"]})
         messages.append({"role": "user", "content": user_message})
-        return messages
+        return self._merge_consecutive_roles(messages)
 
-    def gerar_resposta_stream(self, chat_history: list, sistema_prompt: str, user_message: str, image_b64: str = None):
+    def gerar_resposta_stream(self, chat_history: list, sistema_prompt: str, user_message: str, image_b64: str = None, arquivos_multimidia: list = None):
         """
         Gera resposta em modo streaming — retorna um generator de tokens (strings).
         Se o provider não suportar stream, faz fallback para o síncrono e emite tudo de uma vez.
@@ -62,7 +78,8 @@ class BaseLLM(ABC):
             stream = self._chamar_api_stream(
                 modelo=self.modelo_chat,
                 mensagens=messages,
-                image_b64=image_b64
+                image_b64=image_b64,
+                arquivos_multimidia=arquivos_multimidia
             )
 
             if stream is not None:
@@ -75,7 +92,8 @@ class BaseLLM(ABC):
                 response = self._chamar_api(
                     modelo=self.modelo_chat,
                     mensagens=messages,
-                    image_b64=image_b64
+                    image_b64=image_b64,
+                    arquivos_multimidia=arquivos_multimidia
                 )
                 content = ""
                 if hasattr(response, 'choices'):
@@ -89,7 +107,7 @@ class BaseLLM(ABC):
             logger.error(f"[{self.provedor.upper()}] Erro no stream: {e}")
             return
 
-    def gerar_resposta(self, chat_history: list, sistema_prompt: str, user_message: str, tools: list = None, image_b64: str = None) -> str:
+    def gerar_resposta(self, chat_history: list, sistema_prompt: str, user_message: str, tools: list = None, image_b64: str = None, arquivos_multimidia: list = None) -> str:
         if not self.config_valida:
             return None
 
@@ -101,6 +119,7 @@ class BaseLLM(ABC):
         
         # A mensagem atual pode conter a imagem (multi-modal)
         messages.append({"role": "user", "content": user_message})
+        messages = self._merge_consecutive_roles(messages)
 
         try:
             ui.print_pensando(self.provedor.upper())
@@ -110,7 +129,8 @@ class BaseLLM(ABC):
                 modelo=self.modelo_chat,
                 mensagens=messages,
                 ferramentas=tools,
-                image_b64=image_b64
+                image_b64=image_b64,
+                arquivos_multimidia=arquivos_multimidia
             )
 
             # --- Tratamento de Tool Calls Nativas ---
@@ -147,4 +167,4 @@ class BaseLLM(ABC):
 
         except Exception as e:
             logger.error(f"[{self.provedor.upper()}] Erro de API: {e}")
-            return None
+            return f"(ERRO API: {e})"

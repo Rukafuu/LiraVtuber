@@ -24,15 +24,15 @@
             "modelo_vision": "x-ai/grok-4.1-fast"
         },
         "google_cloud": {
-            "modelo": "gemini-3.1-pro-preview",
-            "modelo_vision": "gemini-3.1-pro-preview",
+            "modelo": "gemini-3.1-flash-lite-preview",
+            "modelo_vision": "gemini-3.1-flash-lite-preview",
             "modelo_chat": "gemini-3.1-flash-lite-preview"
         }
     },
     "_comment_chat": "================= CHAT DA GUI (PROVEDOR INDEPENDENTE) =================",
     "CHAT": {
-        "LLM_PROVIDER": "openrouter",
-        "LLM_MODEL": "x-ai/grok-4.1-fast",
+        "LLM_PROVIDER": "google_cloud",
+        "LLM_MODEL": "gemini-2.5-flash",
         "LLM_TEMPERATURE": 0.85,
         "usa_mesmo_prompt_terminal": true
     },
@@ -44,10 +44,10 @@
     "GOOGLE_TTS_PITCH": 1.4,
     "_comment_toggles": "================= TOGGLES DE MÓDULOS =================",
     "TTS_ATIVO": true,
-    "STT_ATIVO": true,
-    "VISAO_ATIVA": true,
+    "STT_ATIVO": false,
+    "VISAO_ATIVA": false,
     "VISAO_MONITOR": 1,
-    "VTUBESTUDIO_ATIVO": true,
+    "VTUBESTUDIO_ATIVO": false,
     "Modo_discord": false,
     "_comment_vts": "================= VTUBE STUDIO (LIVE2D) =================",
     "VTUBE_STUDIO": {

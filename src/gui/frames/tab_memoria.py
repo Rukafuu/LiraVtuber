@@ -245,7 +245,7 @@ class TabMemoria(ctk.CTkFrame):
             row.pack(fill="x", padx=4, pady=3)
 
             tripla = f"({s})  →  [{rel}]  →  ({o})"
-            lbl = ctk.CTkLabel(row, text=tripla, font=FONT_MONO, text_color=COLORS["purple_neon"], anchor="w")
+            lbl = ctk.CTkLabel(row, text=tripla, font=FONT_MONO, text_color=COLORS["purple_neon"], anchor="w", wraplength=450)
             lbl.pack(side="left", padx=10, pady=6, fill="x", expand=True)
 
             btn_del = ctk.CTkButton(
