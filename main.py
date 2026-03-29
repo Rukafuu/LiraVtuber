@@ -43,9 +43,13 @@ from src.utils.sentence_divider import SentenceDivider
 from src.config.config_loader import CONFIG
 
 
-load_dotenv()
+# === Sinais de Estado (Neuro style) ===
+class HanaSignals:
+    def __init__(self):
+        self.HANA_SPEAKING = False
+        self.STT_ACTIVE = True
 
-_ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
+signals = HanaSignals()
 
 tts = get_tts()
 stt_motor = MotorSTTWhisper()
@@ -68,7 +72,8 @@ if CONFIG.get("VTUBESTUDIO_ATIVO", False):
         vts_controller = VTSController(
             host=vts_cfg.get("host", "localhost"),
             port=vts_cfg.get("port", 8001),
-            emotion_map=vts_cfg.get("emotion_map", {})
+            emotion_map=vts_cfg.get("emotion_map", {}),
+            signals=signals
         )
         emotion_engine.registrar_callback_emocao(vts_controller.trigger_emotion)
         vts_controller.start()
@@ -144,6 +149,13 @@ while True:
 
         current_datetime = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
         prompt_rules = "\n".join([f"- {k}: {v}" for k, v in prompt.items()])
+        
+        # Anatomia do VTube Studio (Neuro)
+        vts_anatomy = ""
+        if vts_controller and vts_controller.authenticated:
+            vts_anatomy = "\n[ANATOMIA DO SEU CORPO DIGITAL (VTube Studio)]:\n"
+            vts_anatomy += vts_controller.get_anatomy_detailed()
+            vts_anatomy += "\nUse [PARAM:Nome=Valor] para poses. Use os limites informados."
 
         # --- FERRAMENTAS DE IMAGEM (NOVO) ---
         # Novo técnica de XML que roubei do Evertson
@@ -159,6 +171,7 @@ while True:
             f"=== [CONTEXTO AMBIENTAL] ===\n"
             f"Data/Hora: {current_datetime}\n"
             f"LOCAL: E:\\Projeto_Hana_AI\n"
+            f"{vts_anatomy}\n"
             f"{mem_context}\n\n"
             "⚠️ LEMBRETE CRÍTICO: Você é a HANA. Fale como ela, sinta como ela. "
             "Nunca aja como uma IA, nunca se descreva como modelo de linguagem. "
@@ -225,9 +238,17 @@ while True:
                 emotion_engine.processar_pensamento(chunk.thought)
                 full_raw_response.append(chunk.raw)
             else:
-                # Processar emoções (dispara VTS em tempo real)
+                # Processar emoções e parâmetros (dispara VTS em tempo real)
                 for emo in chunk.emotions:
                     emotion_engine.processar_emocao(emo)
+                
+                if vts_controller and chunk.params:
+                    for p_str in chunk.params:
+                        if "=" in p_str:
+                            p_name, p_val = p_str.split("=", 1)
+                            try:
+                                vts_controller.set_parameter(p_name.strip(), float(p_val.strip()))
+                            except: pass
 
                 # Imprimir no terminal em tempo real (visual rápido)
                 print(f"{ui.C_NYRA}[HANA]{ui.C_RST}: {chunk.text}")
@@ -242,7 +263,9 @@ while True:
         texto_final_tts = " ".join(full_tts_text)
         if texto_final_tts.strip() and CONFIG.get("TTS_ATIVO", True):
             ui.print_falando(tts.provedor)
+            signals.HANA_SPEAKING = True
             tts.falar(texto_final_tts)
+            signals.HANA_SPEAKING = False
 
         ai_response_falada = " ".join(full_raw_response)
 
@@ -287,6 +310,18 @@ while True:
                     tts.falar(limpar_texto_tts(resumo_tts))
                 if resultado_sis:
                     # Injeta a legenda gigante no banco / contexto
+                    memory_manager.add_interaction("System", resultado_sis)
+
+        # 5. <ferramenta_web>query</ferramenta_web>
+        for match in re.finditer(r'<ferramenta_web>(.*?)</ferramenta_web>', ai_response_falada, re.DOTALL):
+            query = match.group(1).strip()
+            if query:
+                ui.print_executando("pesquisa_web")
+                resultado_sis, resumo_tts = tool_manager.executar_tool("pesquisa_web", {"query": query})
+                if resumo_tts:
+                    ui.print_falando(tts.provedor)
+                    tts.falar(limpar_texto_tts(resumo_tts))
+                if resultado_sis:
                     memory_manager.add_interaction("System", resultado_sis)
 
         if not ai_response_falada:

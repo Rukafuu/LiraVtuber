@@ -27,6 +27,7 @@ class SentenceChunk:
     text: str = ""                    # Texto limpo para TTS
     thought: str = ""                 # Pensamento interno (se houver)
     emotions: List[str] = field(default_factory=list)  # Emoções detectadas
+    params: List[str] = field(default_factory=list)    # Parâmetros VTS [PARAM:N=V]
     is_thought: bool = False          # True se este chunk é um pensamento
     raw: str = ""                     # Texto original bruto (para memória)
 
@@ -184,8 +185,12 @@ class SentenceDivider:
         # Extrair [EMOTION:NOME]
         emotions = re.findall(r'\[EMOTION:(\w+)\]', raw_text, re.IGNORECASE)
         
-        # Limpar o texto removendo as tags de emoção
+        # Extrair [PARAM:Nome=Valor]
+        params = re.findall(r'\[PARAM:([\w=.-]+)\]', raw_text, re.IGNORECASE)
+        
+        # Limpar o texto removendo as tags de emoção e parâmetros
         clean_text = re.sub(r'\[EMOTION:\w+\]', '', raw_text).strip()
+        clean_text = re.sub(r'\[PARAM:[\w=.-]+\]', '', clean_text).strip()
         
         # Remover tags XML de ações silenciosas (elas serão processadas no main.py)
         clean_text = re.sub(r'<(pensamento|thought|think)>.*?</\1>', '', clean_text, flags=re.DOTALL | re.IGNORECASE).strip()
@@ -207,6 +212,7 @@ class SentenceDivider:
         return SentenceChunk(
             text=clean_text,
             emotions=emotions,
+            params=params,
             raw=display_raw
         )
 
