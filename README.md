@@ -1,53 +1,61 @@
 # HanaNakamura-VTuber-OSS
 
-Projeto open source da **Hana Nakamura**, uma assistente VTuber cross-platform com visão, pesquisa web, conversação e controle do VTube Studio. Sua mãe digital para dominar o mundo!" Fufu.
+Projeto open source da **Hana Nakamura**, uma assistente VTuber cross-platform com visão, pesquisa web, conversação e controle avançado do VTube Studio. Sua mãe digital para dominar o mundo!" Fufu.
 
-Hana é uma assistente virtual por voz em Python, com foco em conversa, personalidade e operação local via terminal. O projeto combina STT, LLM, TTS e memória persistente em uma arquitetura modular.
+Hana é uma assistente virtual por voz em Python, com foco em conversa, personalidade e operação local via terminal. O projeto combina STT, LLM, TTS e uma "alma" digital que controla o corpo do avatar em tempo real.
 
-## O que o projeto faz
+---
 
-- Capta áudio do microfone e transcreve com Groq Whisper
-- Gera respostas com provedor LLM configurável
-- Sintetiza voz com Google Cloud Text-to-Speech
-- Salva histórico da conversa em SQLite
-- Exibe status em tempo real no terminal
-- Pode pesquisar na web, mas apenas quando o usuário pedir explicitamente ou autorizar
+## 🚀 Novidades: Neuro-Update Merge
+Recentemente, o projeto recebeu melhorias baseadas no protocolo **Neuro Lira**, tornando a Hana muito mais viva e imprevisível:
 
-## Arquitetura
+- **"Alma" Digital (Wander Loop):** A Hana agora possui movimentos autônomos de cabeça, respiração, piscar de olhos e poses idle, simulando presença humana e bypassando o tracking tradicional.
+- **Controle de Parâmetros [PARAM]:** A IA agora tem consciência total do seu corpo digital e pode ajustar parâmetros específicos do VTube Studio (como `ParamAngleX`, `ParamMouthForm`, etc) via tags dinâmicas.
+- **Modo Gamer Copilot:** Personalidade expandida para comentários técnicos e caóticos de jogos, com foco inicial em *Clash Royale* (contagem de elixir e counters).
+- **Pesquisa Web Expandida:** Integração total com Tavily para trazer fatos do mundo real em tempo real.
 
-- `main.py`: loop principal de conversa, controle de ferramentas e consentimento para pesquisa
-- `src/modules/voice/stt_whisper.py`: captura de áudio e transcrição
-- `src/providers/provider_selector.py`: seleção do provedor LLM
-- `src/providers/groq_provider.py`: integração com Groq
-- `src/providers/google_provider.py`: integração com Google Gemini
-- `src/modules/voice/tts_selector.py`: seleção de TTS
-- `src/modules/voice/tts_google.py`: síntese de voz com Google Cloud TTS
-- `src/brain/tool_manager.py`: ferramentas auxiliares, incluindo pesquisa web
-- `src/memory/sqlite.py`: persistência de mensagens
+---
 
-## Requisitos
+## 🛠️ O que o projeto faz
 
-- Python 3.10+
-- Microfone configurado no sistema
-- Dispositivo de áudio para reprodução local de voz
-- Credenciais válidas para os serviços que você quiser usar
+- **Audição:** Capta áudio do microfone e transcreve com Groq Whisper.
+- **Cérebro:** Gera respostas com provedores LLM (Groq ou Google Gemini).
+- **Voz:** Sintetiza fala premium com Google Cloud Text-to-Speech.
+- **Memória:** Sistema híbrido de memória (SQLite + RAG) para lembrar de fatos passados.
+- **Corpo:** Controlador VTube Studio integrado com suporte a expressões e parâmetros customizados.
+- **Visão:** Captura de tela periódica para que a Hana "veja" o que você está fazendo.
 
-## Dependências principais
+---
 
+## 📂 Arquitetura
+
+- `main.py`: Loop principal, processamento de sinais e orquestração de ferramentas.
+- `src/modules/vts_controller.py`: O coração do avatar. Gerencia a conexão WebSocket, hotkeys e o *Wander Loop*.
+- `src/brain/tool_manager.py`: Gerenciador de ferramentas (Pesquisa Web, YouTube, Memória).
+- `src/utils/sentence_divider.py`: Processa o stream da LLM, extraindo emoções, parâmetros de VTS e pensamentos internos.
+- `src/config/persona.txt`: Onde reside a essência, gírias e regras de conduta da Hana.
+
+---
+
+## 📦 Instalação
+
+### Requisitos
+- Python 3.10+ (Recomendado 3.11+)
+- Microfone e Saída de Áudio configurados.
+- VTube Studio aberto (se quiser usar o avatar).
+
+### Dependências
 Instale tudo com:
-
 ```bash
 pip install -r requirements.txt
 ```
 
-## Configuração
+---
 
-### 1. Variáveis de ambiente
+## ⚙️ Configuração
 
-Crie um arquivo `.env` na raiz do projeto com as chaves que pretende usar.
-
-Exemplo:
-
+### 1. Variáveis de Ambiente (.env)
+Crie um arquivo `.env` na raiz:
 ```env
 GROQ_API_KEY=sua_chave_groq
 GEMINI_API_KEY=sua_chave_gemini
@@ -55,78 +63,34 @@ GOOGLE_APPLICATION_CREDENTIALS=src/config/service_account.json
 TAVILY_API_KEY=sua_chave_tavily
 ```
 
-Observações:
+### 2. Parâmetros do VTube Studio
+No `src/config/config.json`, certifique-se de que o `VTUBESTUDIO_ATIVO` está como `true`. A Hana irá se autenticar automaticamente e buscar a lista de expressões e parâmetros do seu modelo atual.
 
-- `GROQ_API_KEY` é usada no STT e no provedor Groq
-- `GEMINI_API_KEY` é usada se você escolher `google_cloud` como LLM
-- `GOOGLE_APPLICATION_CREDENTIALS` aponta para o JSON de service account do Google Cloud TTS
-- `TAVILY_API_KEY` é usada para pesquisa na web
+---
 
-### 2. Arquivo de configuração
+## 🎮 Como Usar
 
-Edite `src/config/config.json`.
+1. Execute o terminal:
+   ```bash
+   python main.py
+   ```
+2. Fale naturalmente. A Hana irá ouvir, processar seu pensamento interno (visível no terminal) e responder com voz e movimento.
+3. **Tags Especiais:** Se você for desenvolvedor, note que a Hana usa tags como `[EMOTION:HAPPY]` para expressões rápidas e `[PARAM:ParamAngleX=20]` para poses.
 
-Campos mais importantes:
+---
 
-- `LLM_PROVIDER`: `groq` ou `google_cloud`
-- `TTS_PROVIDER`: atualmente o fluxo está preparado para `google`
-- `GOOGLE_TTS_VOICE`: voz do Google TTS
-- `GOOGLE_TTS_LANG`: idioma da voz
-- `GOOGLE_TTS_RATE`: velocidade da fala
-- `GOOGLE_TTS_PITCH`: tom da fala
+## 🧠 Estado Atual
 
-## Como executar
+Atualmente, o projeto utiliza:
+- **STT:** Groq Whisper (Velocidade subsônica).
+- **LLM:** Google Gemini 1.5/2.0 ou Groq Llama 3.
+- **TTS:** Google Cloud TTS (Vozes neurais).
+- **VTS:** Conexão nativa via `pyvts` com suporte a injeção direta de parâmetros.
 
-```bash
-python main.py
-```
+---
+---
+*Projeto mantido pela comunidade NakamuraIA. Colabore e ajude a Hana a dominar o mundo! Fufu.*
 
-Fluxo esperado:
-
-- A Hana inicializa no terminal
-- Ela entra em modo de escuta
-- Você fala pelo microfone
-- A resposta aparece no console e é reproduzida por voz
-
-Para encerrar:
-
-- diga `Desligar sistema`
-- ou use `Ctrl+C`
-
-## Pesquisa na web
-
-O projeto possui uma ferramenta de pesquisa online via Tavily, mas ela foi restringida para evitar pesquisas automáticas indevidas.
-
-Comportamento atual:
-
-- Hana só deve pesquisar quando você pedir explicitamente
-- Se o modelo quiser pesquisar por conta própria, ela deve pedir sua permissão antes
-- Se você responder algo como `pode pesquisar`, a busca é autorizada
-- Se você responder `não` ou equivalente, ela segue sem pesquisa
-
-## Armazenamento
-
-O histórico da conversa é salvo em:
-
-- `data/hana_memory.db`
-
-O último áudio sintetizado é salvo em:
-
-- `data/last_response.mp3`
-
-## Observações importantes
-
-- O terminal no Windows foi ajustado para UTF-8 para evitar erro de encoding no banner
-- Se o mixer de áudio do `pygame` não iniciar, o TTS continua podendo sintetizar, mas a reprodução local pode falhar
-- O projeto ainda depende de serviços externos; sem credenciais válidas algumas partes não funcionarão
-- Python 3.11+ é recomendado para maior longevidade das dependências do Google
-
-## Estado atual
-
-Hoje o projeto está alinhado com este comportamento:
-
-- STT: Groq Whisper
-- LLM: Groq ou Google Gemini, conforme `config.json`
-- TTS: Google Cloud TTS
-- Memória: SQLite
-- Pesquisa web: Tavily, com consentimento do usuário
+<div align="center">
+  <img src="https://count.getloli.com/get/@Rukafuu?theme=booru-lewd" alt="Moe Counter" />
+</div>
