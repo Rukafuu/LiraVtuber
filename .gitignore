@@ -52,6 +52,7 @@ logs/
 data/vts_token.txt
 data/emotion_state.json
 temp/
+src/config/persona.txt
 
 # Test scripts (local only)
 test_*.py
