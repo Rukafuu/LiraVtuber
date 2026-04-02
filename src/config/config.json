@@ -24,6 +24,7 @@
             "modelo_vision": "x-ai/grok-4.1-fast"
         },
         "google_cloud": {
+            "backend": "auto",
             "modelo": "gemini-3.1-flash-lite-preview",
             "modelo_vision": "gemini-3.1-flash-lite-preview",
             "modelo_chat": "gemini-3.1-flash-lite-preview"
@@ -34,7 +35,13 @@
         "LLM_PROVIDER": "google_cloud",
         "LLM_MODEL": "gemini-3.1-pro-preview",
         "LLM_TEMPERATURE": 0.85,
-        "usa_mesmo_prompt_terminal": true
+        "usa_mesmo_prompt_terminal": false,
+        "response_mode": "adaptive",
+        "auto_route_media": true,
+        "media_model": "gemini-2.5-flash",
+        "max_output_tokens_normal": 2048,
+        "max_output_tokens_media": 8192,
+        "markdown_enabled": true
     },
     "_comment_tts": "================= CONFIGURACOES DE VOZ (TTS) =================",
     "TTS_PROVIDER": "google",
@@ -45,7 +52,7 @@
     "_comment_toggles": "================= TOGGLES DE MÓDULOS =================",
     "TTS_ATIVO": true,
     "STT_ATIVO": true,
-    "VISAO_ATIVA": true,
+    "VISAO_ATIVA": false,
     "VISAO_MONITOR": 1,
     "VTUBESTUDIO_ATIVO": false,
     "Modo_discord": false,
@@ -66,7 +73,7 @@
     },
     "_comment_gui": "================= GUI (PERSONALIZAÇÃO VISUAL) =================",
     "GUI": {
-        "accent_color": "#a855f7",
+        "accent_color": "#f472b6",
         "bg_opacity": 1.0,
         "ptt_key": "F2",
         "ptt_enabled": false
