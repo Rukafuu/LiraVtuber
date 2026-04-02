@@ -79,6 +79,7 @@ if CONFIG.get("VTUBESTUDIO_ATIVO", False):
         vts_controller.start()
 
 # Banner
+_ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
 _llm_model = CONFIG.get("LLM_PROVIDERS", {}).get(_ultimo_provedor, {}).get("modelo", "desconhecido")
 ui.set_banner(
     stt_info="GROQ WHISPER",
