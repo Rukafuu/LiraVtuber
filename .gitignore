@@ -50,6 +50,7 @@ logs/
 # Project Specific
 !data/.gitkeep
 data/vts_token.txt
+data/vts_state.json
 data/emotion_state.json
 temp/
 src/config/persona.txt

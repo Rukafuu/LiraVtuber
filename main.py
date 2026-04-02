@@ -38,6 +38,7 @@ from src.modules.vision.image_gen import HanaImageGen
 from src.modules.emotion_engine import EmotionEngine
 from src.modules.vts_controller import VTSController
 from src.providers.provider_selector import ProviderSelector
+from src.core.request_profiles import build_request_context
 from src.utils.text import limpar_texto_tts, ui
 from src.utils.sentence_divider import SentenceDivider
 from src.config.config_loader import CONFIG
@@ -61,21 +62,33 @@ visao = VisaoNyra()
 # === Motor de Emoções ===
 emotion_engine = EmotionEngine()
 
+def _trigger_vts_emotion(emotion: str):
+    global vts_controller
+    if vts_controller is not None:
+        vts_controller.trigger_emotion(emotion)
+
+emotion_engine.registrar_callback_emocao(_trigger_vts_emotion)
+
 # === Gerador de Imagens ===
 image_gen = HanaImageGen()
 
 # === Controlador VTube Studio ===
 vts_controller = None
+_ultimo_vts_cfg = None
 if CONFIG.get("VTUBESTUDIO_ATIVO", False):
     vts_cfg = CONFIG.get("VTUBE_STUDIO", {})
     if isinstance(vts_cfg, dict):
+        _ultimo_vts_cfg = {
+            "host": vts_cfg.get("host", "localhost"),
+            "port": vts_cfg.get("port", 8001),
+            "emotion_map": dict(vts_cfg.get("emotion_map", {})),
+        }
         vts_controller = VTSController(
-            host=vts_cfg.get("host", "localhost"),
-            port=vts_cfg.get("port", 8001),
-            emotion_map=vts_cfg.get("emotion_map", {}),
+            host=_ultimo_vts_cfg["host"],
+            port=_ultimo_vts_cfg["port"],
+            emotion_map=_ultimo_vts_cfg["emotion_map"],
             signals=signals
         )
-        emotion_engine.registrar_callback_emocao(vts_controller.trigger_emotion)
         vts_controller.start()
 
 # Banner
@@ -102,16 +115,41 @@ while True:
             if CONFIG.get("VTUBESTUDIO_ATIVO", False) and vts_controller is None:
                 vts_cfg = CONFIG.get("VTUBE_STUDIO", {})
                 if isinstance(vts_cfg, dict):
+                    _ultimo_vts_cfg = {
+                        "host": vts_cfg.get("host", "localhost"),
+                        "port": vts_cfg.get("port", 8001),
+                        "emotion_map": dict(vts_cfg.get("emotion_map", {})),
+                    }
                     vts_controller = VTSController(
-                        host=vts_cfg.get("host", "localhost"),
-                        port=vts_cfg.get("port", 8001),
-                        emotion_map=vts_cfg.get("emotion_map", {})
+                        host=_ultimo_vts_cfg["host"],
+                        port=_ultimo_vts_cfg["port"],
+                        emotion_map=_ultimo_vts_cfg["emotion_map"],
+                        signals=signals
                     )
-                    emotion_engine.registrar_callback_emocao(vts_controller.trigger_emotion)
                     vts_controller.start()
+            elif CONFIG.get("VTUBESTUDIO_ATIVO", False) and vts_controller is not None:
+                vts_cfg = CONFIG.get("VTUBE_STUDIO", {})
+                desired_cfg = None
+                if isinstance(vts_cfg, dict):
+                    desired_cfg = {
+                        "host": vts_cfg.get("host", "localhost"),
+                        "port": vts_cfg.get("port", 8001),
+                        "emotion_map": dict(vts_cfg.get("emotion_map", {})),
+                    }
+                if desired_cfg and desired_cfg != _ultimo_vts_cfg:
+                    vts_controller.stop()
+                    vts_controller = VTSController(
+                        host=desired_cfg["host"],
+                        port=desired_cfg["port"],
+                        emotion_map=desired_cfg["emotion_map"],
+                        signals=signals
+                    )
+                    vts_controller.start()
+                    _ultimo_vts_cfg = desired_cfg
             elif not CONFIG.get("VTUBESTUDIO_ATIVO", False) and vts_controller is not None:
                 vts_controller.stop()
                 vts_controller = None
+                _ultimo_vts_cfg = None
 
         ui.novo_turno()
         emotion_engine.novo_turno()
@@ -225,12 +263,14 @@ while True:
         full_raw_response = []
         full_tts_text = []  # Acumula TUDO para falar uma vez só
         divider = SentenceDivider(faster_first_response=True)
+        displayed_hana_prefix = False
 
         token_stream = llm.gerar_resposta_stream(
             chat_history=raw_history,
             sistema_prompt=sistema_prompt,
             user_message=user_message,
-            image_b64=image_b64
+            image_b64=image_b64,
+            request_context=build_request_context(channel="terminal_voice", task_type="chat_normal"),
         )
 
         for chunk in divider.process_stream(token_stream):
@@ -252,7 +292,10 @@ while True:
                             except: pass
 
                 # Imprimir no terminal em tempo real (visual rápido)
-                print(f"{ui.C_NYRA}[HANA]{ui.C_RST}: {chunk.text}")
+                if chunk.text.strip():
+                    prefix = f"{ui.C_NYRA}[HANA]{ui.C_RST}: " if not displayed_hana_prefix else "        "
+                    print(f"{prefix}{chunk.text}")
+                    displayed_hana_prefix = True
                 full_raw_response.append(chunk.raw)
 
                 # Acumular texto limpo para TTS
@@ -268,7 +311,7 @@ while True:
             tts.falar(texto_final_tts)
             signals.HANA_SPEAKING = False
 
-        ai_response_falada = " ".join(full_raw_response)
+        ai_response_falada = divider.complete_response or "".join(full_raw_response)
 
         # ==============================================================
         # PÓS-PROCESSAMENTO: Parser XML de ações silenciosas

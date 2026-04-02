@@ -48,6 +48,7 @@ def limpar_texto_tts(texto: str) -> str:
     texto_limpo = re.sub(r'<analisar_inbox>.*?</analisar_inbox>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<bypass>.*?</bypass>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<resumo_imagem>.*?</resumo_imagem>', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r'<ferramenta_web>.*?</ferramenta_web>', '', texto_limpo, flags=re.DOTALL)
 
     # 2. Proteção de Emergência: Remove blocos de código
     texto_limpo = re.sub(r'<tool_code>.*?</tool_code>', '', texto_limpo, flags=re.DOTALL)

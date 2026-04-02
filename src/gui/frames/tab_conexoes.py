@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.gui.design import COLORS, FONT_TITLE, FONT_BODY, FONT_SMALL
 from src.config.config_loader import CONFIG
+from src.core.runtime_capabilities import get_ptt_settings, sync_legacy_ptt_config
 
 
 class TabConexoes(ctk.CTkFrame):
@@ -70,8 +71,7 @@ class TabConexoes(ctk.CTkFrame):
 
             # PTT: Adicionar seletor de tecla ao lado
             if key == "ptt":
-                gui_cfg = CONFIG.get("GUI", {})
-                current_key = gui_cfg.get("ptt_key", "F2") if isinstance(gui_cfg, dict) else "F2"
+                current_key = get_ptt_settings()["key"]
 
                 key_frame = ctk.CTkFrame(card, fg_color="transparent")
                 key_frame.grid(row=2, column=0, columnspan=2, padx=15, pady=(0, 12), sticky="ew")
@@ -134,6 +134,9 @@ class TabConexoes(ctk.CTkFrame):
         else:
             CONFIG[config_key] = ativo
 
+        if key == "ptt":
+            sync_legacy_ptt_config()
+
         try:
             CONFIG.save()
             logging.info(f"[CONEXÕES] {config_key} = {ativo}")
@@ -147,9 +150,9 @@ class TabConexoes(ctk.CTkFrame):
             gui_cfg = {}
         gui_cfg["ptt_key"] = new_key
         CONFIG["GUI"] = gui_cfg
+        sync_legacy_ptt_config()
         try:
             CONFIG.save()
             logging.info(f"[CONEXÕES] PTT tecla: {new_key}")
         except Exception:
             pass
-

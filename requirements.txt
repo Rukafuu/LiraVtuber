@@ -13,6 +13,7 @@ tavily-python==0.7.23
 mss==9.0.1
 Pillow==10.4.0
 customtkinter>=5.2.0
+tkinterdnd2>=0.4.3
 pywinstyles>=1.8
 psutil>=5.9.0
 chromadb>=0.4.0

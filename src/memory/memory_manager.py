@@ -137,6 +137,19 @@ class HanaMemoryManager:
         for node in self.graph.graph.nodes():
             if node in text_lower:
                 entities.add(node)
+
+        # Método 3: resolve perguntas em primeira pessoa para o usuário principal
+        if re.search(r"\b(eu|meu|minha|meus|minhas|mim)\b", text_lower):
+            for alias in ("nakamura", "criador", "mestre", "usuario", "usuário", "user"):
+                if alias in self.graph.graph.nodes():
+                    entities.add(alias)
+            if not any(alias in entities for alias in ("nakamura", "criador", "mestre", "usuario", "usuário", "user")):
+                entities.add("nakamura")
+
+        # Método 4: resolve perguntas sobre a própria Hana
+        if re.search(r"\b(voc[eê]|vc|hana)\b", text_lower):
+            if "hana" in self.graph.graph.nodes():
+                entities.add("hana")
         
         return list(entities)
 

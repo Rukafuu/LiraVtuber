@@ -1,14 +1,13 @@
 """
 Provider LLM: Cerebras
-
-Wrapper fino herdando de BaseLLM. Todo o pipeline vem da base.
-Cerebras não tem modelo de visão — usa o fallback Groq da BaseLLM automaticamente.
 """
 
-import os 
-from src.config.config_loader import CONFIG
-from src.brain.base_llm import BaseLLM
+import os
+
 from dotenv import load_dotenv
+
+from src.brain.base_llm import BaseLLM
+from src.config.config_loader import CONFIG
 
 
 class CerebrasProvider(BaseLLM):
@@ -30,34 +29,66 @@ class CerebrasProvider(BaseLLM):
             api_key = os.getenv("CEREBRAS_API_KEY")
             if api_key:
                 return Cerebras(api_key=api_key)
-            else:
-                print("[ERRO LLM CEREBRAS] CEREBRAS_API_KEY ausente no .env")
-                return None
+            print("[ERRO LLM CEREBRAS] CEREBRAS_API_KEY ausente no .env")
+            return None
         except Exception as e:
             print(f"[ERRO LLM CEREBRAS] {e}")
             return None
 
-    def _chamar_api(self, modelo, mensagens, ferramentas=None, tool_choice="auto", image_b64: str = None):
+    def _chamar_api(
+        self,
+        modelo,
+        mensagens,
+        ferramentas=None,
+        tool_choice="auto",
+        image_b64: str = None,
+        arquivos_multimidia: list = None,
+        request_context: dict | None = None,
+    ):
         kwargs = {
             "model": modelo,
             "messages": mensagens,
             "temperature": self.temperatura,
         }
+        max_output_tokens = (request_context or {}).get("max_output_tokens")
+        if max_output_tokens:
+            kwargs["max_tokens"] = max_output_tokens
         if ferramentas:
             kwargs["tools"] = ferramentas
-            # Cerebras pode não suportar tool_choice em todos os modelos
+
+        self.last_request_meta = {
+            "provider": self.provedor,
+            "model": modelo,
+            "backend": "cerebras_api",
+            "routed": False,
+        }
         return self.cliente.chat.completions.create(**kwargs)
 
-    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
-        """Stream de tokens via Cerebras SDK."""
-        stream = self.cliente.chat.completions.create(
-            model=modelo,
-            messages=mensagens,
-            temperature=self.temperatura,
-            stream=True,
-        )
+    def _chamar_api_stream(
+        self,
+        modelo,
+        mensagens,
+        image_b64: str = None,
+        arquivos_multimidia: list = None,
+        request_context: dict | None = None,
+    ):
+        kwargs = {
+            "model": modelo,
+            "messages": mensagens,
+            "temperature": self.temperatura,
+            "stream": True,
+        }
+        max_output_tokens = (request_context or {}).get("max_output_tokens")
+        if max_output_tokens:
+            kwargs["max_tokens"] = max_output_tokens
+        self.last_request_meta = {
+            "provider": self.provedor,
+            "model": modelo,
+            "backend": "cerebras_api",
+            "routed": False,
+        }
+        stream = self.cliente.chat.completions.create(**kwargs)
         for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 yield delta.content
-

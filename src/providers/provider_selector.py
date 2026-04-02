@@ -19,7 +19,7 @@ class ProviderSelector:
         prov = self.provedor_atual.lower()
         
         if prov in self.instancias:
-            return self.instancias[prov]
+            return self.instancias[prov].refresh_runtime_settings()
             
         try:
             if prov == "groq":
@@ -40,7 +40,7 @@ class ProviderSelector:
                 self.instancias["groq"] = GroqProvider()
                 return self.instancias["groq"]
                 
-            return self.instancias[prov]
+            return self.instancias[prov].refresh_runtime_settings()
             
         except ImportError as e:
             logger.error(f"[PROVIDER SELECTOR] Erro ao carregar provedor {prov}: {e}")

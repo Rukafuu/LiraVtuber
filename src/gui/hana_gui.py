@@ -127,7 +127,7 @@ class HanaControlCenter(ctk.CTk):
             ("💾  Memória",           6,  "memoria"),
             ("💭  Mente da Hana",    7,  "emocoes"),
             ("🎭  VTube Studio",     8,  "vtube"),
-            ("💬  Terminal Chat",     9,  "chat"),
+            ("💬  Chat do Controle",  9,  "chat"),
             ("📝  Persona",          10, "persona"),
             ("⚙  Prompts",           11, "prompts"),
             ("🔌  Conexões",         12, "conexoes"),
@@ -150,7 +150,7 @@ class HanaControlCenter(ctk.CTk):
 
         # Status na base da sidebar
         self._status_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self._status_frame.grid(row=13, column=0, padx=15, pady=(5, 15), sticky="sew")
+        self._status_frame.grid(row=15, column=0, padx=15, pady=(5, 15), sticky="sew")
 
         self._status_dot = ctk.CTkLabel(
             self._status_frame, text="●",

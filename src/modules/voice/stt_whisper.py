@@ -10,6 +10,7 @@ import pyaudio
 from groq import Groq
 
 from src.config.config_loader import CONFIG
+from src.core.runtime_capabilities import get_ptt_settings
 from src.utils.text import ui
 
 logger = logging.getLogger(__name__)
@@ -59,8 +60,9 @@ class MotorSTTWhisper:
         self.limiar_volume = 800
         self.limite_silencio = 1.6
 
-        self.modo_ptt = CONFIG.get("precione_para_falar", False)
-        self.tecla_ptt = CONFIG.get("TECLA_PTT", "insert").lower()
+        ptt_cfg = get_ptt_settings()
+        self.modo_ptt = bool(ptt_cfg["enabled"])
+        self.tecla_ptt = str(ptt_cfg["key"]).lower()
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.caminho_dicionario = os.path.join(base_dir, "config", "dicionário.json")

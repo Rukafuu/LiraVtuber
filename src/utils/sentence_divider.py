@@ -1,240 +1,207 @@
 """
-SentenceDivider — Fatia o stream de tokens da LLM em frases completas.
-
-Inspirado no Open-LLM-VTuber, adaptado para o pipeline síncrono da Hana.
-Extrai tags especiais:
-  - <thought>...</thought> ou <pensamento>...</pensamento> → Pensamento interno
-  - [EMOTION:NOME]          → Emoção para o VTube Studio
-  - <salvar_memoria>...</salvar_memoria> → Removido do texto (ação silenciosa)
-  - <gerar_imagem>...</gerar_imagem>    → Removido do texto (ação silenciosa)
+SentenceDivider - fatia o stream em frases visíveis sem deixar vazar XML silencioso.
 """
 
+from __future__ import annotations
+
 import re
-import logging
 from dataclasses import dataclass, field
-from typing import Generator, List, Optional
+from typing import Generator, List
 
-logger = logging.getLogger(__name__)
-
-# Pontuação que indica fim de frase
-END_PUNCTUATION = {".", "!", "?", "。", "！", "？", "…"}
-COMMAS = {",", "，", ";", "、"}
+END_PUNCTUATION = {".", "!", "?", "…", "。", "！", "？"}
+COMMAS = {",", ";", "，", "、"}
+THOUGHT_TAGS = ("pensamento", "thought", "think")
+SILENT_XML_TAGS = (
+    "salvar_memoria",
+    "gerar_imagem",
+    "editar_imagem",
+    "analisar_youtube",
+    "usar_inbox",
+    "analisar_inbox",
+    "bypass",
+    "resumo_imagem",
+    "ferramenta_web",
+)
 
 
 @dataclass
 class SentenceChunk:
-    """Representa um pedaço processado do stream."""
-    text: str = ""                    # Texto limpo para TTS
-    thought: str = ""                 # Pensamento interno (se houver)
-    emotions: List[str] = field(default_factory=list)  # Emoções detectadas
-    params: List[str] = field(default_factory=list)    # Parâmetros VTS [PARAM:N=V]
-    is_thought: bool = False          # True se este chunk é um pensamento
-    raw: str = ""                     # Texto original bruto (para memória)
+    text: str = ""
+    thought: str = ""
+    emotions: List[str] = field(default_factory=list)
+    params: List[str] = field(default_factory=list)
+    is_thought: bool = False
+    raw: str = ""
 
 
 class SentenceDivider:
-    """
-    Recebe um generator de tokens (strings) e emite SentenceChunks
-    assim que detecta uma frase completa.
-    """
-
     def __init__(self, faster_first_response: bool = True):
         self.faster_first_response = faster_first_response
-        self._buffer = ""
-        self._is_first_sentence = True
-        self._inside_thought = False
-        self._thought_buffer = ""
-        self._full_response = []
+        self.reset()
 
     def reset(self):
-        """Reseta o estado para um novo turno."""
         self._buffer = ""
+        self._raw_response_parts: list[str] = []
+        self._visible_buffer = ""
+        self._visible_raw_buffer = ""
         self._is_first_sentence = True
-        self._inside_thought = False
-        self._thought_buffer = ""
-        self._full_response = []
+        self._tag_buffer = ""
+        self._mode = "visible"
+        self._hidden_tag_name = ""
+        self._hidden_buffer = ""
 
     def process_stream(self, token_generator: Generator[str, None, None]) -> Generator[SentenceChunk, None, None]:
-        """
-        Processa o stream de tokens e emite SentenceChunks completos.
-        
-        Args:
-            token_generator: Generator que emite tokens (strings) da LLM.
-            
-        Yields:
-            SentenceChunk com texto pronto para TTS ou pensamento interno.
-        """
         self.reset()
 
         for token in token_generator:
+            if not token:
+                continue
+            self._raw_response_parts.append(token)
             self._buffer += token
-
-            # Processa o buffer continuamente
             for chunk in self._process_buffer():
                 yield chunk
 
-        # Flush do que sobrou no buffer
         for chunk in self._flush():
             yield chunk
 
     def _process_buffer(self) -> Generator[SentenceChunk, None, None]:
-        """Processa o buffer atual, emitindo chunks completos."""
-        while True:
-            # 1. Detectar abertura de <thought> ou <pensamento>
-            thought_open = -1
-            thought_tag_len = 0
-            for tag in ("<thought>", "<pensamento>", "<think>"):
-                idx = self._buffer.find(tag)
-                if idx != -1 and (thought_open == -1 or idx < thought_open):
-                    thought_open = idx
-                    thought_tag_len = len(tag)
+        while self._buffer:
+            char = self._buffer[0]
+            self._buffer = self._buffer[1:]
 
-            if thought_open != -1:
-                # Emitir texto ANTES do <thought>/<pensamento> se houver
-                text_before = self._buffer[:thought_open]
-                if text_before.strip():
-                    for chunk in self._extract_sentences(text_before):
-                        yield chunk
-
-                self._buffer = self._buffer[thought_open + thought_tag_len:]
-                self._inside_thought = True
-                self._thought_buffer = ""
+            if self._mode == "tag":
+                self._tag_buffer += char
+                if char == ">":
+                    yield from self._consume_completed_tag()
                 continue
 
-            # 2. Detectar fechamento de </thought> ou </pensamento>
-            if self._inside_thought:
-                thought_close = -1
-                close_tag_len = 0
-                for ctag in ("</thought>", "</pensamento>", "</think>"):
-                    idx = self._buffer.find(ctag)
-                    if idx != -1 and (thought_close == -1 or idx < thought_close):
-                        thought_close = idx
-                        close_tag_len = len(ctag)
+            if self._mode in {"thought", "silent"}:
+                self._hidden_buffer += char
+                close_tag = f"</{self._hidden_tag_name}>"
+                if self._hidden_buffer.lower().endswith(close_tag):
+                    content = self._hidden_buffer[: -len(close_tag)]
+                    if self._mode == "thought" and content.strip():
+                        yield self._make_thought_chunk(content.strip())
+                    self._hidden_buffer = ""
+                    self._hidden_tag_name = ""
+                    self._mode = "visible"
+                continue
 
-                if thought_close != -1:
-                    self._thought_buffer += self._buffer[:thought_close]
-                    self._buffer = self._buffer[thought_close + close_tag_len:]
-                    self._inside_thought = False
+            if char == "<":
+                self._mode = "tag"
+                self._tag_buffer = "<"
+                continue
 
-                    # Emitir o pensamento como chunk especial
-                    if self._thought_buffer.strip():
-                        chunk = SentenceChunk(
-                            thought=self._thought_buffer.strip(),
-                            is_thought=True,
-                            raw=f"<thought>{self._thought_buffer.strip()}</thought>"
-                        )
-                        self._full_response.append(chunk.raw)
-                        yield chunk
-                    continue
-                else:
-                    # Ainda dentro do thought, acumula tudo
-                    self._thought_buffer += self._buffer
-                    self._buffer = ""
-                    return
-
-            # 3. Texto normal — buscar frases completas
-            found_any = False
-            for chunk in self._extract_sentences(self._buffer):
-                found_any = True
+            self._append_visible_char(char)
+            chunk = self._extract_next_sentence()
+            if chunk:
                 yield chunk
 
-            if not found_any:
-                return
-            else:
-                # Se emitimos algo, o buffer foi atualizado dentro de _extract_sentences
-                # mas precisamos checar se há mais
-                if not self._buffer.strip():
-                    return
+    def _consume_completed_tag(self) -> Generator[SentenceChunk, None, None]:
+        raw_tag = self._tag_buffer
+        self._tag_buffer = ""
+        self._mode = "visible"
 
-    def _extract_sentences(self, text: str) -> Generator[SentenceChunk, None, None]:
-        """Extrai frases completas do texto, atualizando self._buffer."""
-        # Primeiro, tenta a resposta rápida via vírgula (só na primeira frase)
+        normalized = raw_tag.strip().lower()
+        tag_name = normalized.strip("<>/ ").split()[0] if normalized.startswith("<") else ""
+        is_closing = normalized.startswith("</")
+
+        if tag_name in THOUGHT_TAGS and not is_closing:
+            self._mode = "thought"
+            self._hidden_tag_name = tag_name
+            self._hidden_buffer = ""
+            return
+
+        if tag_name in SILENT_XML_TAGS and not is_closing:
+            self._mode = "silent"
+            self._hidden_tag_name = tag_name
+            self._hidden_buffer = ""
+            return
+
+        self._append_visible_text(raw_tag)
+        chunk = self._extract_next_sentence()
+        if chunk:
+            yield chunk
+
+    def _append_visible_char(self, char: str):
+        self._visible_buffer += char
+        self._visible_raw_buffer += char
+
+    def _append_visible_text(self, text: str):
+        self._visible_buffer += text
+        self._visible_raw_buffer += text
+
+    def _extract_next_sentence(self) -> SentenceChunk | None:
+        text = self._visible_buffer
+        if not text.strip():
+            return None
+
         if self._is_first_sentence and self.faster_first_response:
             for comma in COMMAS:
                 idx = text.find(comma)
-                if idx != -1 and idx > 3:  # Pelo menos 4 chars antes da vírgula
-                    sentence = text[:idx + 1].strip()
-                    remaining = text[idx + 1:].strip()
-                    
-                    if sentence:
-                        chunk = self._make_chunk(sentence)
-                        self._buffer = remaining
-                        self._is_first_sentence = False
-                        yield chunk
-                        return
+                if idx > 3:
+                    return self._pop_sentence(idx + 1)
 
-        # Busca por pontuação final
-        for i, char in enumerate(text):
+        for idx, char in enumerate(text):
             if char in END_PUNCTUATION:
-                # Verifica se não é abreviação (ex: "ex." no meio de frase)
-                sentence = text[:i + 1].strip()
-                remaining = text[i + 1:]
-                
-                if len(sentence) > 2:  # Evitar emitir só "." ou "!"
-                    chunk = self._make_chunk(sentence)
-                    self._buffer = remaining
-                    self._is_first_sentence = False
-                    yield chunk
-                    return
+                return self._pop_sentence(idx + 1)
+        return None
 
-        # Nenhuma frase completa encontrada, manter no buffer
-        self._buffer = text
+    def _pop_sentence(self, cut_index: int) -> SentenceChunk | None:
+        visible = self._visible_buffer[:cut_index]
+        raw = self._visible_raw_buffer[:cut_index]
+        self._visible_buffer = self._visible_buffer[cut_index:]
+        self._visible_raw_buffer = self._visible_raw_buffer[cut_index:]
+        self._is_first_sentence = False
+        return self._make_chunk(raw, visible)
 
-    def _make_chunk(self, raw_text: str) -> SentenceChunk:
-        """Cria um SentenceChunk extraindo emoções e limpando o texto."""
-        # Extrair [EMOTION:NOME]
-        emotions = re.findall(r'\[EMOTION:(\w+)\]', raw_text, re.IGNORECASE)
-        
-        # Extrair [PARAM:Nome=Valor]
-        params = re.findall(r'\[PARAM:([\w=.-]+)\]', raw_text, re.IGNORECASE)
-        
-        # Limpar o texto removendo as tags de emoção e parâmetros
-        clean_text = re.sub(r'\[EMOTION:\w+\]', '', raw_text).strip()
-        clean_text = re.sub(r'\[PARAM:[\w=.-]+\]', '', clean_text).strip()
-        
-        # Remover tags XML de ações silenciosas (elas serão processadas no main.py)
-        clean_text = re.sub(r'<(pensamento|thought|think)>.*?</\1>', '', clean_text, flags=re.DOTALL | re.IGNORECASE).strip()
-        clean_text = re.sub(r'<salvar_memoria>.*?</salvar_memoria>', '', clean_text, flags=re.DOTALL).strip()
-        clean_text = re.sub(r'<gerar_imagem>.*?</gerar_imagem>', '', clean_text, flags=re.DOTALL).strip()
-        clean_text = re.sub(r'<editar_imagem>.*?</editar_imagem>', '', clean_text, flags=re.DOTALL).strip()
-        clean_text = re.sub(r'<analisar_youtube>.*?</analisar_youtube>', '', clean_text, flags=re.DOTALL).strip()
-        clean_text = re.sub(r'<bypass>.*?</bypass>', '', clean_text, flags=re.DOTALL).strip()
-        clean_text = re.sub(r'<resumo_imagem>.*?</resumo_imagem>', '', clean_text, flags=re.DOTALL).strip()
+    def _make_thought_chunk(self, thought_text: str) -> SentenceChunk:
+        return SentenceChunk(
+            thought=thought_text,
+            is_thought=True,
+            raw=f"<thought>{thought_text}</thought>",
+        )
 
-        # Remover citações do Google Search Grounding [INDEX_X.Y]
-        clean_text = re.sub(r'\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]', '', clean_text).strip()
-        
-        # Remover 【...】 (marcadores fantasma existentes)
-        display_raw = raw_text
+    def _make_chunk(self, raw_text: str, visible_text: str | None = None) -> SentenceChunk:
+        text_base = visible_text if visible_text is not None else raw_text
+        emotions = re.findall(r"\[EMOTION:(\w+)\]", text_base, re.IGNORECASE)
+        params = re.findall(r"\[PARAM:([\w=.-]+)\]", text_base, re.IGNORECASE)
 
-        self._full_response.append(display_raw)
+        clean_text = re.sub(r"\[EMOTION:\w+\]", "", text_base, flags=re.IGNORECASE).strip()
+        clean_text = re.sub(r"\[PARAM:[\w=.-]+\]", "", clean_text, flags=re.IGNORECASE).strip()
+        clean_text = re.sub(r"\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]", "", clean_text).strip()
 
         return SentenceChunk(
             text=clean_text,
             emotions=emotions,
             params=params,
-            raw=display_raw
+            raw=raw_text,
         )
 
     def _flush(self) -> Generator[SentenceChunk, None, None]:
-        """Emite qualquer texto restante no buffer."""
-        if self._inside_thought and self._thought_buffer.strip():
-            chunk = SentenceChunk(
-                thought=self._thought_buffer.strip(),
-                is_thought=True,
-                raw=f"<thought>{self._thought_buffer.strip()}</thought>"
-            )
-            self._full_response.append(chunk.raw)
-            yield chunk
-            self._thought_buffer = ""
-            self._inside_thought = False
+        if self._mode == "tag" and self._tag_buffer:
+            self._append_visible_text(self._tag_buffer)
+            self._tag_buffer = ""
+            self._mode = "visible"
 
-        if self._buffer.strip():
-            chunk = self._make_chunk(self._buffer.strip())
-            yield chunk
-            self._buffer = ""
+        if self._mode == "thought" and self._hidden_buffer.strip():
+            yield self._make_thought_chunk(self._hidden_buffer.strip())
+            self._hidden_buffer = ""
+            self._hidden_tag_name = ""
+            self._mode = "visible"
+
+        if self._mode == "silent":
+            self._hidden_buffer = ""
+            self._hidden_tag_name = ""
+            self._mode = "visible"
+
+        tail = self._visible_buffer.strip()
+        raw_tail = self._visible_raw_buffer.strip()
+        if tail and raw_tail:
+            yield self._make_chunk(raw_tail, tail)
+        self._visible_buffer = ""
+        self._visible_raw_buffer = ""
 
     @property
     def complete_response(self) -> str:
-        """Retorna a resposta completa acumulada."""
-        return " ".join(self._full_response)
+        return "".join(self._raw_response_parts)
