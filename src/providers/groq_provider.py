@@ -53,7 +53,7 @@ class GroqProvider(BaseLLM):
             
         return self.cliente.chat.completions.create(**kwargs)
 
-    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None):
+    def _chamar_api_stream(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
         """Stream de tokens via Groq SDK."""
         modelo_exec = modelo
         if image_b64:

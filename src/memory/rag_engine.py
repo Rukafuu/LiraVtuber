@@ -37,24 +37,33 @@ class HanaRAGEngine:
 
     # Tamanho mínimo para armazenar (evita salvar "Oi", "Ok", etc.)
     MIN_TEXT_LENGTH = 15
-    # Distância máxima aceitável (cosine distance: 0=idêntico, 2=oposto)
-    # MemOS usa 0.75 de sim = 0.25 de dist. Usamos 0.35 para ser um pouco mais flexível.
-    MAX_DISTANCE = 0.35
+    # MAX_DISTANCE: Distância máxima aceitável (cosine distance: 0=idêntico, 2=oposto)
+    # Aumentado para 0.55 para permitir correspondência de fatos com palavras ligeiramente diferentes.
+    MAX_DISTANCE = 0.55
 
     def add_memory(self, text: str, metadata: Dict[str, Any] = None):
-        """Adiciona uma nova memória ao banco vetorial."""
+        """Adiciona uma nova memória ao banco vetorial com ID automático."""
         if not text.strip() or len(text.strip()) < self.MIN_TEXT_LENGTH:
             return
             
         import uuid
         mem_id = str(uuid.uuid4())
-        
-        self.collection.add(
-            documents=[text],
-            metadatas=[metadata] if metadata else [{"source": "chat"}],
-            ids=[mem_id]
-        )
-        logger.debug(f"[RAG ENGINE] Memória adicionada: {text[:50]}...")
+        self.upsert_memory(mem_id, text, metadata)
+
+    def upsert_memory(self, mem_id: str, text: str, metadata: Dict[str, Any] = None):
+        """Atualiza ou insere uma memória específica com ID fixo."""
+        if not text.strip() or len(text.strip()) < self.MIN_TEXT_LENGTH:
+            return
+            
+        try:
+            self.collection.upsert(
+                documents=[text],
+                metadatas=[metadata] if metadata else [{"source": "chat"}],
+                ids=[mem_id]
+            )
+            logger.debug(f"[RAG ENGINE] Memória upserted (ID: {mem_id}): {text[:50]}...")
+        except Exception as e:
+            logger.error(f"[RAG ENGINE] Erro no upsert_memory: {e}")
 
     def query_memories(self, query_text: str, n_results: int = 5, max_distance: float = None) -> List[str]:
         """

@@ -44,6 +44,8 @@ def limpar_texto_tts(texto: str) -> str:
     texto_limpo = re.sub(r'<gerar_imagem>.*?</gerar_imagem>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<editar_imagem>.*?</editar_imagem>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<analisar_youtube>.*?</analisar_youtube>', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r'<usar_inbox>.*?</usar_inbox>', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r'<analisar_inbox>.*?</analisar_inbox>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<bypass>.*?</bypass>', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'<resumo_imagem>.*?</resumo_imagem>', '', texto_limpo, flags=re.DOTALL)
 
@@ -133,6 +135,7 @@ class ConsoleUI:
         self.prefix = prefix
         self.turno_atual = 1
         self.tempo_inicio_turno = 0.0
+        self._ultimo_turno_pensado = 0
 
     def novo_turno(self):
         self.turno_atual += 1
@@ -171,9 +174,43 @@ class ConsoleUI:
         self.print_linha("OUVINDO", self.C_SYS, "HUMANO", "👂", "👤")
 
     def print_pensando(self, provedor: str = "LLM_PROVIDER"):
+        # Previne spam duplicado no mesmo turno
+        if getattr(self, '_ultimo_turno_pensado', 0) == self.turno_atual:
+            return
+        self._ultimo_turno_pensado = self.turno_atual
+            
         mod = provedor.upper()
-        if len(mod) > 10: mod = mod[:10]
+        
+        # PENSANDO main line
         self.print_linha("PENSANDO", self.C_MOTOR, mod, "🧠", "🎭")
+
+        # Dynamic hot-read from Config to output exact setup
+        import json
+        import os
+        try:
+            with open(os.path.join("src", "config", "config.json"), "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                
+            llm_provider_key = cfg.get("LLM_PROVIDER", provedor.lower())
+            llm_provider_name = llm_provider_key.upper()
+            
+            provider_cfg = cfg.get("LLM_PROVIDERS", {}).get(llm_provider_key, {})
+            modelo_chat = str(provider_cfg.get("modelo_chat", provider_cfg.get("modelo", "N/D")))
+            
+            visao_ativa = cfg.get("VISAO_ATIVA", False)
+            
+            # Printa o modelo de raciocínio principal
+            self.print_linha("MODELO", self.C_MOTOR, modelo_chat, "⚙️", "📘")
+            
+            # Se tiver visão ativa, adiciona uma linha mostrando o Módulo e o Modelo de Visão
+            if visao_ativa:
+                modelo_visao = str(provider_cfg.get("modelo_vision", modelo_chat))
+                self.print_linha("VISÃO: ON", self.C_VIS, modelo_visao, "👁️", "🏭")
+            else:
+                self.print_linha("VISÃO: OFF", self.C_SYS, "Desativado", "👁️", "🏭")
+            
+        except Exception as e:
+            pass
 
     def print_falando(self, tts_provider: str = "TTS"):
         mod = tts_provider.upper()

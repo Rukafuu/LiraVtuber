@@ -10,7 +10,7 @@
     "LLM_TEMPERATURE": 0.85,
     "LLM_PROVIDERS": {
         "groq": {
-            "modelo": "llama-3.3-70b-versatile",
+            "modelo": "groq/compound",
             "modelo_chat": "llama-3.3-70b-versatile",
             "modelo_vision": "meta-llama/llama-4-scout-17b-16e-instruct",
             "modelo_web": "groq/compound-mini"
@@ -32,7 +32,7 @@
     "_comment_chat": "================= CHAT DA GUI (PROVEDOR INDEPENDENTE) =================",
     "CHAT": {
         "LLM_PROVIDER": "google_cloud",
-        "LLM_MODEL": "gemini-2.5-flash",
+        "LLM_MODEL": "gemini-3.1-pro-preview",
         "LLM_TEMPERATURE": 0.85,
         "usa_mesmo_prompt_terminal": true
     },
@@ -44,8 +44,8 @@
     "GOOGLE_TTS_PITCH": 1.4,
     "_comment_toggles": "================= TOGGLES DE MÓDULOS =================",
     "TTS_ATIVO": true,
-    "STT_ATIVO": false,
-    "VISAO_ATIVA": false,
+    "STT_ATIVO": true,
+    "VISAO_ATIVA": true,
     "VISAO_MONITOR": 1,
     "VTUBESTUDIO_ATIVO": false,
     "Modo_discord": false,
@@ -66,11 +66,12 @@
     },
     "_comment_gui": "================= GUI (PERSONALIZAÇÃO VISUAL) =================",
     "GUI": {
-        "accent_color": "#3b82f6",
+        "accent_color": "#a855f7",
         "bg_opacity": 1.0,
         "ptt_key": "F2",
         "ptt_enabled": false
     },
     "_comment_sistema": "================ CONFIGURACOES DE SISTEMA ===================",
-    "FFMPEG_PATH": "C:\\Ffmpeg\\ffmpeg.exe"
+    "HANA_INBOX_ROOT": "",
+    "HANA_INBOX_MODEL": "gemini-2.5-flash"
 }

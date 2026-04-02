@@ -4,7 +4,7 @@ Módulo de Geração e Edição de Imagens da Hana — via Gemini 2.5 Flash Imag
 Usa o SDK google.genai com response_modalities=["TEXT", "IMAGE"]
 para gerar e editar imagens.
 
-Salva as imagens em: C:\\Users\\Nakamura\\Pictures\\Hana Artista
+Salva as imagens em: ~/Pictures/Hana Artista (auto-detectado)
 """
 
 import datetime
@@ -19,8 +19,20 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# Diretório padrão para salvar as imagens geradas
-DEFAULT_OUTPUT_DIR = r"C:\Users\Nakamura\Pictures\Hana Artista"
+
+def _resolve_output_dir():
+    """Auto-detecta a pasta Pictures do usuário e cria 'Hana Artista' dentro."""
+    try:
+        pictures = os.path.join(os.path.expanduser("~"), "Pictures", "Hana Artista")
+        os.makedirs(pictures, exist_ok=True)
+        return pictures
+    except Exception:
+        fallback = os.path.join("C:\\", "Hana Artista")
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+
+DEFAULT_OUTPUT_DIR = _resolve_output_dir()
 
 
 class HanaImageGen:

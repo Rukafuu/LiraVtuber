@@ -49,5 +49,9 @@ logs/
 
 # Project Specific
 !data/.gitkeep
-temp/ultima_visao.png
 data/vts_token.txt
+data/emotion_state.json
+temp/
+
+# Test scripts (local only)
+test_*.py

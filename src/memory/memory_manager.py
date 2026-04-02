@@ -18,7 +18,24 @@ class HanaMemoryManager:
         # Camada 3: Lógica (Grafo de Conhecimento)
         self.graph = HanaKnowledgeGraph()
         
+        # Sincroniza os fatos permanentes na base de dados de vetores
+        self._sincronizar_grafo_rag()
+        
         logger.info("[MEMORY MANAGER] Sistema de memória híbrida inicializado.")
+
+    def _sincronizar_grafo_rag(self):
+        """Itera os nós do grafo atual e injeta no RAG (com Upsert) para busca vetorial livre."""
+        count = 0
+        import hashlib
+        for s, o, data in self.graph.graph.edges(data=True):
+            r = data.get("relation", "?").replace('_', ' ')
+            frase = f"O {s} tem {r} como {o}."
+            # Cria ID baseado nas chaves únicas do fato para não duplicar no RAG
+            mem_id = hashlib.md5(f"{s}{r}{o}".encode('utf-8')).hexdigest()
+            self.rag.upsert_memory(mem_id, frase, metadata={"source": "knowledge_graph"})
+            count += 1
+        if count > 0:
+            logger.info(f"[MEMORY MANAGER] {count} fatos do Grafo foram sincronizados com o RAG.")
 
     # Padrões de extração automática de fatos (PT-BR)
     FACT_PATTERNS = [
@@ -61,7 +78,7 @@ class HanaMemoryManager:
             if match:
                 value = match.group(group_idx).strip()
                 if len(value) > 1 and len(value) < 100:
-                    self.graph.add_fact(subject, relation, value)
+                    self.add_fact(subject, relation, value)
                     logger.info(f"[MEMORY MANAGER] Fato extraído: {subject} --[{relation}]--> {value}")
         
         # 2. Comando explícito de "decore/guarda/lembra/anota"
@@ -74,7 +91,7 @@ class HanaMemoryManager:
             # Procura números na mensagem
             numeros = re.findall(r"\b\d{2,}\b", text)
             for num in numeros:
-                self.graph.add_fact("nakamura", "número_importante", num)
+                self.add_fact("nakamura", "número_importante", num)
                 logger.info(f"[MEMORY MANAGER] Número memorizado: {num}")
             
             # Se não encontrou números, salva o conteúdo relevante
@@ -85,7 +102,7 @@ class HanaMemoryManager:
                     "", text_lower, count=1
                 ).strip()
                 if len(conteudo) > 3:
-                    self.graph.add_fact("hana_nota", "deve_lembrar", conteudo)
+                    self.add_fact("hana_nota", "deve_lembrar", conteudo)
                     logger.info(f"[MEMORY MANAGER] Nota memorizada: {conteudo}")
 
     def get_context(self, user_query: str, recent_limit: int = 100) -> str:
@@ -124,8 +141,14 @@ class HanaMemoryManager:
         return list(entities)
 
     def add_fact(self, s, r, o):
-        """Atalho para adicionar fatos permanentes ao grafo."""
+        """Atalho para adicionar fatos permanentes ao grafo e ao RAG."""
         self.graph.add_fact(s, r, o)
+        
+        import hashlib
+        r_limpo = r.replace('_', ' ')
+        frase = f"O {s} tem {r_limpo} como {o}."
+        mem_id = hashlib.md5(f"{s}{r}{o}".encode('utf-8')).hexdigest()
+        self.rag.upsert_memory(mem_id, frase, metadata={"source": "knowledge_graph"})
 
     def get_messages(self, limit: int = 100):
         """Retorna o histórico recente do SQLite."""

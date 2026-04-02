@@ -212,19 +212,19 @@ class TabLLM(ctk.CTkFrame):
         """Atualiza modelos baseado no provedor."""
         sugestoes = {
             "groq": {
-                "chat": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-4-scout-17b-16e-instruct", "Outro..."],
+                "chat": ["llama-3.1-8b-instant", "meta-llama/llama-4-scout-17b-16e-instruct", "moonshotai/kimi-k2-instruct-0905", "Outro..."],
                 "visao": ["meta-llama/llama-4-scout-17b-16e-instruct", "Outro..."]
             },
             "google_cloud": {
-                "chat": ["gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash", "Outro..."],
-                "visao": ["gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", "gemini-2.5-flash", "Outro..."]
+                "chat": ["gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-3.1-flash-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "Outro..."],
+                "visao": ["gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-3.1-flash-preview", "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "Outro..."]
             },
             "openrouter": {
-                "chat": ["x-ai/grok-4.1-fast", "x-ai/grok-4", "openai/gpt-5.4", "openai/gpt-5.4-mini", "google/gemini-3.1-pro-preview", "google/gemini-2.5-flash", "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6", "deepseek/deepseek-r1", "meta-llama/llama-4-maverick", "Outro..."],
-                "visao": ["x-ai/grok-4.1-fast", "google/gemini-3.1-pro-preview", "google/gemini-2.5-flash", "Outro..."]
+                "chat": ["openai/gpt-5.4", "openai/gpt-5.4-mini", "google/gemini-3.1-flash-lite-preview", "google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "x-ai/grok-4.20-beta", "x-ai/grok-4.1-fast", "x-ai/grok-4", "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6", "anthropic/claude-haiku-4.5", "Outro..."],
+                "visao": ["google/gemini-3.1-pro-preview", "google/gemini-2.5-flash", "google/gemini-2.5-pro", "x-ai/grok-4.1-fast", "Outro..."]
             },
             "cerebras": {
-                "chat": ["qwen-3-235b-a22b-instruct-2507", "llama-3.3-70b", "Outro..."],
+                "chat": ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b", "gpt-oss-120b", "zai-glm-4.7", "Outro..."],
                 "visao": []
             }
         }

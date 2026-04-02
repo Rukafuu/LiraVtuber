@@ -327,12 +327,16 @@ class TabMemoria(ctk.CTkFrame):
 
                 color = COLORS["purple_neon"] if role and role.lower() == "hana" else COLORS["blue_neon"]
                 display_role = role or "?"
-                preview = (content or "")[:120].replace("\n", " ")
-
+                preview = content or ""
+                
                 lbl_role = ctk.CTkLabel(row, text=f"[{display_role}]", font=FONT_MONO, text_color=color, width=90, anchor="w")
                 lbl_role.pack(side="left", padx=(10, 5), pady=5)
 
-                lbl_msg = ctk.CTkLabel(row, text=preview, font=FONT_SMALL, text_color=COLORS["text_secondary"], anchor="w")
+                lbl_msg = ctk.CTkLabel(
+                    row, text=preview, font=FONT_SMALL, 
+                    text_color=COLORS["text_secondary"], 
+                    anchor="w", justify="left", wraplength=850
+                )
                 lbl_msg.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
 
         except Exception as e:
