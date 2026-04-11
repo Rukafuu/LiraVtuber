@@ -19,7 +19,7 @@ class TabPrompts(ctk.CTkFrame):
     """Editor do prompt.json — regras operacionais da Hana."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
@@ -34,7 +34,7 @@ class TabPrompts(ctk.CTkFrame):
         sub.grid(row=1, column=0, padx=25, pady=(0, 12), sticky="w")
 
         # ─── EDITOR ───
-        editor_card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        editor_card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         editor_card.grid(row=2, column=0, padx=15, pady=(0, 8), sticky="nsew")
         editor_card.grid_columnconfigure(0, weight=1)
         editor_card.grid_rowconfigure(1, weight=1)
@@ -53,7 +53,7 @@ class TabPrompts(ctk.CTkFrame):
             editor_card, font=FONT_MONO,
             fg_color=COLORS["bg_darkest"],
             text_color=COLORS["text_primary"],
-            border_width=1, border_color=COLORS["border"],
+            border_width=2, border_color=COLORS["border"],
             corner_radius=8, wrap="word"
         )
         self.editor.grid(row=1, column=0, padx=12, pady=(0, 8), sticky="nsew")
@@ -65,7 +65,7 @@ class TabPrompts(ctk.CTkFrame):
         self.btn_recarregar = ctk.CTkButton(
             btn_frame, text="↻  Recarregar", width=130,
             fg_color=COLORS["bg_card"], hover_color=COLORS["blue_dim"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._carregar
         )
         self.btn_recarregar.pack(side="left", padx=(0, 8))
@@ -73,7 +73,7 @@ class TabPrompts(ctk.CTkFrame):
         self.btn_formatar = ctk.CTkButton(
             btn_frame, text="🔍  Formatar JSON", width=140,
             fg_color=COLORS["bg_card"], hover_color=COLORS["bg_card_hover"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._formatar_json
         )
         self.btn_formatar.pack(side="left", padx=(0, 8))

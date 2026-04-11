@@ -1,8 +1,10 @@
 import os
 import logging
 import time
+import threading
 import xml.sax.saxutils as saxutils
 from src.config.config_loader import CONFIG
+from src.modules.voice import audio_control
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,7 @@ except ImportError:
 class MotorTTSAzure:
     def __init__(self):
         self.provedor = "azure"
+        self._stop_event = threading.Event()
         
         self.chave = CONFIG.get("AZURE_SPEECH_KEY")
         self.regiao = CONFIG.get("AZURE_REGION")
@@ -47,6 +50,9 @@ class MotorTTSAzure:
             texto_limpo = limpar_texto_tts(str(texto))
             if not texto_limpo: return False
 
+            self._stop_event.clear()
+            audio_control.reset_stop_state()
+
             texto_escapado = saxutils.escape(texto_limpo)
             ssml = f"""
             <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR">
@@ -69,7 +75,13 @@ class MotorTTSAzure:
                     
                     audio_np = np.frombuffer(audio_buffer, dtype=np.int16)
                     sd.play(audio_np, samplerate=16000)
-                    sd.wait()
+                    while sd.get_stream() is not None and sd.get_stream().active:
+                        if self._stop_event.is_set() or audio_control.stop_requested():
+                            sd.stop()
+                            break
+                        time.sleep(0.05)
+                    return True
+                if self._stop_event.is_set() or audio_control.stop_requested():
                     return True
                 
             elif resultado.reason == speechsdk.ResultReason.Canceled:
@@ -80,3 +92,18 @@ class MotorTTSAzure:
         except Exception as e:
             logger.error(f"[TTS AZURE] Erro: {e}")
             return False
+
+    def parar(self) -> bool:
+        self._stop_event.set()
+        try:
+            import sounddevice as sd
+
+            sd.stop()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "sintetizador"):
+                self.sintetizador.stop_speaking_async()
+        except Exception:
+            pass
+        return True

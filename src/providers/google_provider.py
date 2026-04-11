@@ -225,7 +225,9 @@ class GoogleProvider(BaseLLM):
         clean_kwargs = {key: value for key, value in config_kwargs.items() if value is not None}
         return types.GenerateContentConfig(**clean_kwargs)
 
-    def _count_tokens_if_possible(self, client, modelo_exec: str, contents):
+    def _count_tokens_if_possible(self, client, modelo_exec: str, contents, request_context: dict | None = None):
+        if not (request_context or {}).get("measure_tokens", False):
+            return None
         try:
             response = client.models.count_tokens(model=modelo_exec, contents=contents)
             return getattr(response, "total_tokens", None)
@@ -272,7 +274,7 @@ class GoogleProvider(BaseLLM):
             arquivos_multimidia=arquivos_multimidia,
             request_context=request_context,
         )
-        token_count = self._count_tokens_if_possible(client, modelo_exec, contents)
+        token_count = self._count_tokens_if_possible(client, modelo_exec, contents, request_context=request_context)
         self.last_request_meta = {
             "provider": self.provedor,
             "model": modelo_exec,

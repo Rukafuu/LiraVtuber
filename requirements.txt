@@ -1,8 +1,10 @@
 azure-cognitiveservices-speech==1.48.2
 edge-tts==7.2.8
 google-cloud-texttospeech==2.34.0
+google-cloud-storage>=2.19.0
 google-genai>=1.68.0
 groq==1.0.0
+openai>=1.111.0
 keyboard==0.13.5
 numpy==2.2.6
 PyAudio==0.2.14

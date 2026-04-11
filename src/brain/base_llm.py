@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+import datetime
 
 from src.config.config_loader import CONFIG
 from src.core.request_profiles import build_request_context
@@ -80,7 +81,8 @@ class BaseLLM(ABC):
             api_message = self._history_message_to_api(msg)
             if api_message:
                 messages.append(api_message)
-        messages.append({"role": "user", "content": user_message})
+        data_hora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        messages.append({"role": "user", "content": f"[{data_hora}]\n{user_message}"})
         return self._merge_consecutive_roles(messages)
 
     def _history_message_to_api(self, message: dict):
@@ -246,7 +248,7 @@ class BaseLLM(ABC):
                 and not content.startswith("{")
                 and '"acao": "tool_call"' not in content
             ):
-                print(f"{ui.C_NYRA}[HANA]{ui.C_RST}: {content}")
+                ui.print_hana_text(content, first_chunk=True)
 
             return content
 

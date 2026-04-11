@@ -37,7 +37,7 @@ class TabPersonalizacao(ctk.CTkFrame):
     """Personalização — cores, opacidade e tema visual."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.master_window = master
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -49,7 +49,7 @@ class TabPersonalizacao(ctk.CTkFrame):
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 15), sticky="w")
 
         # ═══ COLUNA ESQUERDA: Cores ═══
-        card_cores = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_cores = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_cores.grid(row=2, column=0, padx=(15, 8), pady=8, sticky="nsew")
         self.grid_rowconfigure(2, weight=1)
 
@@ -123,7 +123,7 @@ class TabPersonalizacao(ctk.CTkFrame):
         self.lbl_status.pack(pady=(0, 10))
 
         # ═══ COLUNA DIREITA: Foto da Hana ═══
-        card_foto = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_foto = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_foto.grid(row=2, column=1, padx=(8, 15), pady=8, sticky="nsew")
 
         try:
