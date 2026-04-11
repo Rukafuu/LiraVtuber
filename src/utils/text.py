@@ -1,138 +1,130 @@
 """
-Utilitários de processamento de texto compartilhados por toda a Nyra/Hana.
-
-Centraliza limpeza de texto para TTS, remoção de emojis, formatação etc.
+Utilitarios de texto e console compartilhados pela Hana.
 """
 
+from __future__ import annotations
+
 import re
+import shutil
 import sys
+import textwrap
 import time
 
+from src.utils.hana_tags import SILENT_XML_TAGS
+
+
+def repair_mojibake_text(text: str) -> str:
+    if not text:
+        return ""
+
+    repaired = str(text)
+    replacements = {
+        "Ã¡": "á",
+        "Ã¢": "â",
+        "Ã£": "ã",
+        "Ãª": "ê",
+        "Ã©": "é",
+        "Ã­": "í",
+        "Ã³": "ó",
+        "Ãµ": "õ",
+        "Ãº": "ú",
+        "Ã§": "ç",
+        "Ã": "Á",
+        "Ã‰": "É",
+        "Ã“": "Ó",
+        "Ãš": "Ú",
+        "Ã‡": "Ç",
+        "â€¢": "•",
+        "â€”": "—",
+        "â€“": "–",
+        "âœ“": "✓",
+        "âœ¨": "✨",
+        "âš¡": "⚡",
+        "âš™": "⚙️",
+        "â—": "●",
+        "ðŸ§ ": "🧠",
+        "ðŸ—£": "🗣",
+        "ðŸ—£ï¸": "🗣️",
+        "ðŸŽ­": "🎭",
+        "ðŸ‘": "👁",
+        "ðŸ‘ï¸": "👁️",
+        "ðŸŽ™ï¸": "🎙️",
+        "ðŸ‘‚": "👂",
+        "ðŸ‘¤": "👤",
+        "ðŸ”Š": "🔊",
+        "ðŸ”§": "🔧",
+        "ðŸŽ¨": "🎨",
+        "ðŸŽ¬": "🎬",
+        "ðŸŽµ": "🎵",
+        "Ã€": "À",
+        "Ã¹": "ù",
+        "Ã´": "ô",
+        "Ã‡Ã£": "ção",
+    }
+    for bad, good in replacements.items():
+        repaired = repaired.replace(bad, good)
+    return repaired
+
+
 def limpar_texto_tts(texto: str) -> str:
-    """
-    Remove formatação oculta antes de envio ao sintetizador de voz.
-    
-    ⚠️ FUNÇÃO CRÍTICA: ÚLTIMA ETAPA antes de pronunciar.
-    Aqui removemos APENAS o que não deve ser lido.
-    
-    NOVO SISTEMA (2026):
-    - 【 】 (Marcador Fantasma): REMOVE COMPLETAMENTE (pensamentos ocultos)
-    - 《 》 (Marcador Visual): Remove colchetes mas MANTÉM conteúdo (links, código, fontes)
-    - * * (Ênfase): Remove asteriscos mas MANTÉM texto
-    - **negrito** MARKDOWN: PRESERVA (será lido normalmente como "negrito")
-    - Backticks: Remove mas mantém texto
-    - Emojis, links, código: Remove
-    
-    PIPELINE ESPERADO:
-    Nyra/Hana responde → Terminal (COM formatação 《》【】**) → Memória (completo)
-    ↓ (AQUI na TTS)
-    limpar_texto_tts() remove APENAS canais silenciosos
-    ↓
-    Síntese de Voz (natural)
-    """
+    """Remove canais silenciosos e ruido visual antes do envio ao TTS."""
     if not texto:
         return ""
 
-    # PRÉ-LIMPEZA: Marcar seções para remover
-    # 1. Tags <think>...</think> (DeepSeek/R1)
-    texto_limpo = re.sub(r'<think>.*?</think>', '', texto, flags=re.DOTALL)
+    texto_limpo = repair_mojibake_text(texto)
+    texto_limpo = re.sub(r"<think>.*?</think>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
+    texto_limpo = re.sub(r"<pensamento>.*?</pensamento>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
+    texto_limpo = re.sub(r"<thought>.*?</thought>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
+    for tag_name in SILENT_XML_TAGS:
+        texto_limpo = re.sub(rf"<{tag_name}>.*?</{tag_name}>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
 
-    # 1b. Tags XML de habilidades da Hana (NÃO devem ser lidas pelo TTS)
-    texto_limpo = re.sub(r'<pensamento>.*?</pensamento>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<thought>.*?</thought>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<salvar_memoria>.*?</salvar_memoria>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<gerar_imagem>.*?</gerar_imagem>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<editar_imagem>.*?</editar_imagem>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<analisar_youtube>.*?</analisar_youtube>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<usar_inbox>.*?</usar_inbox>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<analisar_inbox>.*?</analisar_inbox>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<bypass>.*?</bypass>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<resumo_imagem>.*?</resumo_imagem>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'<ferramenta_web>.*?</ferramenta_web>', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r"<tool_code>.*?</tool_code>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
+    texto_limpo = re.sub(r"```.*?```", "", texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r"\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]", "", texto_limpo)
+    texto_limpo = re.sub(r"ã€.*?ã€‘", "", texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r"ã€Š.*?ã€‹", "", texto_limpo, flags=re.DOTALL)
 
-    # 2. Proteção de Emergência: Remove blocos de código
-    texto_limpo = re.sub(r'<tool_code>.*?</tool_code>', '', texto_limpo, flags=re.DOTALL)
-    texto_limpo = re.sub(r'```.*?```', '', texto_limpo, flags=re.DOTALL)
-
-    # 2b. Remove citações do Google Search Grounding [INDEX_X.Y]
-    texto_limpo = re.sub(r'\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]', '', texto_limpo)
-    
-    # === NOVO SISTEMA DE MARCADORES (2026) ===
-    
-    # 3. MARCADOR FANTASMA 【 】: REMOVE COMPLETAMENTE (totalmente invisível)
-    texto_limpo = re.sub(r'【.*?】', '', texto_limpo, flags=re.DOTALL)
-    
-    # 4. MARCADOR VISUAL 《 》: REMOVE COMPLETAMENTE NA VOZ (Silencioso na Voz)
-    texto_limpo = re.sub(r'《.*?》', '', texto_limpo, flags=re.DOTALL)
-    
-    # 5. Emojis (Unicode range abrangente)
     emoji_pattern = re.compile(
-        '['
-        '\U0001F600-\U0001F64F'  # Emoticons
-        '\U0001F300-\U0001F5FF'  # Misc Symbols and Pictographs
-        '\U0001F680-\U0001F6FF'  # Transport and Map Symbols
-        '\U0001F1E6-\U0001F1FF'  # Flags (Regional Indicator Symbols)
-        '\U0001F900-\U0001F9FF'  # Supplemental Symbols and Pictographs
-        '\u2600-\u26FF'          # Misc Symbols (like ✨)
-        '\u2700-\u27BF'          # Dingbats
-        '\U00020000-\U0003FFFF'  # Surrogates/Planes
-        ']+', flags=re.UNICODE
+        "["
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U0001F1E6-\U0001F1FF"
+        "\U0001F900-\U0001F9FF"
+        "\u2600-\u26FF"
+        "\u2700-\u27BF"
+        "\U00020000-\U0003FFFF"
+        "]+",
+        flags=re.UNICODE,
     )
-    texto_limpo = emoji_pattern.sub('', texto_limpo)
-
-    # 6. Remove marcadores de sistema [SISTEMA...] e labels [NYRA]/[HANA]:
-    texto_limpo = re.sub(r'\[SISTEMA[^\]]*\]', '', texto_limpo)
-    texto_limpo = re.sub(r'\[([^\]]+)\]:', '', texto_limpo)
-
-    # 7. Remove function call artifacts
-    texto_limpo = re.sub(r'function.*?function', '', texto_limpo, flags=re.DOTALL | re.IGNORECASE)
-
-    # 8. Remove <> residuais
-    texto_limpo = re.sub(r'<[^>]*>', '', texto_limpo)
-
-    # 9. REMOVER CARACTERES ESPECIAIS QUE TEIMAM A SER LIDOS PELA TTS
-    # Removemos: *, `, ~, (), [], {}, ^, aspas, e outros símbolos estranhos
-    for char in ['*', '**', '** **', '`', '~', '(', ')', '[', ']', '{', '}', '^', '«', '»', '"', "'", '‹', '›', '„', '“', '”']:
-        texto_limpo = texto_limpo.replace(char, '')
-        texto_limpo = texto_limpo.replace('_', '').replace('__', '').replace('___', '').replace('#', '').replace('##', '').replace('###', '')
-
-    # 10. Normaliza espaços múltiplos e linhas em branco
-    texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
-
-    # 11. Escape de caracteres XML para SSML (Evita Erro 400 Google TTS)
-    texto_limpo = texto_limpo.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
+    texto_limpo = emoji_pattern.sub("", texto_limpo)
+    texto_limpo = re.sub(r"\[SISTEMA[^\]]*\]", "", texto_limpo)
+    texto_limpo = re.sub(r"\[([^\]]+)\]:", "", texto_limpo)
+    texto_limpo = re.sub(r"<[^>]*>", "", texto_limpo)
+    texto_limpo = re.sub(r"[*`~^_#{}\[\]()]", "", texto_limpo)
+    texto_limpo = re.sub(r"\s+", " ", texto_limpo).strip()
+    texto_limpo = texto_limpo.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return texto_limpo
 
-# Utility to format terminal output with colors and aligned columns
+
 class ConsoleUI:
-    # ANSI Color Codes
     RESET = "\033[0m"
     BOLD = "\033[1m"
-    
-    # Colors
-    CYAN = "\033[36m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    MAGENTA = "\033[35m"
-    RED = "\033[31m"
-    BLUE = "\033[34m"
-    GRAY = "\033[90m"
+    C_SYS = "\033[96m"
+    C_STT = "\033[96m"
+    C_HANA = "\033[95m"
+    C_TTS = "\033[95m"
+    C_MEM = "\033[94m"
+    C_VIS = "\033[92m"
+    C_USER = "\033[93m"
+    C_TEMP = "\033[96m"
+    C_MOTOR = "\033[95m"
+    C_ERR = "\033[41;97m"
+    C_INFO = "\033[90m"
+    C_RST = "\033[0m"
+    _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
-    # NOVAS CORES GLOBAIS (Fase 13.8)
-    C_SYS = "\033[96m"     # Ciano -> [SISTEMA]
-    C_STT = "\033[96m"     # Ciano -> [STT]
-    C_NYRA = "\033[95m"    # Magenta/Roxa -> [NYRA] / [HANA]
-    C_TTS = "\033[95m"     # Roxa -> [TTS]
-    C_MEM = "\033[94m"     # Azul -> [MEMÓRIA]
-    C_VIS = "\033[92m"     # Verde -> [VISÃO]
-    C_USER = "\033[93m"    # Amarelo -> Minha fala
-    C_TEMP = "\033[96m"    # Ciano -> [TEMPERAMENTO]
-    C_MOTOR = "\033[95m"   # Roxa -> [MOTOR / LLM]
-    C_ERR = "\033[41;97m"  # Fundo Vermelho -> [ERRO] / [HEALTH]
-    C_RST = "\033[0m"      # Reset
-
-    def __init__(self, prefix="[HANA\\]"):
+    def __init__(self, prefix="[HANA]"):
         self.prefix = prefix
         self.turno_atual = 1
         self.tempo_inicio_turno = 0.0
@@ -148,117 +140,138 @@ class ConsoleUI:
         return f"{int(time.time() - self.tempo_inicio_turno)}s"
 
     def _obter_hora(self) -> str:
-        return time.strftime("[%H:%M:%S\\]")
+        return time.strftime("[%H:%M:%S]")
+
+    def _terminal_width(self) -> int:
+        try:
+            return max(88, shutil.get_terminal_size((120, 40)).columns)
+        except Exception:
+            return 120
+
+    def _strip_ansi(self, value: str) -> str:
+        return self._ANSI_RE.sub("", value)
+
+    def _write_line(self, line: str):
+        sys.stdout.write(f"\r\033[K{repair_mojibake_text(line)}{self.C_RST}\n")
+        sys.stdout.flush()
+
+    def _wrap_text(self, text: str, width: int, subsequent_indent: str = "") -> list[str]:
+        wrapped = []
+        for paragraph in repair_mojibake_text(str(text)).splitlines() or [""]:
+            if not paragraph.strip():
+                wrapped.append("")
+                continue
+            wrapped.extend(
+                textwrap.wrap(
+                    paragraph,
+                    width=width,
+                    replace_whitespace=False,
+                    drop_whitespace=False,
+                    subsequent_indent=subsequent_indent,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                or [paragraph]
+            )
+        return wrapped
 
     def print_linha(self, estado: str, cor: str, modulo_dir: str, icone_esq: str, icone_dir: str):
-        """
-        Gera uma linha formatada no estilo:
-        [HANA\] [HH:MM:SS\] 👂 OUVINDO      | Turno: 21 |  0s | 🎤 ASR
-        """
-        hora = self._obter_hora()
-        
-        # Coluna 1: Prefixo, Hora, Ícone, Estado (Tamanho fixo approx 35 chars)
-        col1 = f"{self.C_NYRA}{self.prefix}{self.C_RST} {self.GRAY}{hora}{self.C_RST} {icone_esq} {cor}{self.BOLD}{estado.ljust(12)}{self.C_RST}"
-        
-        # Coluna 2: Turno e Tempo
-        tempo_str = self.get_tempo_decorrido()
-        col2 = f"{self.GRAY}|{self.C_RST} Turno: {str(self.turno_atual).ljust(2)} {self.GRAY}|{self.C_RST} {tempo_str.rjust(3)} {self.GRAY}|{self.C_RST}"
-        
-        # Coluna 3: Ícone e Módulo
-        col3 = f"{icone_dir} {cor}{modulo_dir}{self.C_RST}"
+        prefix = f"{self.C_HANA}{self.prefix}{self.C_RST} {self.C_INFO}{self._obter_hora()}{self.C_RST}"
+        rail = f"{icone_esq} {cor}{self.BOLD}{repair_mojibake_text(estado)}{self.C_RST} | Turno: {self.turno_atual} | {self.get_tempo_decorrido()} | {icone_dir} {cor}{repair_mojibake_text(modulo_dir)}{self.C_RST}"
+        full = f"{prefix} {rail}"
+        width = self._terminal_width()
+        if len(self._strip_ansi(full)) <= width:
+            self._write_line(full)
+            return
 
-        # Monta a linha completa e limpa a linha atual do terminal (útil se estivermos sobrescrevendo mensagens)
-        sys.stdout.write(f"\r\033[K{col1} {col2} {col3}\n")
-        sys.stdout.flush()
+        left = f"{prefix} {icone_esq} {cor}{self.BOLD}{repair_mojibake_text(estado)}{self.C_RST}"
+        right = f"Turno: {self.turno_atual} | {self.get_tempo_decorrido()} | {icone_dir} {cor}{repair_mojibake_text(modulo_dir)}{self.C_RST}"
+        self._write_line(left)
+        indent = " " * len(self._strip_ansi(prefix)) + " "
+        for line in self._wrap_text(right, max(20, width - len(indent))):
+            self._write_line(f"{indent}{line}")
 
     def print_ouvindo(self):
         self.print_linha("OUVINDO", self.C_SYS, "HUMANO", "👂", "👤")
 
     def print_pensando(self, provedor: str = "LLM_PROVIDER"):
-        # Previne spam duplicado no mesmo turno
-        if getattr(self, '_ultimo_turno_pensado', 0) == self.turno_atual:
+        if self._ultimo_turno_pensado == self.turno_atual:
             return
         self._ultimo_turno_pensado = self.turno_atual
-            
-        mod = provedor.upper()
-        
-        # PENSANDO main line
-        self.print_linha("PENSANDO", self.C_MOTOR, mod, "🧠", "🎭")
+        self.print_linha("PENSANDO", self.C_MOTOR, provedor.upper(), "🧠", "🎭")
 
-        # Dynamic hot-read from Config to output exact setup
         import json
         import os
+
         try:
-            with open(os.path.join("src", "config", "config.json"), "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                
+            with open(os.path.join("src", "config", "config.json"), "r", encoding="utf-8-sig") as file:
+                cfg = json.load(file)
             llm_provider_key = cfg.get("LLM_PROVIDER", provedor.lower())
-            llm_provider_name = llm_provider_key.upper()
-            
             provider_cfg = cfg.get("LLM_PROVIDERS", {}).get(llm_provider_key, {})
             modelo_chat = str(provider_cfg.get("modelo_chat", provider_cfg.get("modelo", "N/D")))
-            
-            visao_ativa = cfg.get("VISAO_ATIVA", False)
-            
-            # Printa o modelo de raciocínio principal
             self.print_linha("MODELO", self.C_MOTOR, modelo_chat, "⚙️", "📘")
-            
-            # Se tiver visão ativa, adiciona uma linha mostrando o Módulo e o Modelo de Visão
-            if visao_ativa:
+            if cfg.get("VISAO_ATIVA", False):
                 modelo_visao = str(provider_cfg.get("modelo_vision", modelo_chat))
-                self.print_linha("VISÃO: ON", self.C_VIS, modelo_visao, "👁️", "🏭")
+                self.print_linha("VISAO: ON", self.C_VIS, modelo_visao, "👁️", "🏭")
             else:
-                self.print_linha("VISÃO: OFF", self.C_SYS, "Desativado", "👁️", "🏭")
-            
-        except Exception as e:
+                self.print_linha("VISAO: OFF", self.C_SYS, "Desativado", "👁️", "🏭")
+        except Exception:
             pass
 
     def print_falando(self, tts_provider: str = "TTS"):
-        mod = tts_provider.upper()
-        if len(mod) > 10: mod = mod[:10]
-        self.print_linha("FALANDO", self.C_NYRA, mod, "🗣️", "🔊")
+        self.print_linha("FALANDO", self.C_HANA, tts_provider.upper(), "🗣️", "🔊")
 
     def print_executando(self, tool_name: str):
-        mod = tool_name.upper()
-        if len(mod) > 10: mod = mod[:10]
-        self.print_linha("EXECUTANDO", self.C_VIS, mod, "⚙️", "🔧")
+        self.print_linha("EXECUTANDO", self.C_VIS, tool_name.upper(), "⚙️", "🔧")
 
     def print_erro(self, msg: str):
-        hora = self._obter_hora()
-        sys.stdout.write(f"\r\033[K{self.C_ERR}{self.prefix}{self.C_RST} {self.GRAY}{hora}{self.C_RST} [ERROR] {self.C_ERR}{self.BOLD}ERRO: {msg}{self.C_RST}\n")
-        sys.stdout.flush()
+        prefix = f"{self.C_ERR}{self.prefix}{self.C_RST} {self.C_INFO}{self._obter_hora()}{self.C_RST} {self.C_ERR}{self.BOLD}ERRO{self.C_RST}: "
+        indent = " " * len(self._strip_ansi(prefix))
+        width = max(20, self._terminal_width() - len(self._strip_ansi(prefix)))
+        for idx, line in enumerate(self._wrap_text(msg, width, subsequent_indent=indent)):
+            if idx == 0:
+                self._write_line(f"{prefix}{line}")
+            else:
+                self._write_line(f"{indent}{line}")
 
     def print_info_livre(self, msg: str):
-        # Aplicar cores baseadas em tags específicas para manter o padrão visual
-        if msg.startswith("Você:"):
-            msg = f"{self.C_USER}{msg}"
-        elif "[STT]" in msg:
-            msg = msg.replace("[STT]", f"{self.C_STT}[STT]{self.C_RST}")
-        elif "[TTS]" in msg:
-            msg = msg.replace("[TTS]", f"{self.C_TTS}[TTS]{self.C_RST}")
-        elif "[TEMPERAMENTO]" in msg:
-            msg = msg.replace("[TEMPERAMENTO]", f"{self.C_TEMP}[TEMPERAMENTO]{self.C_RST}")
-        elif "[MOTOR" in msg:
-            msg = msg.replace("[MOTOR", f"{self.C_MOTOR}[MOTOR")
-            if "]" in msg:
-                msg = msg.replace("]", f"]{self.C_RST}", 1) # Fecha a cor no primeiro ]
-        
-        hora = self._obter_hora()
-        sys.stdout.write(f"\r\033[K{self.GRAY}{self.prefix} {hora} ℹ️ {msg}{self.C_RST}\n")
-        sys.stdout.flush()
+        formatted = repair_mojibake_text(str(msg))
+        if formatted.startswith("Você:") or formatted.startswith("Voce:"):
+            formatted = f"{self.C_USER}{formatted}{self.C_RST}"
+        formatted = formatted.replace("[STT]", f"{self.C_STT}[STT]{self.C_RST}")
+        formatted = formatted.replace("[TTS]", f"{self.C_TTS}[TTS]{self.C_RST}")
+        formatted = formatted.replace("[TEMPERAMENTO]", f"{self.C_TEMP}[TEMPERAMENTO]{self.C_RST}")
+
+        prefix = f"{self.C_INFO}{self.prefix} {self._obter_hora()} ℹ {self.C_RST}"
+        indent = " " * len(self._strip_ansi(prefix))
+        width = max(20, self._terminal_width() - len(self._strip_ansi(prefix)))
+        for idx, line in enumerate(self._wrap_text(formatted, width, subsequent_indent=indent)):
+            if idx == 0:
+                self._write_line(f"{prefix}{line}")
+            else:
+                self._write_line(f"{indent}{line}")
+
+    def print_hana_text(self, text: str, first_chunk: bool = False):
+        prefix = f"{self.C_HANA}[HANA]{self.C_RST}: " if first_chunk else " " * 8
+        width = max(20, self._terminal_width() - len(self._strip_ansi(prefix)))
+        wrapped = self._wrap_text(text, width)
+        for idx, line in enumerate(wrapped):
+            line_prefix = prefix if idx == 0 else " " * len(self._strip_ansi(prefix))
+            self._write_line(f"{line_prefix}{line}")
 
     def set_banner(self, stt_info: str, tts_info: str, provider_info: str = "", model_info: str = ""):
-        """Imprime o banner de boot da Hana com STT, TTS, Provider e Modelo."""
-        border = f"{self.BOLD}{self.C_NYRA}======================================================={self.C_RST}"
-        
+        border = f"{self.BOLD}{self.C_HANA}{'=' * 63}{self.C_RST}"
         print("\n" + border)
         print(f" {self.C_SYS}✨ HANA ONLINE E PRONTA PARA OUVIR ✨{self.C_RST}")
-        print(f" {self.GRAY}STT: {self.BOLD}{stt_info}{self.C_RST}{self.GRAY} | TTS: {self.BOLD}{tts_info}{self.C_RST}")
+        print(f" {self.C_INFO}STT: {self.BOLD}{repair_mojibake_text(stt_info)}{self.C_RST}{self.C_INFO} | TTS: {self.BOLD}{repair_mojibake_text(tts_info)}{self.C_RST}")
         if provider_info:
-            print(f" {self.GRAY}PROVEDOR: {self.BOLD}{provider_info}{self.C_RST}{self.GRAY} | LLM: {self.BOLD}{model_info}{self.C_RST}")
-        print(f" {self.GRAY}Pressiona e segura a tecla configurada para falar.")
-        print(f" Diz/Digite 'Desligar sistema' para encerrar.{self.C_RST}")
+            print(
+                f" {self.C_INFO}PROVEDOR: {self.BOLD}{repair_mojibake_text(provider_info)}{self.C_RST}"
+                f"{self.C_INFO} | LLM: {self.BOLD}{repair_mojibake_text(model_info)}{self.C_RST}"
+            )
+        print(f" {self.C_INFO}Pressione e segure a tecla configurada para falar.{self.C_RST}")
+        print(f" {self.C_INFO}Diga ou digite 'Desligar sistema' para encerrar.{self.C_RST}")
         print(border + "\n")
 
-# Instância global para ser importada onde precisar (ex: no main.py)
+
 ui = ConsoleUI()

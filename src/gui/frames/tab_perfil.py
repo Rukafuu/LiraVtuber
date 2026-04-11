@@ -17,7 +17,7 @@ class TabPerfil(ctk.CTkFrame):
     """Perfil da Nyra — foto, identidade e cores."""
 
     def __init__(self, master, runtime=None):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.runtime = runtime
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -29,7 +29,7 @@ class TabPerfil(ctk.CTkFrame):
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 20), sticky="w")
 
         # ═══ COLUNA ESQUERDA: Foto ═══
-        card_foto = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_foto = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_foto.grid(row=2, column=0, padx=(15, 8), pady=8, sticky="nsew")
         self.grid_rowconfigure(2, weight=1)
 
@@ -57,7 +57,7 @@ class TabPerfil(ctk.CTkFrame):
         ctk.CTkLabel(nome_frame, text="IA Assistente Autônoma  •  v2.0", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack()
 
         # ═══ COLUNA DIREITA: Info + Cores ═══
-        card_info = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_info = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_info.grid(row=2, column=1, padx=(8, 15), pady=8, sticky="nsew")
 
         ctk.CTkLabel(card_info, text="📋  Identidade", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w", padx=15, pady=(15, 10))

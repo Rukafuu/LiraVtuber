@@ -1,5 +1,5 @@
 """
-SentenceDivider - fatia o stream em frases visíveis sem deixar vazar XML silencioso.
+SentenceDivider - fatia o stream em frases visiveis sem deixar vazar XML silencioso.
 """
 
 from __future__ import annotations
@@ -8,20 +8,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Generator, List
 
-END_PUNCTUATION = {".", "!", "?", "…", "。", "！", "？"}
+from src.utils.hana_tags import SILENT_XML_TAGS, THOUGHT_TAGS
+
+END_PUNCTUATION = {".", "!", "?", "...", "。", "！", "？"}
 COMMAS = {",", ";", "，", "、"}
-THOUGHT_TAGS = ("pensamento", "thought", "think")
-SILENT_XML_TAGS = (
-    "salvar_memoria",
-    "gerar_imagem",
-    "editar_imagem",
-    "analisar_youtube",
-    "usar_inbox",
-    "analisar_inbox",
-    "bypass",
-    "resumo_imagem",
-    "ferramenta_web",
-)
 
 
 @dataclass

@@ -45,6 +45,8 @@ class VTSController:
         self.tracking_mode = "injected_face_tracking"
         self.mouth_parameter = ""
         self._last_error = ""
+        self._last_expression = ""
+        self._mouth_level = 0.0
 
         self._vts: Optional[object] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -77,6 +79,7 @@ class VTSController:
             "mouth_parameter": self.mouth_parameter,
             "tracking_mode": self.tracking_mode,
             "last_error": last_error if last_error is not None else self._last_error,
+            "last_expression": self._last_expression,
         }
 
     def _write_state(self, status: str | None = None, last_error: str | None = None):
@@ -346,6 +349,12 @@ class VTSController:
             if random.random() < 0.02 or (t % 4.0 < 0.15):
                 eye_open = 0.0
 
+            mouth_target = 0.72 if is_speaking else 0.0
+            self._mouth_level += (mouth_target - self._mouth_level) * 0.25
+            mouth_value = self._mouth_level
+            if is_speaking:
+                mouth_value = max(0.0, min(1.0, mouth_value + ((math.sin(t * 10) + 1) / 2) * 0.12))
+
             params = {
                 "ParamAngleX": current_x,
                 "ParamAngleY": current_y + (math.sin(t * 4) * 1.2 if is_speaking else 0.0),
@@ -357,7 +366,7 @@ class VTSController:
                 "ParamEyeBallY": current_y / 10.0,
             }
             if self.mouth_parameter:
-                params[self.mouth_parameter] = ((math.sin(t * 10) + 1) / 2) if is_speaking else 0.0
+                params[self.mouth_parameter] = mouth_value
 
             await self._send_multi_parameters(params)
             await asyncio.sleep(self.ANIMATION_SECONDS)
@@ -428,6 +437,8 @@ class VTSController:
         try:
             if hotkey_id:
                 await self._vts.request(self._vts.vts_request.requestTriggerHotKey(hotkey_id))
+                self._last_expression = hotkey_name
+                self._write_state(status="ready", last_error="")
                 return
             await self._send_expression(hotkey_name)
         except Exception as e:
@@ -440,6 +451,8 @@ class VTSController:
                 if expression_name.lower() in file_name.lower():
                     request = self._vts.vts_request.requestExpressionActivation(file_name, active=True)
                     await self._vts.request(request)
+                    self._last_expression = file_name
+                    self._write_state(status="ready", last_error="")
                     asyncio.create_task(self._delayed_reset(5, express_file=file_name))
                     return
         except Exception as e:

@@ -24,7 +24,7 @@ class TabGeral(ctk.CTkFrame):
     """Dashboard — visão geral do sistema Hana."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -85,7 +85,7 @@ class TabGeral(ctk.CTkFrame):
 
     def _criar_card(self, titulo, row, col, colspan=1):
         """Cria um card estilizado."""
-        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card.grid(row=row, column=col, columnspan=colspan, padx=15, pady=8, sticky="nsew")
         self.grid_rowconfigure(row, weight=1)
 

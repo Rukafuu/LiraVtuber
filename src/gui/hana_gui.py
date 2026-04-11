@@ -38,6 +38,20 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
 
+def _hide_console_window():
+    """Esconde a janela de console quando a GUI for iniciada em modo oculto."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        console_hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if console_hwnd:
+            ctypes.windll.user32.ShowWindow(console_hwnd, 0)
+    except Exception as exc:
+        logger.debug("[GUI] Nao foi possivel esconder o console: %s", exc)
+
+
 class HanaControlCenter(ctk.CTk):
     """Painel de Controle Premium da Hana."""
 
@@ -68,7 +82,8 @@ class HanaControlCenter(ctk.CTk):
         self.sidebar = ctk.CTkFrame(
             self, width=220, corner_radius=0,
             fg_color=COLORS["bg_sidebar"],
-            border_width=0
+            border_width=2,
+            border_color=COLORS["border_strong"],
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_rowconfigure(15, weight=1)
@@ -116,7 +131,7 @@ class HanaControlCenter(ctk.CTk):
         self.version_label.grid(row=2, column=0, padx=20, pady=(0, 15))
 
         # Separador visual
-        sep = ctk.CTkFrame(self.sidebar, height=1, fg_color=COLORS["border"])
+        sep = ctk.CTkFrame(self.sidebar, height=2, fg_color=COLORS["border_strong"])
         sep.grid(row=3, column=0, sticky="ew", padx=15, pady=(0, 8))
 
         # Botões de navegação (8 abas)
@@ -236,7 +251,7 @@ class HanaControlCenter(ctk.CTk):
         if self._active_frame and self._active_frame in self.frames:
             self.frames[self._active_frame].grid_forget()
 
-        self.frames[key].grid(row=0, column=1, padx=(0, 12), pady=12, sticky="nsew")
+        self.frames[key].grid(row=0, column=1, padx=(6, 12), pady=12, sticky="nsew")
         self._active_frame = key
 
         for btn_key, btn in self._menu_btns:
@@ -264,9 +279,11 @@ class HanaControlCenter(ctk.CTk):
                     self._last_mtime = current_mtime
                     CONFIG.reload()
 
-                    # Atualiza a Tab LLM se tiver método de recarga
-                    if "llm" in self.frames and hasattr(self.frames["llm"], "_carregar_settings"):
-                        self.frames["llm"]._carregar_settings()
+                    for frame in self.frames.values():
+                        if hasattr(frame, "_carregar_settings"):
+                            frame._carregar_settings()
+                        if hasattr(frame, "on_config_reload"):
+                            frame.on_config_reload()
             except Exception:
                 pass
 
@@ -301,6 +318,8 @@ class HanaControlCenter(ctk.CTk):
 
 def main():
     """Abre o painel em modo standalone."""
+    if "--hide-console" in sys.argv or os.environ.get("HANA_GUI_HIDE_CONSOLE") == "1":
+        _hide_console_window()
     app = HanaControlCenter()
     app.mainloop()
 

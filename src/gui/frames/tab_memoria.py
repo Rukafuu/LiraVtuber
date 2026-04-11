@@ -24,7 +24,7 @@ class TabMemoria(ctk.CTkFrame):
     """Painel de Memória: Visualizador do Grafo de Conhecimento + Memórias RAG."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -41,7 +41,7 @@ class TabMemoria(ctk.CTkFrame):
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 15), sticky="w")
 
         # ═══ COLUNA ESQUERDA: Fatos do Grafo ═══
-        card_fatos = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_fatos = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_fatos.grid(row=2, column=0, padx=(15, 8), pady=8, sticky="nsew")
         self.grid_rowconfigure(2, weight=1)
 
@@ -58,7 +58,7 @@ class TabMemoria(ctk.CTkFrame):
         # Lista de fatos (scrollable)
         self.fatos_scroll = ctk.CTkScrollableFrame(
             card_fatos, fg_color=COLORS["bg_darkest"],
-            corner_radius=8, border_width=1, border_color=COLORS["border"]
+            corner_radius=8, border_width=2, border_color=COLORS["border"]
         )
         self.fatos_scroll.pack(fill="both", expand=True, padx=12, pady=(5, 8))
 
@@ -69,13 +69,13 @@ class TabMemoria(ctk.CTkFrame):
         btn_refresh = ctk.CTkButton(
             btn_frame, text="↻  Recarregar", width=120,
             fg_color=COLORS["bg_darkest"], hover_color=COLORS["blue_dim"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._listar_fatos
         )
         btn_refresh.pack(side="left", padx=(0, 8))
 
         # ═══ LINHA INFERIOR: Histórico de Conversas (SQLite) ═══
-        card_hist = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_hist = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_hist.grid(row=3, column=0, columnspan=2, padx=15, pady=(0, 8), sticky="nsew")
         self.grid_rowconfigure(3, weight=1)
 
@@ -90,19 +90,19 @@ class TabMemoria(ctk.CTkFrame):
         btn_refresh_hist = ctk.CTkButton(
             hist_header, text="↻", width=30, height=28,
             fg_color=COLORS["bg_darkest"], hover_color=COLORS["blue_dim"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._carregar_historico
         )
         btn_refresh_hist.pack(side="right")
 
         self.hist_scroll = ctk.CTkScrollableFrame(
             card_hist, fg_color=COLORS["bg_darkest"],
-            corner_radius=8, border_width=1, border_color=COLORS["border"]
+            corner_radius=8, border_width=2, border_color=COLORS["border"]
         )
         self.hist_scroll.pack(fill="both", expand=True, padx=12, pady=(5, 12))
 
         # ═══ COLUNA DIREITA: Adicionar Fato Manual ═══
-        card_add = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card_add = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_add.grid(row=2, column=1, padx=(8, 15), pady=8, sticky="nsew")
 
         lbl_add = ctk.CTkLabel(card_add, text="➕  Adicionar Fato Manual", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=COLORS["text_primary"])
@@ -152,7 +152,7 @@ class TabMemoria(ctk.CTkFrame):
         self.lbl_status.pack(anchor="w", padx=15, pady=(0, 15))
 
         # ─── Seção: Busca Semântica (RAG) ───
-        card_rag = ctk.CTkFrame(card_add, fg_color=COLORS["bg_darkest"], corner_radius=8, border_width=1, border_color=COLORS["border"])
+        card_rag = ctk.CTkFrame(card_add, fg_color=COLORS["bg_darkest"], corner_radius=8, border_width=2, border_color=COLORS["border"])
         card_rag.pack(fill="both", expand=True, padx=12, pady=(10, 12))
 
         ctk.CTkLabel(card_rag, text="🔍  Busca Semântica (RAG)", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=COLORS["text_primary"]).pack(anchor="w", padx=12, pady=(10, 5))

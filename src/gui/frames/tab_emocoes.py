@@ -21,7 +21,7 @@ class TabEmocoes(ctk.CTkFrame):
     """Aba Mente da Hana — visualização do estado emocional e pensamentos."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -76,7 +76,7 @@ class TabEmocoes(ctk.CTkFrame):
         self._thought_box = ctk.CTkTextbox(
             card_thought, height=80, font=FONT_MONO,
             fg_color=COLORS["bg_darkest"], border_color=COLORS["border"],
-            text_color=COLORS["text_secondary"], border_width=1,
+            text_color=COLORS["text_secondary"], border_width=2,
             corner_radius=8, wrap="word"
         )
         self._thought_box.pack(fill="both", expand=True, padx=15, pady=10)
@@ -96,7 +96,7 @@ class TabEmocoes(ctk.CTkFrame):
         self._atualizar()
 
     def _criar_card(self, titulo, row, col, colspan=1):
-        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card.grid(row=row, column=col, columnspan=colspan, padx=15, pady=8, sticky="nsew")
         self.grid_rowconfigure(row, weight=1)
         lbl = ctk.CTkLabel(card, text=titulo, font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=COLORS["text_primary"])

@@ -34,7 +34,7 @@ class TabLogs(ctk.CTkFrame):
     """Painel de logs do sistema em tempo real."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=1, border_color=COLORS["border"])
+        super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
@@ -49,7 +49,7 @@ class TabLogs(ctk.CTkFrame):
             self, font=FONT_MONO_SM,
             fg_color=COLORS["bg_darkest"],
             text_color=COLORS["text_secondary"],
-            border_width=1, border_color=COLORS["border"],
+            border_width=2, border_color=COLORS["border"],
             corner_radius=8, wrap="word",
             state="disabled"
         )
@@ -62,7 +62,7 @@ class TabLogs(ctk.CTkFrame):
         self.btn_limpar = ctk.CTkButton(
             btn_frame, text="🗑  Limpar", width=100,
             fg_color=COLORS["bg_card"], hover_color=COLORS["red"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._limpar
         )
         self.btn_limpar.pack(side="left", padx=(0, 8))
@@ -70,7 +70,7 @@ class TabLogs(ctk.CTkFrame):
         self.btn_copiar = ctk.CTkButton(
             btn_frame, text="📋  Copiar", width=100,
             fg_color=COLORS["bg_card"], hover_color=COLORS["blue_dim"],
-            text_color=COLORS["text_secondary"], border_width=1, border_color=COLORS["border"],
+            text_color=COLORS["text_secondary"], border_width=2, border_color=COLORS["border"],
             command=self._copiar
         )
         self.btn_copiar.pack(side="left")
