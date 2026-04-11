@@ -11,18 +11,28 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from src.config.config_loader import CONFIG
+from src.core.prompt_builder import build_gui_system_prompt
+from src.core.provider_catalog import get_llm_providers, get_model_ids_for_provider
 from src.core.request_profiles import build_request_context, get_chat_settings
-from src.core.runtime_capabilities import get_provider_capabilities
+from src.core.runtime_capabilities import get_provider_capabilities, get_stop_hotkey_settings
 from src.gui.design import COLORS, FONT_BODY, FONT_SMALL, FONT_TITLE
+from src.modules.media import HanaMusicGen
 from src.modules.tools.inbox_manager import InboxManager
+from src.modules.tools.pc_control import execute_pc_action, parse_pc_action_payload
+from src.modules.voice.audio_control import poll_external_stop, register_stop_callback, request_global_stop, unregister_stop_callback
+from src.utils.hana_tags import DISPLAY_XML_TAGS, MEDIA_XML_TAGS, extract_xml_actions, strip_xml_tags
+from src.utils.sentence_divider import SentenceDivider
+from src.utils.text import repair_mojibake_text
 
 logger = logging.getLogger(__name__)
 
 try:
     from PIL import Image as PILImage
+    from PIL import ImageGrab as PILImageGrab
 
     HAS_PIL = True
 except ImportError:
+    PILImageGrab = None
     HAS_PIL = False
 
 try:
@@ -35,26 +45,19 @@ except Exception:
     TkinterDnD = None
     HAS_DND = False
 
+try:
+    import keyboard
+except Exception:
+    keyboard = None
+
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 AUDIO_EXTS = {".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac"}
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".webm", ".mkv", ".m4v"}
 TEXT_EXTS = {".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml", ".log", ".docx"}
-XML_TAGS = (
-    "pensamento",
-    "thought",
-    "think",
-    "gerar_imagem",
-    "editar_imagem",
-    "salvar_memoria",
-    "analisar_youtube",
-    "usar_inbox",
-    "analisar_inbox",
-    "bypass",
-    "resumo_imagem",
-    "ferramenta_web",
-)
-HEAVY_MEDIA_TASKS = {"analise_midia", "media_summary", "resumo_detalhado"}
+LONG_FORM_TASKS = {"analise_midia_estruturada", "media_summary", "media_exact_request", "media_question", "resumo_detalhado"}
+STRUCTURED_MEDIA_TASKS = {"analise_midia_estruturada"}
+CLIPBOARD_CACHE_DIR = os.path.join("temp", "clipboard_attachments")
 
 BUBBLE_USER = "#1A2744"
 BUBBLE_HANA = "#201933"
@@ -68,8 +71,8 @@ class TabChat(ctk.CTkFrame):
             master,
             corner_radius=12,
             fg_color=COLORS["bg_dark"],
-            border_width=1,
-            border_color=COLORS["border"],
+            border_width=0,
+            border_color=COLORS["bg_dark"],
         )
         self._ultima_resposta = ""
         self._anexos = []
@@ -77,33 +80,61 @@ class TabChat(ctk.CTkFrame):
         self._llm_instance = None
         self._memory_manager = None
         self._image_gen = None
+        self._music_gen = None
         self._session_history = []
         self._audio_preview_path = None
         self._inbox_manager = InboxManager()
         self._request_seq = 0
         self._active_request_id = None
         self._active_cancel_event = None
+        self._active_media_jobs = {}
+        self._active_stream_state = None
+        self._stop_hotkey_handle = None
+        self._stop_hotkey_signature = None
+        self._active_tts_thread = None
+        self._stop_callback_name = f"chat_gui_{id(self)}"
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
         self._build_layout()
         self._carregar_config_chat()
+        register_stop_callback(self._stop_callback_name, self._handle_global_stop_signal)
         self.after(200, self._ativar_dragdrop)
+        self.after(300, self._sync_stop_hotkey_binding)
+        self.after(350, self._poll_global_stop_signal)
 
     def _build_layout(self):
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, padx=24, pady=(16, 0), sticky="ew")
+        top_shell, top_panel = self._create_visual_shell(
+            self,
+            outer_color=COLORS["border_strong"],
+            inner_color=COLORS["bg_card"],
+            corner_radius=14,
+            padding=2,
+        )
+        top_shell.grid(row=0, column=0, padx=15, pady=(14, 8), sticky="ew")
+        top_panel.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(top_panel, fg_color="transparent")
+        header.grid(row=0, column=0, padx=16, pady=(12, 6), sticky="ew")
         ctk.CTkLabel(header, text="Control Center Chat", font=FONT_TITLE, text_color=COLORS["text_primary"]).pack(side="left")
         ctk.CTkLabel(header, text="GUI da Hana", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 0))
 
-        self.toolbar = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, height=48)
-        self.toolbar.grid(row=1, column=0, padx=15, pady=(8, 6), sticky="ew")
-        ctk.CTkLabel(self.toolbar, text="Provedor:", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 4))
+        self.toolbar = ctk.CTkFrame(
+            top_panel,
+            fg_color=COLORS["bg_darkest"],
+            corner_radius=11,
+            height=44,
+            border_width=0,
+        )
+        self.toolbar.grid(row=1, column=0, padx=14, pady=(0, 6), sticky="ew")
+        self.toolbar.grid_columnconfigure(4, weight=1)
+        ctk.CTkLabel(self.toolbar, text="Provedor:", font=FONT_SMALL, text_color=COLORS["text_muted"]).grid(row=0, column=0, padx=(12, 4), pady=8, sticky="w")
         self.combo_chat_prov = ctk.CTkComboBox(
             self.toolbar,
-            values=["groq", "google_cloud", "cerebras", "openrouter"],
+            values=get_llm_providers(),
             width=135,
+            height=30,
             fg_color=COLORS["bg_darkest"],
             border_color=COLORS["border"],
             button_color=COLORS["purple_dim"],
@@ -114,12 +145,13 @@ class TabChat(ctk.CTkFrame):
             font=FONT_SMALL,
             command=self._on_chat_prov_change,
         )
-        self.combo_chat_prov.pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(self.toolbar, text="Modelo:", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="left", padx=(0, 4))
+        self.combo_chat_prov.grid(row=0, column=1, padx=(0, 8), pady=7, sticky="w")
+        ctk.CTkLabel(self.toolbar, text="Modelo:", font=FONT_SMALL, text_color=COLORS["text_muted"]).grid(row=0, column=2, padx=(0, 4), pady=8, sticky="w")
         self.combo_chat_modelo = ctk.CTkComboBox(
             self.toolbar,
             values=[""],
             width=225,
+            height=30,
             fg_color=COLORS["bg_darkest"],
             border_color=COLORS["border"],
             button_color=COLORS["purple_dim"],
@@ -129,54 +161,73 @@ class TabChat(ctk.CTkFrame):
             text_color=COLORS["text_primary"],
             font=FONT_SMALL,
         )
-        self.combo_chat_modelo.pack(side="left", padx=(0, 10))
+        self.combo_chat_modelo.grid(row=0, column=3, padx=(0, 10), pady=7, sticky="w")
         self.lbl_input_hint = ctk.CTkLabel(
             self.toolbar,
-            text="Enter envia • Shift+Enter quebra linha • Arraste arquivos aqui",
+            text="Enter envia | Shift+Enter quebra linha | Arraste arquivos aqui",
             font=FONT_SMALL,
             text_color=COLORS["text_muted"],
+            anchor="w",
         )
-        self.lbl_input_hint.pack(side="left", padx=(8, 0))
+        self.lbl_input_hint.grid(row=0, column=4, padx=(6, 12), pady=8, sticky="ew")
         self.btn_stop = ctk.CTkButton(
             self.toolbar,
             text="Parar",
             width=84,
-            height=28,
+            height=30,
             fg_color=COLORS["bg_darkest"],
             hover_color=COLORS["red"],
             text_color=COLORS["text_secondary"],
-            border_width=1,
+            border_width=2,
             border_color=COLORS["border"],
             font=FONT_SMALL,
             command=self._parar_fala,
         )
-        self.btn_stop.pack(side="right", padx=8)
+        self.btn_stop.grid(row=0, column=5, padx=(0, 10), pady=7, sticky="e")
 
-        self.status_bar = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=8, height=26)
-        self.status_bar.grid(row=2, column=0, padx=15, pady=(0, 6), sticky="ew")
-        self.lbl_chat_status = ctk.CTkLabel(self.status_bar, text="Chat da GUI pronto.", font=FONT_SMALL, text_color=COLORS["text_muted"])
-        self.lbl_chat_status.pack(side="left", padx=10, pady=3)
+        status_shell, self.status_bar = self._create_visual_shell(
+            top_panel,
+            outer_color=COLORS["border_focus"],
+            inner_color=COLORS["bg_darkest"],
+            corner_radius=11,
+            padding=1,
+        )
+        status_shell.grid(row=2, column=0, padx=14, pady=(0, 12), sticky="ew")
+        self.status_bar.grid_columnconfigure(0, weight=1)
+        self.lbl_chat_status = ctk.CTkLabel(self.status_bar, text="Chat da GUI pronto.", font=FONT_SMALL, text_color=COLORS["text_muted"], anchor="w")
+        self.lbl_chat_status.grid(row=0, column=0, padx=12, pady=(6, 5), sticky="ew")
+
+        chat_shell, chat_inner = self._create_visual_shell(
+            self,
+            outer_color=COLORS["border_strong"],
+            inner_color=COLORS["bg_darkest"],
+            corner_radius=14,
+            padding=2,
+        )
+        chat_shell.grid(row=3, column=0, padx=15, pady=(0, 8), sticky="nsew")
+        chat_inner.grid_columnconfigure(0, weight=1)
+        chat_inner.grid_rowconfigure(0, weight=1)
 
         self.chat_scroll = ctk.CTkScrollableFrame(
-            self,
+            chat_inner,
             fg_color=COLORS["bg_darkest"],
             corner_radius=12,
-            border_width=1,
-            border_color=COLORS["border"],
+            border_width=0,
+            border_color=COLORS["bg_darkest"],
             scrollbar_button_color=COLORS["purple_dim"],
             scrollbar_button_hover_color=COLORS["purple_neon"],
         )
-        self.chat_scroll.grid(row=3, column=0, padx=15, pady=(0, 8), sticky="nsew")
+        self.chat_scroll.grid(row=0, column=0, sticky="nsew")
         self.chat_scroll.grid_columnconfigure(0, weight=1)
         self._bubble_row = 0
 
-        self.frame_anexo = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+        self.frame_anexo = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         self.lbl_anexo = ctk.CTkLabel(self.frame_anexo, text="Arquivos prontos para envio", font=FONT_SMALL, text_color=COLORS["text_secondary"])
         self.lbl_anexo.pack(anchor="w", padx=12, pady=(8, 4))
         self.frame_anexo_list = ctk.CTkFrame(self.frame_anexo, fg_color="transparent")
         self.frame_anexo_list.pack(fill="x", padx=10, pady=(0, 8))
 
-        self.input_frame = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=1, border_color=COLORS["border"])
+        self.input_frame = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         self.input_frame.grid(row=5, column=0, padx=15, pady=(0, 15), sticky="ew")
         self.input_frame.grid_columnconfigure(2, weight=1)
 
@@ -185,7 +236,13 @@ class TabChat(ctk.CTkFrame):
         self.btn_anexo = ctk.CTkButton(self.input_frame, text="+", width=44, height=44, fg_color="transparent", hover_color=COLORS["bg_card_hover"], text_color=COLORS["text_muted"], font=("Segoe UI", 20, "bold"), command=self._abrir_anexo)
         self.btn_anexo.grid(row=0, column=1, padx=(0, 0), pady=8)
 
-        textbox_frame = ctk.CTkFrame(self.input_frame, fg_color=COLORS["bg_darkest"], corner_radius=10)
+        textbox_frame = ctk.CTkFrame(
+            self.input_frame,
+            fg_color=COLORS["bg_darkest"],
+            corner_radius=10,
+            border_width=1,
+            border_color=COLORS["border_subtle"],
+        )
         textbox_frame.grid(row=0, column=2, padx=8, pady=8, sticky="ew")
         textbox_frame.grid_columnconfigure(0, weight=1)
         self.entry_msg = ctk.CTkTextbox(textbox_frame, height=84, fg_color=COLORS["bg_darkest"], border_width=0, text_color=COLORS["text_primary"], font=FONT_BODY, wrap="word")
@@ -193,13 +250,26 @@ class TabChat(ctk.CTkFrame):
         self.entry_msg.bind("<Return>", self._on_input_return)
         self.entry_msg.bind("<KP_Enter>", self._on_input_return)
         self.entry_msg.bind("<KeyRelease>", self._update_input_placeholder)
+        self.entry_msg.bind("<Control-v>", self._on_paste)
+        self.entry_msg.bind("<Control-V>", self._on_paste)
         self.entry_placeholder = ctk.CTkLabel(textbox_frame, text="Digite uma mensagem para a Hana... (Shift+Enter quebra linha)", font=FONT_BODY, text_color=COLORS["text_muted"])
         self.entry_placeholder.place(x=12, y=12)
 
         self.btn_enviar = ctk.CTkButton(self.input_frame, text="Enviar", width=110, height=44, fg_color=COLORS["purple_dim"], hover_color=COLORS["purple_neon"], font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), command=self._enviar)
         self.btn_enviar.grid(row=0, column=3, padx=(0, 8), pady=8)
 
-        self._adicionar_msg("system", "Hana", "Control Center online. Este chat não é o terminal.")
+        self._adicionar_msg("system", "Hana", "Control Center online. Este chat nao e o terminal.")
+
+    def _create_visual_shell(self, parent, *, outer_color, inner_color, corner_radius=12, padding=2):
+        shell = ctk.CTkFrame(parent, fg_color=outer_color, corner_radius=corner_radius, border_width=0)
+        inner = ctk.CTkFrame(
+            shell,
+            fg_color=inner_color,
+            corner_radius=max(0, corner_radius - padding),
+            border_width=0,
+        )
+        inner.pack(fill="both", expand=True, padx=padding, pady=padding)
+        return shell, inner
 
     def _carregar_config_chat(self):
         chat_cfg = CONFIG.get("CHAT", {})
@@ -239,12 +309,7 @@ class TabChat(ctk.CTkFrame):
                 pass
 
     def _provider_models(self, provedor):
-        return {
-            "groq": ["llama-3.1-8b-instant", "meta-llama/llama-4-scout-17b-16e-instruct", "moonshotai/kimi-k2-instruct-0905", "Outro..."],
-            "google_cloud": ["gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-3.1-flash-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "Outro..."],
-            "openrouter": ["openai/gpt-5.4", "openai/gpt-5.4-mini", "google/gemini-3.1-flash-lite-preview", "google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "x-ai/grok-4.20-beta", "x-ai/grok-4.1-fast", "x-ai/grok-4", "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6", "anthropic/claude-haiku-4.5", "Outro..."],
-            "cerebras": ["qwen-3-235b-a22b-instruct-2507", "llama3.1-8b", "gpt-oss-120b", "zai-glm-4.7", "Outro..."],
-        }.get(provedor, ["Outro..."])
+        return get_model_ids_for_provider(provedor)
 
     def _provider_class(self, provedor):
         prov = (provedor or "").strip().lower()
@@ -264,6 +329,10 @@ class TabChat(ctk.CTkFrame):
             from src.providers.openrouter_provider import OpenRouterProvider
 
             return OpenRouterProvider
+        if prov == "openai":
+            from src.providers.openai_provider import OpenAIProvider
+
+            return OpenAIProvider
         return None
 
     def _on_chat_prov_change(self, provedor):
@@ -323,9 +392,142 @@ class TabChat(ctk.CTkFrame):
             self._image_gen = HanaImageGen()
         return self._image_gen
 
+    def _get_music_gen(self):
+        if self._music_gen is None:
+            self._music_gen = HanaMusicGen()
+        return self._music_gen
+
+    def on_config_reload(self):
+        self._sync_stop_hotkey_binding()
+
+    def destroy(self):
+        self._teardown_stop_hotkey()
+        unregister_stop_callback(self._stop_callback_name)
+        return super().destroy()
+
+    def _handle_global_stop_signal(self, **_kwargs):
+        if self.winfo_exists():
+            self.after(0, self._parar_fala_local)
+
+    def _poll_global_stop_signal(self):
+        if not self.winfo_exists():
+            return
+        try:
+            poll_external_stop()
+        except Exception:
+            logger.debug("[CHAT GUI] Falha ao verificar sinal global de stop.", exc_info=True)
+        self.after(250, self._poll_global_stop_signal)
+
+    def _handle_stop_hotkey(self):
+        if self.winfo_exists():
+            request_global_stop("gui_hotkey")
+
+    def _teardown_stop_hotkey(self):
+        if keyboard is None or self._stop_hotkey_handle is None:
+            self._stop_hotkey_handle = None
+            return
+        try:
+            keyboard.remove_hotkey(self._stop_hotkey_handle)
+        except Exception:
+            logger.debug("[CHAT GUI] Nao foi possivel remover hotkey de parada.", exc_info=True)
+        self._stop_hotkey_handle = None
+
+    def _sync_stop_hotkey_binding(self):
+        settings = get_stop_hotkey_settings()
+        signature = (bool(settings["enabled"]), str(settings["key"]).upper())
+        if signature == self._stop_hotkey_signature:
+            return
+
+        self._teardown_stop_hotkey()
+        self._stop_hotkey_signature = signature
+
+        if not settings["enabled"]:
+            return
+        if keyboard is None:
+            logger.warning("[CHAT GUI] Biblioteca 'keyboard' indisponivel para o hotkey de parada.")
+            return
+
+        try:
+            self._stop_hotkey_handle = keyboard.add_hotkey(
+                settings["key"],
+                lambda: self.after(0, self._handle_stop_hotkey),
+                suppress=False,
+                trigger_on_release=False,
+            )
+            logger.info("[CHAT GUI] Hotkey global de parada registrada: %s", settings["key"])
+        except Exception as e:
+            logger.warning("[CHAT GUI] Falha ao registrar hotkey de parada %s: %s", settings["key"], e)
+
+    def _add_attachment_paths(self, paths):
+        added = 0
+        for raw_path in paths or []:
+            path = os.path.abspath(str(raw_path).strip().strip('"').strip("'"))
+            if not path or not os.path.exists(path):
+                continue
+            if path in self._anexos:
+                continue
+            self._anexos.append(path)
+            added += 1
+        if added:
+            self._atualizar_container_anexos()
+            self.lbl_chat_status.configure(text=f"{added} anexo(s) adicionados ao chat.", text_color=COLORS["green"])
+        return added > 0
+
+    def _save_clipboard_image(self, image):
+        os.makedirs(CLIPBOARD_CACHE_DIR, exist_ok=True)
+        filepath = os.path.join(CLIPBOARD_CACHE_DIR, f"clipboard_{int(time.time() * 1000)}.png")
+        image.save(filepath, "PNG")
+        return filepath
+
+    def _extract_paths_from_text(self, text):
+        if not text:
+            return []
+
+        candidates = []
+        lines = [line.strip() for line in str(text).replace("\r", "\n").split("\n") if line.strip()]
+        if not lines:
+            return []
+
+        for line in lines:
+            clean = line.strip().strip('"').strip("'")
+            if clean.startswith("{") and clean.endswith("}"):
+                clean = clean[1:-1].strip()
+            if not os.path.exists(clean):
+                return []
+            candidates.append(clean)
+        return candidates
+
+    def _on_paste(self, _event=None):
+        try:
+            clipboard_payload = PILImageGrab.grabclipboard() if PILImageGrab else None
+        except Exception as e:
+            logger.debug("[CHAT GUI] Falha ao ler clipboard via ImageGrab: %s", e)
+            clipboard_payload = None
+
+        if isinstance(clipboard_payload, list) and self._add_attachment_paths(clipboard_payload):
+            return "break"
+
+        if HAS_PIL and clipboard_payload is not None and hasattr(clipboard_payload, "save"):
+            try:
+                image_path = self._save_clipboard_image(clipboard_payload)
+                if self._add_attachment_paths([image_path]):
+                    return "break"
+            except Exception as e:
+                logger.error("[CHAT GUI] Falha ao salvar imagem colada: %s", e)
+
+        try:
+            text = self.clipboard_get()
+        except Exception:
+            return None
+
+        candidate_paths = self._extract_paths_from_text(text)
+        if candidate_paths and self._add_attachment_paths(candidate_paths):
+            return "break"
+        return None
+
     def _ativar_dragdrop(self):
         if not HAS_DND:
-            self.lbl_input_hint.configure(text="Enter envia • Shift+Enter quebra linha • Use o clipe para anexar")
+            self.lbl_input_hint.configure(text="Enter envia | Shift+Enter quebra linha | Use o clipe para anexar")
             return
         try:
             TkinterDnD._require(self.winfo_toplevel())
@@ -333,15 +535,12 @@ class TabChat(ctk.CTkFrame):
                 widget.drop_target_register(DND_FILES)
                 widget.dnd_bind("<<Drop>>", self._on_drop_files)
         except Exception as e:
-            logger.warning("[CHAT GUI] Drag-and-drop indisponível: %s", e)
-            self.lbl_input_hint.configure(text="Enter envia • Shift+Enter quebra linha • Use o clipe para anexar")
+            logger.warning("[CHAT GUI] Drag-and-drop indisponivel: %s", e)
+            self.lbl_input_hint.configure(text="Enter envia | Shift+Enter quebra linha | Use o clipe para anexar")
 
     def _on_drop_files(self, event):
         try:
-            for path in self.tk.splitlist(event.data):
-                if os.path.exists(path) and path not in self._anexos:
-                    self._anexos.append(path)
-            self._atualizar_container_anexos()
+            self._add_attachment_paths(self.tk.splitlist(event.data))
         except Exception as e:
             logger.error("[CHAT GUI] Falha no drop: %s", e)
         return COPY or "copy"
@@ -394,24 +593,57 @@ class TabChat(ctk.CTkFrame):
 
     def _classify_task(self, texto, anexos_envio):
         lowered = (texto or "").strip().lower()
-        if re.search(r"\b(gera|cria|criar|faz|faça).*(imagem|foto|arte)\b", lowered):
+        if re.search(r"\b(gera|cria|criar|faz|fa[cç]a).*(imagem|foto|arte)\b", lowered):
             return "image_action"
+        if re.search(r"\b(gera|cria|criar|faz|fa[cç]a|comp[oô]e|componha).*(m[uú]sica|musica|trilha|beat|can[cç][aã]o|song)\b", lowered):
+            return "music_action"
         if re.search(r"\b(traduz|traduza|translation)\b", lowered):
             return "traducao"
 
         has_media = self._contains_media(anexos_envio)
-        detail_keywords = ("resuma", "resume", "resumir", "detalha", "detalhe", "detalhar", "analisa", "analise", "analisar", "explica", "explique", "explicar", "reunião", "reuniao", "ata", "pontos")
+        detail_keywords = ("resuma", "resume", "resumir", "detalha", "detalhe", "detalhar", "analisa", "analise", "analisar", "explica", "explique", "explicar")
+        structured_media_keywords = ("reuniao", "reunião", "ata", "pontos", "decisoes", "decisões", "acoes", "ações", "encaminhamentos", "timeline", "linha do tempo")
+        exact_media_keywords = (
+            "letra",
+            "lyrics",
+            "transcreve",
+            "transcrever",
+            "transcricao",
+            "transcrição",
+            "texto completo",
+            "fala completa",
+            "palavra por palavra",
+            "ritmo",
+            "bpm",
+            "andamento",
+            "estrutura",
+            "verso",
+            "versos",
+            "refrao",
+            "refrão",
+            "bridge",
+            "ponte",
+            "instrumentacao",
+            "instrumentação",
+            "melodia",
+            "harmonia",
+            "compasso",
+        )
         if has_media:
+            if any(keyword in lowered for keyword in exact_media_keywords):
+                return "media_exact_request"
+            if any(keyword in lowered for keyword in structured_media_keywords):
+                return "analise_midia_estruturada"
             if any(keyword in lowered for keyword in detail_keywords) or not lowered:
-                return "analise_midia"
-            return "media_summary"
+                return "media_summary"
+            return "media_question"
 
         if any(keyword in lowered for keyword in detail_keywords):
             return "resumo_detalhado"
         return "chat_normal"
 
     def _build_response_schema(self, task_type):
-        if task_type not in HEAVY_MEDIA_TASKS:
+        if task_type not in STRUCTURED_MEDIA_TASKS:
             return None
 
         ordered = [
@@ -428,39 +660,17 @@ class TabChat(ctk.CTkFrame):
             "type": "object",
             "propertyOrdering": ordered,
             "properties": {
-                "titulo": {"type": "string", "description": "Título curto e objetivo do conteúdo analisado."},
-                "resumo_executivo": {"type": "string", "description": "Resumo claro e útil em português."},
+                "titulo": {"type": "string", "description": "Titulo curto e objetivo do conteudo analisado."},
+                "resumo_executivo": {"type": "string", "description": "Resumo claro e util em portugues."},
                 "topicos_principais": {"type": "array", "items": {"type": "string"}, "description": "Principais assuntos tratados."},
-                "decisoes": {"type": "array", "items": {"type": "string"}, "description": "Decisões tomadas ou conclusões fechadas."},
-                "acoes": {"type": "array", "items": {"type": "string"}, "description": "Próximas ações, tarefas ou encaminhamentos."},
-                "riscos": {"type": "array", "items": {"type": "string"}, "description": "Riscos, bloqueios ou pontos de atenção."},
-                "linha_do_tempo": {"type": "array", "items": {"type": "string"}, "description": "Sequência resumida dos momentos ou etapas."},
-                "trechos_relevantes": {"type": "array", "items": {"type": "string"}, "description": "Trechos ou citações importantes do conteúdo."},
+                "decisoes": {"type": "array", "items": {"type": "string"}, "description": "Decisoes tomadas ou conclusoes fechadas."},
+                "acoes": {"type": "array", "items": {"type": "string"}, "description": "Proximas acoes, tarefas ou encaminhamentos."},
+                "riscos": {"type": "array", "items": {"type": "string"}, "description": "Riscos, bloqueios ou pontos de atencao."},
+                "linha_do_tempo": {"type": "array", "items": {"type": "string"}, "description": "Sequencia resumida dos momentos ou etapas."},
+                "trechos_relevantes": {"type": "array", "items": {"type": "string"}, "description": "Trechos ou citacoes importantes do conteudo."},
             },
             "required": ["titulo", "resumo_executivo", "topicos_principais", "acoes", "riscos"],
         }
-
-    def _load_gui_persona(self):
-        persona_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "persona.txt")
-        personality = ""
-        try:
-            with open(os.path.abspath(persona_path), "r", encoding="utf-8") as f:
-                personality = f.read()
-        except Exception:
-            return ""
-
-        personality = re.sub(r"Regra de Tamanho:.*?(?:\n|$)", "", personality, flags=re.IGNORECASE)
-        personality = re.sub(r"APENAS 1 a 5 frases.*?(?:\n|$)", "", personality, flags=re.IGNORECASE)
-        return personality.strip()
-
-    def _load_prompt_rules(self):
-        prompt_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "prompt.json")
-        try:
-            with open(os.path.abspath(prompt_path), "r", encoding="utf-8") as f:
-                prompt_data = json.load(f)
-        except Exception:
-            return ""
-        return "\n".join([f"- {k}: {v}" for k, v in prompt_data.items()])
 
     def _attachments_overview(self, anexos_envio):
         lines = []
@@ -470,40 +680,14 @@ class TabChat(ctk.CTkFrame):
         return "\n".join(lines) if lines else "- nenhum anexo"
 
     def _build_gui_prompt(self, user_message, memory_context, task_type, anexos_envio, request_context):
-        personality = self._load_gui_persona()
-        prompt_rules = self._load_prompt_rules()
-        task_guidance = {
-            "chat_normal": "Converse como um chatbot moderno. Se a pergunta for simples, seja direta. Se a pergunta pedir contexto, explique com calma.",
-            "resumo_detalhado": "Responda em markdown claro com seções, parágrafos e listas. Priorize profundidade e utilidade, não resposta curta.",
-            "analise_midia": "Analise os anexos com profundidade. Extraia contexto, tópicos, decisões, ações, riscos e trechos importantes.",
-            "media_summary": "Resuma o conteúdo anexado com detalhes úteis. Não devolva um resumo raso.",
-            "traducao": "Entregue a tradução de forma clara e bem formatada.",
-            "image_action": "Se o usuário pedir criação de imagem, responda naturalmente e use <gerar_imagem>...</gerar_imagem> apenas no final.",
-        }.get(task_type, "Responda como um chatbot moderno e consciente da GUI.")
         return (
-            f"=== [NUCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{personality}\n\n"
-            f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{prompt_rules}\n\n"
-            "=== [MODO DE INTERACAO: CHAT DA GUI] ===\n"
-            "Voce esta dentro do chat visual do Control Center da Hana.\n"
-            "Este ambiente nao e o terminal.\n"
-            "IGNORE completamente qualquer regra global do terminal que limite a resposta a 1-5 frases.\n"
-            "Voce deve agir como um chatbot moderno da GUI, nao como assistente de linha de comando.\n"
-            "Use markdown natural quando a resposta ficar média ou longa: títulos, listas, blocos e espaçamento correto.\n"
-            f"{task_guidance}\n"
-            "Se arquivos chegaram neste chat, reconheca os anexos explicitamente.\n"
-            "Se quiser gerar uma imagem para aparecer neste chat, use <gerar_imagem>...</gerar_imagem> no final.\n"
-            "Se quiser editar a ultima imagem gerada no chat, use <editar_imagem>...</editar_imagem> no final.\n"
-            "Se quiser salvar algo na memoria longa, use <salvar_memoria>...</salvar_memoria> no final.\n"
-            "Nao diga que o usuario esta no terminal, a menos que esta conversa confirme isso.\n\n"
-            f"=== [TIPO DE TAREFA] ===\n{task_type}\n\n"
-            f"=== [ANEXOS RECEBIDOS] ===\n{self._attachments_overview(anexos_envio)}\n\n"
-            f"=== [CONFIGURACAO DE RESPOSTA] ===\n"
-            f"- channel: {request_context.get('channel')}\n"
-            f"- response_mode: {request_context.get('response_mode')}\n"
-            f"- markdown_enabled: {request_context.get('markdown_enabled')}\n"
-            f"- max_output_tokens: {request_context.get('max_output_tokens')}\n\n"
-            f"=== [CONTEXTO DE MEMORIA COMPARTILHADA] ===\n{memory_context}\n\n"
-            f"Mensagem atual do usuario:\n{user_message}"
+            build_gui_system_prompt(
+                task_type=task_type,
+                memory_context=memory_context,
+                request_context=request_context,
+                attachments_overview=self._attachments_overview(anexos_envio),
+            )
+            + f"\nMensagem atual do usuario:\n{user_message}"
         )
 
     def _prepare_attachments_for_llm(self, anexos_envio, capabilities):
@@ -536,7 +720,7 @@ class TabChat(ctk.CTkFrame):
             else:
                 ext = os.path.splitext(path)[1].lower()
                 if ext == ".doc":
-                    raise RuntimeError("Arquivo .doc antigo ainda não é suportado neste fluxo. Use .docx ou PDF.")
+                    raise RuntimeError("Arquivo .doc antigo ainda nao e suportado neste fluxo. Use .docx ou PDF.")
                 text_blocks.append(f"[ARQUIVO: {name}]\n{self._inbox_manager.read_text_like(path)}")
         return image_b64, arquivos_multimidia, text_blocks
 
@@ -550,7 +734,7 @@ class TabChat(ctk.CTkFrame):
         )
         chat_settings = get_chat_settings()
         has_heavy_media = self._contains_media(anexos_envio)
-        route_to_media_model = task_type in HEAVY_MEDIA_TASKS and has_heavy_media
+        route_to_media_model = task_type in LONG_FORM_TASKS and has_heavy_media
         selected_model_key = selected_model.lower()
 
         if chat_settings["auto_route_media"] and has_heavy_media:
@@ -577,14 +761,10 @@ class TabChat(ctk.CTkFrame):
         }
 
     def _extract_xml_actions(self, texto):
-        actions = {}
-        for tag_name in ("salvar_memoria", "gerar_imagem", "editar_imagem"):
-            actions[tag_name] = [
-                item.strip()
-                for item in re.findall(rf"<{tag_name}>(.*?)</{tag_name}>", texto, re.DOTALL | re.IGNORECASE)
-                if item.strip()
-            ]
-        return actions
+        return extract_xml_actions(
+            texto,
+            ("salvar_memoria", "gerar_imagem", "editar_imagem", "gerar_musica", "acao_pc"),
+        )
 
     def _structured_response_to_markdown(self, payload):
         if isinstance(payload, list):
@@ -603,9 +783,9 @@ class TabChat(ctk.CTkFrame):
             sections.append(str(payload["resumo_executivo"]).strip())
 
         section_labels = {
-            "topicos_principais": "### Tópicos Principais",
-            "decisoes": "### Decisões",
-            "acoes": "### Ações",
+            "topicos_principais": "### Topicos Principais",
+            "decisoes": "### Decisoes",
+            "acoes": "### Acoes",
             "riscos": "### Riscos",
             "linha_do_tempo": "### Linha do Tempo",
             "trechos_relevantes": "### Trechos Relevantes",
@@ -628,17 +808,17 @@ class TabChat(ctk.CTkFrame):
         try:
             parsed = json.loads(texto)
             if isinstance(parsed, dict) and parsed.get("acao") == "tool_call":
-                texto = (parsed.get("texto") or "").strip() or "O modelo tentou usar ferramentas nativas, mas este fluxo da GUI ainda não executa tool calls automáticas."
+                texto = (parsed.get("texto") or "").strip() or "O modelo tentou usar ferramentas nativas, mas este fluxo da GUI ainda nao executa tool calls automaticas."
             else:
                 return self._structured_response_to_markdown(parsed)
         except Exception:
             pass
 
-        pattern = r"<(" + "|".join(XML_TAGS) + r")>.*?</\1>"
-        texto = re.sub(pattern, "", texto, flags=re.DOTALL | re.IGNORECASE)
+        texto = repair_mojibake_text(texto)
+        texto = strip_xml_tags(texto, DISPLAY_XML_TAGS)
         texto = re.sub(r"\[EMOTION.*?\]\s*", "", texto, flags=re.IGNORECASE)
         texto = re.sub(r"\[INDEX_\d+\.\d+(?:,\s*INDEX_\d+\.\d+)*\]", "", texto)
-        texto = re.sub(r"ã€.*?ã€‘", "", texto, flags=re.DOTALL)
+        texto = re.sub(r"[\u200b-\u200f\u202a-\u202e]+", "", texto)
         texto = re.sub(r"\n{3,}", "\n\n", texto)
         return texto.strip()
 
@@ -648,61 +828,180 @@ class TabChat(ctk.CTkFrame):
         label = f"{request_meta.get('provider', '?')}/{request_meta.get('model', '?')}"
         backend = request_meta.get("backend")
         if backend:
-            label += f" • {backend}"
+            label += f" | {backend}"
         if request_meta.get("routed"):
-            label += " • auto-route"
+            label += " | auto-route"
         token_count = request_meta.get("token_count")
         if token_count:
-            label += f" • {token_count} tok"
+            label += f" | {token_count} tok"
         return label
 
-    def _adicionar_msg(self, tag, autor, texto, attachments=None, generated_images=None, request_meta=None):
+    def _create_bubble_shell(self, tag, autor, request_meta=None):
+        if tag == "user":
+            side, bg, border, padx, name_color = "right", BUBBLE_USER, BUBBLE_BORDER_USER, (150, 18), COLORS["blue_neon"]
+        else:
+            side, bg, border, padx, name_color = "left", BUBBLE_HANA, BUBBLE_BORDER_HANA, (18, 150), COLORS["purple_neon"]
+
+        row_shell = ctk.CTkFrame(self.chat_scroll, fg_color="transparent")
+        row_shell.grid(row=self._bubble_row, column=0, padx=padx, pady=(8, 4), sticky="ew")
+        row_shell.grid_columnconfigure(0, weight=1)
+        self._bubble_row += 1
+
+        bubble_shell = ctk.CTkFrame(row_shell, fg_color=border, corner_radius=18, border_width=0)
+        bubble_shell.pack(side=side)
+        bubble = ctk.CTkFrame(bubble_shell, fg_color=bg, corner_radius=16, border_width=0)
+        bubble.pack(fill="both", expand=True, padx=2, pady=2)
+
+        header = ctk.CTkFrame(bubble, fg_color="transparent")
+        header.pack(fill="x", padx=14, pady=(12, 0))
+        ctk.CTkLabel(
+            header,
+            text=repair_mojibake_text(autor),
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            text_color=name_color,
+        ).pack(side="left")
+        ctk.CTkLabel(header, text=time.strftime("%H:%M"), font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="right", padx=(10, 0))
+
+        meta_widget = None
+        meta_label = self._meta_label(request_meta)
+        if meta_label:
+            meta_widget = ctk.CTkLabel(
+                bubble,
+                text=repair_mojibake_text(meta_label),
+                font=FONT_SMALL,
+                text_color=COLORS["text_muted"],
+                wraplength=640,
+                justify="left",
+            )
+            meta_widget.pack(anchor="w", padx=14, pady=(4, 0))
+
+        body = ctk.CTkFrame(bubble, fg_color="transparent")
+        body.pack(fill="x")
+        return bubble, body, meta_widget
+
+    def _add_hana_footer(self, bubble, texto):
+        if not texto or not texto.strip():
+            return
+        footer = ctk.CTkFrame(bubble, fg_color="transparent")
+        footer.pack(fill="x", padx=12, pady=(0, 10))
+        ctk.CTkButton(
+            footer,
+            text="Ler em voz alta",
+            width=104,
+            height=26,
+            fg_color="transparent",
+            hover_color=COLORS["purple_dark"],
+            text_color=COLORS["text_muted"],
+            font=FONT_SMALL,
+            command=lambda t=texto: self._falar_texto(t),
+        ).pack(side="left")
+
+    def _create_streaming_bubble(self, request_id):
+        bubble, body, meta_widget = self._create_bubble_shell("hana", "Hana")
+        label = ctk.CTkLabel(
+            body,
+            text="Processando resposta da GUI...",
+            font=FONT_BODY,
+            text_color=COLORS["text_secondary"],
+            wraplength=640,
+            justify="left",
+            anchor="w",
+            width=540,
+        )
+        label.pack(fill="x", padx=14, pady=(8, 12))
+        self._active_stream_state = {
+            "request_id": request_id,
+            "bubble": bubble,
+            "body": body,
+            "label": label,
+            "meta": meta_widget,
+            "text": "",
+        }
+        self._scroll_to_bottom()
+
+    def _update_streaming_bubble(self, request_id, texto, request_meta=None):
+        state = self._active_stream_state
+        if not state or state.get("request_id") != request_id:
+            return
+        state["text"] = texto
+        label = state.get("label")
+        if label and label.winfo_exists():
+            display_text = repair_mojibake_text(texto or "")
+            if display_text.strip():
+                label.configure(text=display_text, text_color=COLORS["text_primary"])
+            else:
+                label.configure(text="Processando resposta da GUI...", text_color=COLORS["text_secondary"])
+        meta_widget = state.get("meta")
+        meta_label = self._meta_label(request_meta)
+        if meta_widget and meta_widget.winfo_exists():
+            meta_widget.configure(text=repair_mojibake_text(meta_label))
+        elif meta_label:
+            state["meta"] = ctk.CTkLabel(
+                state["bubble"],
+                text=repair_mojibake_text(meta_label),
+                font=FONT_SMALL,
+                text_color=COLORS["text_muted"],
+                wraplength=640,
+                justify="left",
+            )
+            state["meta"].pack(anchor="w", padx=14, pady=(4, 0), before=state["body"])
+        self._scroll_to_bottom()
+
+    def _finalize_streaming_bubble(self, request_id, texto, generated_images=None, generated_media=None, request_meta=None):
+        state = self._active_stream_state
+        if not state or state.get("request_id") != request_id:
+            self._adicionar_msg("hana", "Hana", texto, generated_images=generated_images, generated_media=generated_media, request_meta=request_meta)
+            return
+
+        body = state["body"]
+        for child in body.winfo_children():
+            child.destroy()
+        self._render_rich_text(body, texto)
+        if generated_images:
+            self._render_generated_images(body, generated_images)
+        if generated_media:
+            self._render_generated_media(body, generated_media)
+        self._add_hana_footer(state["bubble"], texto)
+        self._active_stream_state = None
+        self._scroll_to_bottom()
+
+    def _cancel_streaming_bubble(self, request_id):
+        state = self._active_stream_state
+        if not state or state.get("request_id") != request_id:
+            return
+        if not (state.get("text") or "").strip():
+            try:
+                state["bubble"].destroy()
+            except Exception:
+                pass
+            self._active_stream_state = None
+            return
+        label = state.get("label")
+        if label and label.winfo_exists():
+            label.configure(text=repair_mojibake_text((state.get("text") or "").strip()))
+        self._active_stream_state = None
+
+    def _adicionar_msg(self, tag, autor, texto, attachments=None, generated_images=None, generated_media=None, request_meta=None):
         attachments = attachments or []
         generated_images = generated_images or []
+        generated_media = generated_media or []
         if tag == "system":
-            lbl = ctk.CTkLabel(self.chat_scroll, text=texto, font=FONT_SMALL, text_color=COLORS["text_muted"], wraplength=920, justify="center")
-            lbl.grid(row=self._bubble_row, column=0, padx=40, pady=(4, 2), sticky="ew")
+            lbl = ctk.CTkLabel(self.chat_scroll, text=repair_mojibake_text(texto), font=FONT_SMALL, text_color=COLORS["text_muted"], wraplength=900, justify="center")
+            lbl.grid(row=self._bubble_row, column=0, padx=48, pady=(6, 4), sticky="ew")
             self._bubble_row += 1
             self._scroll_to_bottom()
             return
 
-        if tag == "user":
-            anchor, bg, border, padx, name_color = "e", BUBBLE_USER, BUBBLE_BORDER_USER, (120, 10), COLORS["blue_neon"]
-        else:
-            anchor, bg, border, padx, name_color = "w", BUBBLE_HANA, BUBBLE_BORDER_HANA, (10, 120), COLORS["purple_neon"]
-
-        bubble = ctk.CTkFrame(self.chat_scroll, fg_color=bg, corner_radius=16, border_width=1, border_color=border)
-        bubble.grid(row=self._bubble_row, column=0, padx=padx, pady=(7, 3), sticky=anchor)
-        self._bubble_row += 1
-
-        header = ctk.CTkFrame(bubble, fg_color="transparent")
-        header.pack(fill="x", padx=12, pady=(10, 0))
-        ctk.CTkLabel(header, text=autor, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=name_color).pack(side="left")
-        ctk.CTkLabel(header, text=time.strftime("%H:%M"), font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="right")
-
-        meta_label = self._meta_label(request_meta)
-        if meta_label:
-            ctk.CTkLabel(bubble, text=meta_label, font=FONT_SMALL, text_color=COLORS["text_muted"], wraplength=720, justify="left").pack(anchor="w", padx=12, pady=(4, 0))
-
-        self._render_rich_text(bubble, texto)
+        bubble, body, _meta = self._create_bubble_shell(tag, autor, request_meta=request_meta)
+        self._render_rich_text(body, texto)
         if attachments:
-            self._render_attachment_cards(bubble, attachments)
+            self._render_attachment_cards(body, attachments)
         if generated_images:
-            self._render_generated_images(bubble, generated_images)
+            self._render_generated_images(body, generated_images)
+        if generated_media:
+            self._render_generated_media(body, generated_media)
         if tag == "hana" and texto.strip():
-            footer = ctk.CTkFrame(bubble, fg_color="transparent")
-            footer.pack(fill="x", padx=12, pady=(0, 10))
-            ctk.CTkButton(
-                footer,
-                text="Ler em voz alta",
-                width=104,
-                height=26,
-                fg_color="transparent",
-                hover_color=COLORS["purple_dark"],
-                text_color=COLORS["text_muted"],
-                font=FONT_SMALL,
-                command=lambda t=texto: self._falar_texto(t),
-            ).pack(side="left")
+            self._add_hana_footer(bubble, texto)
         self._scroll_to_bottom()
 
     def _clean_inline_markdown(self, text):
@@ -710,7 +1009,7 @@ class TabChat(ctk.CTkFrame):
         text = re.sub(r"\*(.*?)\*", r"\1", text)
         text = re.sub(r"__(.*?)__", r"\1", text)
         text = re.sub(r"_(.*?)_", r"\1", text)
-        text = re.sub(r"`([^`]+)`", r"“\1”", text)
+        text = re.sub(r"`([^`]+)`", r"'\1'", text)
         return text.strip()
 
     def _render_heading(self, parent, level, text):
@@ -720,10 +1019,10 @@ class TabChat(ctk.CTkFrame):
             text=self._clean_inline_markdown(text),
             font=ctk.CTkFont(family="Segoe UI", size=size, weight="bold"),
             text_color=COLORS["text_primary"],
-            wraplength=720,
+            wraplength=640,
             justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12, pady=(8, 2))
+        ).pack(fill="x", padx=14, pady=(8, 2))
 
     def _render_paragraph(self, parent, text):
         cleaned = self._clean_inline_markdown(text)
@@ -734,41 +1033,41 @@ class TabChat(ctk.CTkFrame):
             text=cleaned,
             font=FONT_BODY,
             text_color=COLORS["text_primary"],
-            wraplength=720,
+            wraplength=640,
             justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12, pady=(3, 1))
+        ).pack(fill="x", padx=14, pady=(3, 1))
 
     def _render_list_item(self, parent, marker, text):
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=12, pady=(2, 1))
+        row.pack(fill="x", padx=14, pady=(2, 1))
         ctk.CTkLabel(row, text=marker, font=FONT_BODY, text_color=COLORS["purple_neon"], width=24, anchor="n").pack(side="left")
         ctk.CTkLabel(
             row,
             text=self._clean_inline_markdown(text),
             font=FONT_BODY,
             text_color=COLORS["text_primary"],
-            wraplength=690,
+            wraplength=610,
             justify="left",
             anchor="w",
         ).pack(side="left", fill="x", expand=True)
 
     def _render_quote(self, parent, text):
-        frame = ctk.CTkFrame(parent, fg_color="#16151F", corner_radius=10, border_width=1, border_color=COLORS["border"])
-        frame.pack(fill="x", padx=12, pady=(4, 6))
+        frame = ctk.CTkFrame(parent, fg_color="#16151F", corner_radius=12, border_width=2, border_color=COLORS["border"])
+        frame.pack(fill="x", padx=14, pady=(4, 6))
         ctk.CTkLabel(
             frame,
             text=self._clean_inline_markdown(text),
             font=FONT_BODY,
             text_color=COLORS["text_secondary"],
-            wraplength=700,
+            wraplength=620,
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=10, pady=8)
 
     def _render_code_block(self, parent, language, code):
-        code_box = ctk.CTkFrame(parent, fg_color="#141827", corner_radius=10)
-        code_box.pack(fill="x", padx=12, pady=(4, 6))
+        code_box = ctk.CTkFrame(parent, fg_color="#141827", corner_radius=12, border_width=1, border_color=COLORS["border_subtle"])
+        code_box.pack(fill="x", padx=14, pady=(4, 6))
         if language:
             ctk.CTkLabel(code_box, text=language.upper(), font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(anchor="w", padx=8, pady=(6, 0))
         ctk.CTkLabel(
@@ -776,13 +1075,13 @@ class TabChat(ctk.CTkFrame):
             text=code.strip(),
             font=("Consolas", 11),
             text_color="#E2E8F0",
-            wraplength=700,
+            wraplength=620,
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=8, pady=(4, 8))
 
     def _render_rich_text(self, parent, texto):
-        display_text = self._sanitize_response_for_display(texto) or "(Processando internamente...)"
+        display_text = repair_mojibake_text(self._sanitize_response_for_display(texto) or "(Processando internamente...)")
         lines = display_text.splitlines()
         paragraph_lines = []
         in_code = False
@@ -836,7 +1135,7 @@ class TabChat(ctk.CTkFrame):
             bullet_match = re.match(r"^[-*+]\s+(.*)$", stripped)
             if bullet_match:
                 flush_paragraph()
-                self._render_list_item(parent, "•", bullet_match.group(1))
+                self._render_list_item(parent, "-", bullet_match.group(1))
                 continue
 
             number_match = re.match(r"^(\d+)\.\s+(.*)$", stripped)
@@ -853,7 +1152,7 @@ class TabChat(ctk.CTkFrame):
 
     def _render_attachment_cards(self, parent, attachments):
         container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="x", padx=12, pady=(6, 8))
+        container.pack(fill="x", padx=14, pady=(6, 8))
         for path in attachments:
             kind = self._infer_file_kind(path)
             if kind == "image":
@@ -863,12 +1162,39 @@ class TabChat(ctk.CTkFrame):
 
     def _render_generated_images(self, parent, generated_images):
         container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="x", padx=12, pady=(6, 8))
+        container.pack(fill="x", padx=14, pady=(6, 8))
         for path in generated_images:
             self._render_image_attachment(container, path, "Imagem gerada")
 
+    def _normalize_generated_media_kind(self, kind, path):
+        normalized = str(kind or "").strip().lower()
+        if normalized == "music":
+            return "audio"
+        if normalized in {"audio", "video", "image", "pdf", "text", "file"}:
+            return normalized
+        return self._infer_file_kind(path)
+
+    def _render_generated_media(self, parent, generated_media):
+        container = ctk.CTkFrame(parent, fg_color="transparent")
+        container.pack(fill="x", padx=14, pady=(6, 8))
+        for item in generated_media:
+            if isinstance(item, str):
+                path = item
+                title = None
+                kind = self._normalize_generated_media_kind(None, path)
+            else:
+                path = item.get("path")
+                title = item.get("title")
+                kind = self._normalize_generated_media_kind(item.get("kind"), path)
+            if not path:
+                continue
+            if kind == "image":
+                self._render_image_attachment(container, path, title or "Imagem gerada")
+            else:
+                self._render_file_card(container, path, kind, title=title)
+
     def _render_image_attachment(self, parent, path, title):
-        frame = ctk.CTkFrame(parent, fg_color=COLORS["bg_darkest"], corner_radius=12, border_width=1, border_color=COLORS["border"])
+        frame = ctk.CTkFrame(parent, fg_color=COLORS["bg_darkest"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         frame.pack(anchor="w", pady=4)
         ctk.CTkLabel(frame, text=title, font=FONT_SMALL, text_color=COLORS["text_secondary"]).pack(anchor="w", padx=8, pady=(6, 4))
         if HAS_PIL and os.path.exists(path):
@@ -883,19 +1209,202 @@ class TabChat(ctk.CTkFrame):
                 logger.warning("[CHAT GUI] Falha ao renderizar imagem %s: %s", path, e)
         ctk.CTkButton(frame, text="Abrir", width=70, height=26, fg_color=COLORS["purple_dim"], hover_color=COLORS["purple_neon"], font=FONT_SMALL, command=lambda p=path: self._open_file(p)).pack(anchor="w", padx=8, pady=(0, 8))
 
-    def _render_file_card(self, parent, path, kind):
-        card = ctk.CTkFrame(parent, fg_color=COLORS["bg_darkest"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+    def _render_file_card(self, parent, path, kind, title=None):
+        card = ctk.CTkFrame(parent, fg_color=COLORS["bg_darkest"], corner_radius=10, border_width=2, border_color=COLORS["border"])
         card.pack(fill="x", pady=4)
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(6, 2))
         ctk.CTkLabel(row, text=self._icon_for_kind(kind), font=FONT_SMALL, text_color=COLORS["purple_neon"]).pack(side="left")
-        ctk.CTkLabel(row, text=os.path.basename(path), font=FONT_SMALL, text_color=COLORS["text_primary"]).pack(side="left", padx=(8, 0))
-        ctk.CTkLabel(card, text=path, font=FONT_SMALL, text_color=COLORS["text_muted"], wraplength=700, justify="left").pack(anchor="w", padx=8, pady=(0, 4))
+        ctk.CTkLabel(row, text=title or os.path.basename(path), font=FONT_SMALL, text_color=COLORS["text_primary"]).pack(side="left", padx=(8, 0))
+        ctk.CTkLabel(card, text=path, font=FONT_SMALL, text_color=COLORS["text_muted"], wraplength=620, justify="left").pack(anchor="w", padx=8, pady=(0, 4))
         actions = ctk.CTkFrame(card, fg_color="transparent")
         actions.pack(fill="x", padx=8, pady=(0, 8))
         ctk.CTkButton(actions, text="Abrir", width=68, height=24, fg_color=COLORS["purple_dim"], hover_color=COLORS["purple_neon"], font=FONT_SMALL, command=lambda p=path: self._open_file(p)).pack(side="left")
         if kind == "audio":
             ctk.CTkButton(actions, text="Tocar", width=68, height=24, fg_color=COLORS["bg_card_hover"], hover_color=COLORS["purple_dark"], font=FONT_SMALL, command=lambda p=path: self._tocar_audio_anexo(p)).pack(side="left", padx=(6, 0))
+
+    def _media_kind_label(self, kind):
+        return "musica"
+
+    def _build_media_request_meta(self, status, fallback_meta=None):
+        details = dict(status.get("details") or {})
+        request_meta = dict(fallback_meta or {})
+        request_meta["provider"] = request_meta.get("provider") or "google_cloud"
+        request_meta["model"] = details.get("model") or request_meta.get("model") or "desconhecido"
+        request_meta["backend"] = details.get("backend") or request_meta.get("backend")
+        request_meta["routed"] = True
+        return request_meta
+
+    def _monitor_media_job(self, job_id, kind, fallback_meta=None):
+        generator = self._get_music_gen()
+        kind_label = self._media_kind_label(kind)
+        completed_text = "concluida"
+        ready_text = "gerada"
+        state_text = {
+            "queued": f"{kind_label.capitalize()} na fila...",
+            "running": f"{kind_label.capitalize()} em geracao...",
+        }
+        last_state = None
+
+        while True:
+            status = generator.get_status(job_id)
+            state = status.get("state")
+            if state in {"queued", "running"}:
+                if state != last_state:
+                    self.after(
+                        0,
+                        lambda msg=state_text.get(state, f"{kind_label.capitalize()} em andamento."): self.lbl_chat_status.configure(
+                            text=msg,
+                            text_color=COLORS["yellow"],
+                        ),
+                    )
+                last_state = state
+                time.sleep(1.5)
+                continue
+
+            self._active_media_jobs.pop(job_id, None)
+            if state == "completed":
+                output_path = status.get("output_path")
+                generated_media = [{
+                    "path": output_path,
+                    "kind": "audio",
+                    "title": f"{kind_label.capitalize()} {ready_text}",
+                }]
+                result_meta = self._build_media_request_meta(status, fallback_meta)
+                self.after(
+                    0,
+                    lambda: self._adicionar_msg(
+                        "hana",
+                        "Hana",
+                        f"{kind_label.capitalize()} {ready_text} aqui no chat.",
+                        generated_media=generated_media,
+                        request_meta=result_meta,
+                    ),
+                )
+                self.after(
+                    0,
+                    lambda: self.lbl_chat_status.configure(
+                        text=f"{kind_label.capitalize()} {completed_text}.",
+                        text_color=COLORS["green"],
+                    ),
+                )
+                return
+
+            if state == "cancelled":
+                self.after(0, lambda: self._adicionar_msg("system", "Hana", f"Geracao de {kind_label} cancelada."))
+                self.after(
+                    0,
+                    lambda: self.lbl_chat_status.configure(
+                        text=f"Geração de {kind_label} cancelada.",
+                        text_color=COLORS["yellow"],
+                    ),
+                )
+                return
+
+            error = status.get("error") or f"Falha ao gerar {kind_label}."
+            self.after(0, lambda err=error: self._adicionar_msg("system", "Hana", f"Falha ao gerar {kind_label}: {err}"))
+            self.after(
+                0,
+                lambda: self.lbl_chat_status.configure(
+                    text=f"Falha na geracao de {kind_label}.",
+                    text_color=COLORS["red"],
+                ),
+            )
+            return
+
+    def _queue_media_job(self, kind, prompt, request_meta=None):
+        kind_label = self._media_kind_label(kind)
+        if str(kind or "").strip().lower() != "music":
+            self.after(0, lambda: self._adicionar_msg("system", "Hana", f"Geracao de {kind_label} foi desativada nesta versao."))
+            return False
+
+        generator = self._get_music_gen()
+        try:
+            job_id = generator.submit(prompt, origin="control_center_chat", request_meta=request_meta)
+        except Exception as e:
+            self.after(0, lambda err=e: self._adicionar_msg("system", "Hana", f"Falha ao iniciar geracao de {kind_label}: {err}"))
+            self.after(
+                0,
+                lambda: self.lbl_chat_status.configure(
+                    text=f"Falha ao iniciar {kind_label}.",
+                    text_color=COLORS["red"],
+                ),
+            )
+            return False
+
+        self._active_media_jobs[job_id] = {"kind": kind}
+        self.after(0, lambda: self._adicionar_msg("system", "Hana", f"{kind_label.capitalize()} em geracao em segundo plano. Quando terminar, eu te entrego aqui no chat."))
+        self.after(
+            0,
+            lambda: self.lbl_chat_status.configure(
+                text=f"Gerando {kind_label} em background...",
+                text_color=COLORS["yellow"],
+            ),
+        )
+        threading.Thread(
+            target=self._monitor_media_job,
+            args=(job_id, kind, request_meta),
+            daemon=True,
+            name=f"ChatMedia-{kind}-{job_id}",
+        ).start()
+        return True
+
+    def _confirm_pc_action(self, request):
+        decision = {"value": False}
+        done = threading.Event()
+
+        def _show():
+            try:
+                from src.gui.widgets.pc_action_popup import confirm_pc_action_popup
+
+                decision["value"] = confirm_pc_action_popup(
+                    title="Confirmar ação no PC",
+                    body=request.summary,
+                    risk_label=request.risk,
+                    timeout_seconds=15,
+                    parent=self.winfo_toplevel(),
+                )
+            finally:
+                done.set()
+
+        self.after(0, _show)
+        done.wait()
+        return bool(decision["value"])
+
+    def _format_pc_action_result(self, result):
+        base = result.get("message") or result.get("summary") or "Ação no PC concluída."
+        content = str(result.get("content") or "").strip()
+        stdout = str(result.get("stdout") or "").strip()
+        stderr = str(result.get("stderr") or "").strip()
+
+        extra_parts = []
+        if content:
+            extra_parts.append(content[:2500])
+        if stdout:
+            extra_parts.append(f"[stdout]\n{stdout[:1800]}")
+        if stderr:
+            extra_parts.append(f"[stderr]\n{stderr[:1200]}")
+        if extra_parts:
+            return f"{base}\n\n" + "\n\n".join(extra_parts)
+        return base
+
+    def _execute_pc_actions(self, action_payloads, request_id, cancel_event):
+        for raw_payload in action_payloads or []:
+            if self._is_request_cancelled(request_id, cancel_event):
+                return
+            try:
+                request = parse_pc_action_payload(raw_payload)
+            except Exception as e:
+                self.after(0, lambda err=e: self._adicionar_msg("system", "PC", f"Falha ao interpretar <acao_pc>: {err}"))
+                continue
+
+            result = execute_pc_action(request.payload, confirm_callback=self._confirm_pc_action)
+            message = self._format_pc_action_result(result)
+            self.after(0, lambda msg=message: self._adicionar_msg("system", "PC", msg))
+            if result.get("ok"):
+                self.after(0, lambda: self.lbl_chat_status.configure(text="Ação no PC executada.", text_color=COLORS["green"]))
+            else:
+                self.after(0, lambda: self.lbl_chat_status.configure(text="Ação no PC negada ou falhou.", text_color=COLORS["yellow"]))
 
     def _scroll_to_bottom(self):
         self.chat_scroll.update_idletasks()
@@ -908,7 +1417,7 @@ class TabChat(ctk.CTkFrame):
         label = self._meta_label(request_meta)
         if not label:
             return "Resposta recebida."
-        return f"Resposta recebida • {label}"
+        return f"Resposta recebida - {label}"
 
     def _enviar(self):
         texto = self._get_input_text().strip()
@@ -934,6 +1443,8 @@ class TabChat(ctk.CTkFrame):
 
         def _processar():
             request_meta = None
+            divider = SentenceDivider(faster_first_response=True)
+            streamed_visible_parts = []
             try:
                 task_type = self._classify_task(texto, anexos_envio)
                 execution_target = self._resolve_execution_target(task_type, anexos_envio)
@@ -945,7 +1456,7 @@ class TabChat(ctk.CTkFrame):
                     llm = self._create_llm_instance(execution_target["provider"], execution_target["model"], cache=False)
 
                 if not llm:
-                    raise RuntimeError("Não foi possível inicializar o provider LLM.")
+                    raise RuntimeError("Nao foi possivel inicializar o provider LLM.")
 
                 if self._is_request_cancelled(request_id, cancel_event):
                     return
@@ -971,8 +1482,9 @@ class TabChat(ctk.CTkFrame):
                     native_search=False if anexos_envio else None,
                 )
                 sistema_prompt = self._build_gui_prompt(mensagem_final, memory_context, task_type, anexos_envio, request_context)
+                self.after(0, lambda rid=request_id: self._create_streaming_bubble(rid))
 
-                resposta = llm.gerar_resposta(
+                token_stream = llm.gerar_resposta_stream(
                     chat_history=self._session_history[-20:],
                     sistema_prompt=sistema_prompt,
                     user_message=mensagem_final,
@@ -980,24 +1492,48 @@ class TabChat(ctk.CTkFrame):
                     arquivos_multimidia=arquivos_multimidia if arquivos_multimidia else None,
                     request_context=request_context,
                 )
+
+                for chunk in divider.process_stream(token_stream):
+                    request_meta = dict(getattr(llm, "last_request_meta", {}) or {})
+                    request_meta["provider"] = execution_target["provider"]
+                    request_meta["model"] = request_meta.get("model") or execution_target["model"]
+                    request_meta["routed"] = routed
+
+                    if self._is_request_cancelled(request_id, cancel_event):
+                        return
+
+                    if chunk.is_thought:
+                        continue
+
+                    if chunk.text.strip():
+                        streamed_visible_parts.append(chunk.text.strip())
+                        preview = " ".join(streamed_visible_parts).strip()
+                        self.after(
+                            0,
+                            lambda rid=request_id, preview_text=preview, meta=dict(request_meta): self._update_streaming_bubble(
+                                rid,
+                                preview_text,
+                                meta,
+                            ),
+                        )
+
+                if self._is_request_cancelled(request_id, cancel_event):
+                    return
+
+                resposta = divider.complete_response or " ".join(streamed_visible_parts).strip() or "(sem resposta)"
                 request_meta = dict(getattr(llm, "last_request_meta", {}) or {})
                 request_meta["provider"] = execution_target["provider"]
                 request_meta["model"] = request_meta.get("model") or execution_target["model"]
                 request_meta["routed"] = routed
 
-                if self._is_request_cancelled(request_id, cancel_event):
-                    return
-
-                if not resposta:
-                    resposta = "(sem resposta)"
-
                 actions = self._extract_xml_actions(resposta)
                 generated_images = []
+                queued_media = []
                 for fact in actions.get("salvar_memoria", []):
                     try:
                         memory_manager.add_fact("hana_nota", "deve_lembrar", fact)
                     except Exception as e:
-                        logger.warning("[CHAT GUI] Falha ao salvar memória manual: %s", e)
+                        logger.warning("[CHAT GUI] Falha ao salvar memoria manual: %s", e)
 
                 for prompt in actions.get("gerar_imagem", []):
                     if self._is_request_cancelled(request_id, cancel_event):
@@ -1013,11 +1549,19 @@ class TabChat(ctk.CTkFrame):
                     if path:
                         generated_images.append(path)
 
+                for prompt in actions.get("gerar_musica", []):
+                    if self._is_request_cancelled(request_id, cancel_event):
+                        return
+                    if self._queue_media_job("music", prompt, request_meta=request_meta):
+                        queued_media.append("music")
+
                 resp_display = self._sanitize_response_for_display(resposta)
                 if not resp_display and generated_images:
                     resp_display = "Imagem gerada aqui no chat."
+                elif not resp_display and queued_media:
+                    resp_display = "Pedido de midia recebido. Vou gerar e te entregar aqui no chat assim que terminar."
                 elif not resp_display:
-                    resp_display = "(sem resposta visível)"
+                    resp_display = "(sem resposta visivel)"
 
                 if self._is_request_cancelled(request_id, cancel_event):
                     return
@@ -1029,12 +1573,22 @@ class TabChat(ctk.CTkFrame):
                 memory_manager.add_interaction("Nakamura", texto)
                 memory_manager.add_interaction("Hana", history_content)
 
-                self.after(0, lambda: self._adicionar_msg("hana", "Hana", resp_display, generated_images=generated_images, request_meta=request_meta))
-                self.after(0, lambda: self.lbl_chat_status.configure(text=self._status_from_meta(request_meta), text_color=COLORS["green"]))
+                self.after(
+                    0,
+                    lambda rid=request_id, display_text=resp_display, imgs=list(generated_images), meta=dict(request_meta): self._finalize_streaming_bubble(
+                        rid,
+                        display_text,
+                        generated_images=imgs,
+                        request_meta=meta,
+                    ),
+                )
+                self.after(0, lambda meta=dict(request_meta): self.lbl_chat_status.configure(text=self._status_from_meta(meta), text_color=COLORS["green"]))
+                self._execute_pc_actions(actions.get("acao_pc", []), request_id, cancel_event)
             except Exception as e:
                 logger.error("[CHAT GUI] Erro: %s", e)
                 if not self._is_request_cancelled(request_id, cancel_event):
-                    self.after(0, lambda err=e: self._adicionar_msg("system", "ERRO", f"Erro no chat da GUI: {err}"))
+                    self.after(0, lambda rid=request_id: self._cancel_streaming_bubble(rid))
+                    self.after(0, lambda err=e: self._adicionar_msg("system", "ERRO", repair_mojibake_text(f"Erro no chat da GUI: {err}")))
                     self.after(0, lambda: self.lbl_chat_status.configure(text=f"Erro: {e}", text_color=COLORS["red"]))
             finally:
                 if self._active_request_id == request_id:
@@ -1056,10 +1610,7 @@ class TabChat(ctk.CTkFrame):
             ],
         )
         if filepaths:
-            for path in filepaths:
-                if path not in self._anexos and os.path.exists(path):
-                    self._anexos.append(path)
-            self._atualizar_container_anexos()
+            self._add_attachment_paths(filepaths)
 
     def _atualizar_container_anexos(self):
         for child in self.frame_anexo_list.winfo_children():
@@ -1070,7 +1621,7 @@ class TabChat(ctk.CTkFrame):
         self.lbl_anexo.configure(text=f"{len(self._anexos)} arquivo(s) prontos para envio")
         for path in self._anexos:
             kind = self._infer_file_kind(path)
-            card = ctk.CTkFrame(self.frame_anexo_list, fg_color=COLORS["bg_darkest"], corner_radius=10, border_width=1, border_color=COLORS["border"])
+            card = ctk.CTkFrame(self.frame_anexo_list, fg_color=COLORS["bg_darkest"], corner_radius=10, border_width=2, border_color=COLORS["border"])
             card.pack(fill="x", pady=3)
             ctk.CTkLabel(card, text=self._icon_for_kind(kind), font=FONT_SMALL, text_color=COLORS["purple_neon"]).pack(side="left", padx=(8, 6), pady=6)
             ctk.CTkLabel(card, text=os.path.basename(path), font=FONT_SMALL, text_color=COLORS["text_primary"]).pack(side="left", pady=6)
@@ -1083,7 +1634,7 @@ class TabChat(ctk.CTkFrame):
 
     def _gravar_audio(self):
         self.btn_mic.configure(text="REC", text_color=COLORS["red"])
-        self._adicionar_msg("system", "Hana", "Gravando áudio... aguarde.")
+        self._adicionar_msg("system", "Hana", "Gravando audio... aguarde.")
 
         def _capturar():
             texto_transcrito = ""
@@ -1112,12 +1663,13 @@ class TabChat(ctk.CTkFrame):
                 pygame.mixer.music.stop()
                 self._audio_preview_path = None
                 return
+            pygame.mixer.music.stop()
             pygame.mixer.music.load(path)
             pygame.mixer.music.play()
             self._audio_preview_path = path
         except Exception as e:
-            logger.error("[CHAT GUI] Erro ao tocar áudio %s: %s", path, e)
-            self.lbl_chat_status.configure(text=f"Falha ao tocar áudio: {e}", text_color=COLORS["red"])
+            logger.error("[CHAT GUI] Erro ao tocar audio %s: %s", path, e)
+            self.lbl_chat_status.configure(text=repair_mojibake_text(f"Falha ao tocar audio: {e}"), text_color=COLORS["red"])
 
     def _open_file(self, path):
         try:
@@ -1141,17 +1693,51 @@ class TabChat(ctk.CTkFrame):
             except Exception as e:
                 logger.error("[CHAT GUI] Erro TTS: %s", e)
 
-        threading.Thread(target=_run, daemon=True).start()
+        self._active_tts_thread = threading.Thread(target=_run, daemon=True)
+        self._active_tts_thread.start()
 
     def _parar_fala(self):
+        request_global_stop("chat_button")
+
+    def _parar_fala_local(self):
+        cancelled_request = False
         if self._active_cancel_event:
             self._active_cancel_event.set()
+            cancelled_request = True
+        request_id = self._active_request_id
+        if request_id is not None:
             self._active_request_id = None
-            self.lbl_chat_status.configure(text="Geração cancelada pelo usuário.", text_color=COLORS["yellow"])
+            self._cancel_streaming_bubble(request_id)
+        if cancelled_request:
+            self.lbl_chat_status.configure(text="Geracao cancelada pelo usuario.", text_color=COLORS["yellow"])
+
+        cancelled_media_jobs = 0
+        for job_id, meta in list(self._active_media_jobs.items()):
+            generator = self._get_music_gen()
+            try:
+                if generator.cancel(job_id):
+                    cancelled_media_jobs += 1
+            except Exception as e:
+                logger.warning("[CHAT GUI] Falha ao cancelar job %s: %s", job_id, e)
+
+        if cancelled_media_jobs:
+            self.lbl_chat_status.configure(
+                text=f"Cancelando {cancelled_media_jobs} job(s) de midia...",
+                text_color=COLORS["yellow"],
+            )
+
         try:
             import pygame
 
             if pygame.mixer.get_init():
                 pygame.mixer.stop()
+                self._audio_preview_path = None
         except Exception:
             pass
+
+        try:
+            from src.modules.voice.tts_selector import get_tts
+
+            get_tts().parar()
+        except Exception:
+            logger.debug("[CHAT GUI] Falha ao parar TTS ativo.", exc_info=True)

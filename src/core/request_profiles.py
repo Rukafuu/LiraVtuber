@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.config.config_loader import CONFIG
+from src.modules.media import get_media_runtime_capabilities
 
 
 @dataclass(frozen=True)
@@ -67,12 +68,14 @@ def build_request_context(
     **overrides,
 ) -> dict:
     settings = get_chat_settings()
+    media_caps = get_media_runtime_capabilities()
 
     channel_key = (channel or "terminal_voice").strip().lower()
     task_key = (task_type or "chat_normal").strip().lower()
 
     if channel_key == "control_center_chat":
-        is_media_task = task_key in {"analise_midia", "media_summary", "resumo_detalhado"}
+        is_media_task = task_key in {"analise_midia_estruturada", "media_summary", "media_exact_request", "media_question", "resumo_detalhado"}
+        is_structured_task = task_key in {"analise_midia_estruturada"}
         profile = RequestProfile(
             channel=channel_key,
             task_type=task_key,
@@ -83,8 +86,8 @@ def build_request_context(
             thinking_level="medium" if is_media_task else "low",
             auto_route_media=settings["auto_route_media"],
             media_model=settings["media_model"],
-            structured_output=is_media_task,
-            response_mime_type="application/json" if is_media_task else None,
+            structured_output=is_structured_task,
+            response_mime_type="application/json" if is_structured_task else None,
         )
     else:
         profile = RequestProfile(
@@ -114,6 +117,7 @@ def build_request_context(
         "media_model": profile.media_model,
         "structured_output": profile.structured_output,
         "response_mime_type": profile.response_mime_type,
+        "music_generation_enabled": media_caps["music_generation_enabled"],
     }
     context.update({key: value for key, value in overrides.items() if value is not None})
     return context
