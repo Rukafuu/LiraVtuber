@@ -23,7 +23,6 @@ class SQLite:
     def save_message(self, role, content):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        columns = "role, content, timestamp" if include_timestamp else "role, content"
         cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", (role, content))
         conn.commit()
         conn.close()
@@ -31,6 +30,7 @@ class SQLite:
     def load_messages(self, limit=None, include_timestamp=False):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        columns = "role, content, timestamp" if include_timestamp else "role, content"
         
         if limit:
             # Busca os últimos N registros em ordem decrescente
