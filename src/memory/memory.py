@@ -8,8 +8,8 @@ class memory:
     def add_message(self, role, content):
         self.db.save_message(role, content) # Salva a mensagem no DB
 
-    def get_messages(self, limit=None):
-        return self.db.load_messages(limit) # Carrega as mensagens do DB com limite opcional
+    def get_messages(self, limit=None, include_timestamp=False):
+        return self.db.load_messages(limit, include_timestamp=include_timestamp) # Carrega as mensagens do DB com limite opcional
 
     def clear_messages(self):
         self.db.clear_messages() # Limpa o DB (se você criar essa função no SQLite.py)

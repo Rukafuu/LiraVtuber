@@ -23,28 +23,33 @@ class SQLite:
     def save_message(self, role, content):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        columns = "role, content, timestamp" if include_timestamp else "role, content"
         cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", (role, content))
         conn.commit()
         conn.close()
 
-    def load_messages(self, limit=None):
+    def load_messages(self, limit=None, include_timestamp=False):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         if limit:
             # Busca os últimos N registros em ordem decrescente
-            cursor.execute("SELECT role, content FROM messages ORDER BY timestamp DESC LIMIT ?", (limit,))
+            cursor.execute(f"SELECT {columns} FROM messages ORDER BY timestamp DESC LIMIT ?", (limit,))
             raw_messages = cursor.fetchall()
             # Inverte para ficarem em ordem cronológica (mais antigo primeiro)
             raw_messages.reverse()
         else:
             # Caso contrário, busca tudo normalmente
-            cursor.execute("SELECT role, content FROM messages ORDER BY timestamp ASC")
+            cursor.execute(f"SELECT {columns} FROM messages ORDER BY timestamp ASC")
             raw_messages = cursor.fetchall()
             
         conn.close()
 
         formatted_messages = []
-        for role, content in raw_messages:
-            formatted_messages.append({"role": role, "content": content})
+        for row in raw_messages:
+            role, content = row[0], row[1]
+            item = {"role": role, "content": content}
+            if include_timestamp:
+                item["timestamp"] = row[2]
+            formatted_messages.append(item)
         return formatted_messages
