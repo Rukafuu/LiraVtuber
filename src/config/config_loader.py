@@ -1,10 +1,10 @@
 import json
-import os
 import logging
+import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 logger = logging.getLogger(__name__)
 
 ENV_KEYS = (
@@ -12,6 +12,8 @@ ENV_KEYS = (
     "GEMINI_API_KEY",
     "CEREBRAS_API_KEY",
     "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "ELEVENLABS_API_KEY",
     "TAVILY_API_KEY",
     "GOOGLE_APPLICATION_CREDENTIALS",
 )
@@ -22,18 +24,27 @@ class ConfigLoader:
 
     def __init__(self, config_path="src/config/config.json"):
         self.config_path = config_path
+        self.example_path = os.path.join(os.path.dirname(config_path), "config.example.json")
         self._config = {}
         self._last_mtime = 0
+        self._example_last_mtime = 0
         self.load()
 
     def load(self):
-        """Carrega configurações do JSON e sobrepõe com variáveis de ambiente."""
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                self._config = json.load(f)
-            self._last_mtime = os.path.getmtime(self.config_path)
+        """Carrega defaults publicos, config local e variaveis de ambiente."""
+        self._config = {}
+        if os.path.exists(self.example_path):
+            with open(self.example_path, "r", encoding="utf-8") as file:
+                self._config.update(json.load(file))
+            self._example_last_mtime = os.path.getmtime(self.example_path)
 
-        # Environment variables win when set
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", encoding="utf-8") as file:
+                self._config.update(json.load(file))
+            self._last_mtime = os.path.getmtime(self.config_path)
+        else:
+            self._last_mtime = 0
+
         for key in ENV_KEYS:
             value = os.getenv(key)
             if value:
@@ -41,21 +52,20 @@ class ConfigLoader:
 
     def reload(self):
         """Recarrega do disco se o arquivo foi modificado. Retorna True se houve mudança."""
-        if not os.path.exists(self.config_path):
-            return False
-        current_mtime = os.path.getmtime(self.config_path)
-        if current_mtime > self._last_mtime:
+        config_mtime = os.path.getmtime(self.config_path) if os.path.exists(self.config_path) else 0
+        example_mtime = os.path.getmtime(self.example_path) if os.path.exists(self.example_path) else 0
+        if config_mtime > self._last_mtime or example_mtime > self._example_last_mtime:
             self.load()
             logger.info("[CONFIG] config.json recarregado (modificação detectada).")
             return True
         return False
 
     def save(self):
-        """Salva o estado atual no config.json, excluindo chaves de ambiente."""
-        dados = {k: v for k, v in self._config.items() if k not in ENV_KEYS}
+        """Salva o estado atual no config.json, excluindo chaves vindas do ambiente."""
+        dados = {key: value for key, value in self._config.items() if key not in ENV_KEYS}
         os.makedirs(os.path.dirname(self.config_path) or ".", exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(dados, f, ensure_ascii=False, indent=4)
+        with open(self.config_path, "w", encoding="utf-8") as file:
+            json.dump(dados, file, ensure_ascii=False, indent=4)
         self._last_mtime = os.path.getmtime(self.config_path)
         logger.info("[CONFIG] config.json salvo com sucesso.")
 
@@ -91,10 +101,9 @@ CONFIG = ConfigLoader()
 
 
 def salvar_configuracoes(config):
-    """Função global para salvar configurações — compatível com a interface da Nyra."""
+    """Função global para salvar configurações, compatível com a interface da Nyra."""
     if isinstance(config, ConfigLoader):
         config.save()
     else:
-        # Se receber um dict puro, sobrescreve o CONFIG e salva
         CONFIG._config.update(config)
         CONFIG.save()

@@ -1,344 +1,279 @@
 <div align="center">
-  <img src="data/image/hana.png" alt="Hana Nakamura" width="auto" style="max-width: 100%; border-radius: 10px;" />
+  <img src="data/image/hana.png" alt="Hana AM Nakamura" width="50%" style="border-radius: 18px;" />
+
+  <h1>HanaNakamura-VTuber-OSS</h1>
+  <p>
+    <strong>Assistente VTuber desktop-first com voz, memoria, GUI, ferramentas XML, geracao de midia e integracao Live2D.</strong>
+  </p>
+
+  <p>
+    <img alt="Windows" src="https://img.shields.io/badge/Windows-desktop-22d3ee?style=for-the-badge&logo=windows&logoColor=white">
+    <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-f472b6?style=for-the-badge&logo=python&logoColor=white">
+    <img alt="VTuber" src="https://img.shields.io/badge/VTuber-Live2D-8b5cf6?style=for-the-badge">
+    <img alt="Voice" src="https://img.shields.io/badge/TTS-ElevenLabs%20%7C%20Google%20%7C%20Azure%20%7C%20OpenAI-10b981?style=for-the-badge">
+  </p>
+
+  <p>
+    <a href="#visao-geral">Visao geral</a> ·
+    <a href="#showcase-da-hana">Showcase</a> ·
+    <a href="#arquitetura">Arquitetura</a> ·
+    <a href="#instalacao">Instalacao</a> ·
+    <a href="#roadmap">Roadmap</a>
+  </p>
 </div>
 
-# HanaNakamura-VTuber-OSS
+---
 
-Projeto open source da **Hana Nakamura**, uma assistente VTuber com dois produtos conectados entre si:
+## Visao Geral
 
-- **Terminal runtime**: o cérebro principal, com STT, TTS, memória, visão opcional, ferramentas e automação de resposta por voz.
-- **Hana Control Center**: a GUI em CustomTkinter, usada como painel de controle e como chat visual com anexos, renderização inline e configuração dos módulos.
+**Hana AM Nakamura** e uma assistente VTuber feita para rodar no desktop do Windows, conversar por voz, lembrar contexto, controlar ferramentas locais e funcionar como uma personagem viva em volta do seu PC.
 
-Os dois lados **não são o mesmo produto**, mas compartilham os mesmos serviços centrais quando faz sentido:
+O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria hibrida, geracao de imagem/musica, analise de arquivos, controle do PC por tags XML, VTube Studio e multiplos providers de LLM/TTS.
 
-- memória híbrida;
-- configuração;
-- providers LLM;
-- geração de imagem;
-- integração com VTube Studio;
-- leitura de arquivos.
-
-O foco atual do projeto é **Windows desktop**.
+> O terminal e o modo "ao vivo": respostas curtas, falaveis e economicas para TTS.
+> A GUI e o modo "chat completo": respostas maiores, anexos, markdown, arquivos e midia inline.
 
 ---
 
-## Visão geral
+## Showcase Da Hana
 
-A Hana foi pensada para ser mais do que um chatbot de texto. O projeto hoje combina:
-
-- **voz para texto** com captura local;
-- **texto para voz** com Google Cloud TTS;
-- **múltiplos providers LLM**;
-- **chat visual com anexos**;
-- **memória curta + semântica + grafo de conhecimento**;
-- **geração e edição de imagem** via tags XML;
-- **leitura de PDF, DOCX, texto, áudio, vídeo e imagens**;
-- **integração com VTube Studio**;
-- **painel gráfico para operar o sistema sem depender só do terminal**.
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/hana_showcase_01.png" alt="Hana portrait" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Hana VTuber</b></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/hana_showcase_02.png" alt="Hana close-up" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Close-up / expressao</b></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/hana_showcase_03.png" alt="Hana character art" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Arte de personagem</b></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/hana_showcase_04.png" alt="Hana alternate art" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Visual anime</b></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## O que o projeto entrega hoje
+## O Que Ela Faz
 
-### 1. Terminal runtime
+| Area | Recursos |
+| --- | --- |
+| Voz | STT por Whisper, TTS por ElevenLabs, Google, Azure, OpenAI e Edge, stop global por F8 |
+| Cerebro | Providers `google_cloud`, `groq`, `openrouter`, `openai` e `cerebras` |
+| GUI | Control Center em CustomTkinter, chat visual, anexos, markdown, cards de audio e preview de midia |
+| Memoria | SQLite cronologico, RAG vetorial e grafo de conhecimento |
+| Midia | Geracao/edicao de imagem, geracao de musica, analise de video/anexos e historico local |
+| Desktop | Tool XML para abrir URL, abrir app, ler arquivo, mover mouse, digitar, volume e processos |
+| VTuber | Integracao com VTube Studio, emocoes, parametros, lipsync e estado persistido |
 
-O arquivo [main.py](main.py) é o loop principal do modo terminal.
+---
 
-Ele faz:
+## Dois Modos, Dois Contratos
 
-- captura de fala do usuário;
-- montagem do prompt com persona, memória e contexto;
-- streaming da resposta do LLM;
-- filtragem de tags XML silenciosas;
-- TTS em lote ao final da resposta;
-- pós-processamento de ações como:
-  - `<salvar_memoria>`
-  - `<gerar_imagem>`
-  - `<editar_imagem>`
-  - `<analisar_youtube>`
-  - `<ferramenta_web>`
+### Terminal Runtime
 
-### 2. Hana Control Center
+Arquivo principal: [`main.py`](main.py)
 
-A GUI principal fica em [src/gui/hana_gui.py](src/gui/hana_gui.py).
+O terminal e o modo de voz real da Hana. Ele escuta o microfone, monta contexto, chama o LLM em streaming, filtra tags silenciosas e fala a resposta por TTS.
 
-Ela expõe abas para:
+**Regra do terminal:** respostas curtas por padrao para evitar fala longa e gasto desnecessario de TTS.
 
-- monitor geral;
-- cérebro / providers;
-- memória;
-- mente / emoções;
-- VTube Studio;
-- chat do controle;
-- persona;
-- prompts;
-- conexões;
-- personalização;
-- logs.
+### Hana Control Center
 
-### 3. Chat da GUI
+Arquivo principal: [`src/gui/hana_gui.py`](src/gui/hana_gui.py)
 
-A aba do chat fica em [src/gui/frames/tab_chat.py](src/gui/frames/tab_chat.py).
+A GUI e o painel de controle completo. Ela aceita textos grandes, anexos, drag and drop, `Ctrl+V`, arquivos de codigo, imagens, audio, video, PDF e documentos.
 
-Hoje ela já suporta:
+**Regra da GUI:** pode responder grande quando fizer sentido, porque funciona como chat visual.
 
-- envio manual de mensagem;
-- `Shift+Enter` para quebrar linha;
-- drag and drop de arquivos;
-- anexos inline no histórico;
-- preview de imagem gerada no próprio chat;
-- cards de áudio com botão de tocar;
-- cards de arquivos com botão de abrir;
-- prompt específico de GUI, separado do terminal;
-- auto-roteamento de mídia pesada para modelo compatível;
-- renderização melhor de markdown;
-- botão `Parar` para interromper TTS e cancelar a geração ativa da GUI.
+---
 
-### 4. Memória híbrida
+## Arquitetura
 
-O gerenciador de memória está em [src/memory/memory_manager.py](src/memory/memory_manager.py).
+```mermaid
+flowchart LR
+    User["Nakamura"] --> STT["STT Whisper"]
+    STT --> Runtime["Terminal Runtime"]
+    User --> GUI["Hana Control Center"]
+    GUI --> Chat["Chat Visual + Anexos"]
 
-Ele usa três camadas:
+    Runtime --> Prompt["Prompt Builder"]
+    Chat --> Prompt
+    Prompt --> Memory["Memoria Hibrida"]
+    Memory --> SQLite["SQLite"]
+    Memory --> RAG["RAG Vetorial"]
+    Memory --> Graph["Knowledge Graph"]
 
-- **SQLite** para histórico cronológico;
-- **RAG vetorial** para recuperação semântica;
-- **Knowledge Graph** para fatos permanentes.
+    Prompt --> LLM["Provider Selector"]
+    LLM --> Google["Google Gemini / Vertex"]
+    LLM --> Groq["Groq"]
+    LLM --> OpenRouter["OpenRouter"]
+    LLM --> OpenAI["OpenAI"]
+    LLM --> Cerebras["Cerebras"]
 
-Na prática isso permite:
+    LLM --> Divider["SentenceDivider"]
+    Divider --> TTS["TTS Selector"]
+    TTS --> Eleven["ElevenLabs"]
+    TTS --> GoogleTTS["Google TTS"]
+    TTS --> Azure["Azure"]
+    TTS --> Edge["Edge"]
 
-- recuperar conversas antigas por similaridade;
-- guardar fatos estruturados;
-- responder perguntas em primeira pessoa como “qual é meu aniversário?” com resolução melhor da entidade do usuário;
-- cruzar memória curta com memória longa.
+    Divider --> XML["Tags XML Silenciosas"]
+    XML --> Media["Imagem / Musica"]
+    XML --> PC["Controle do PC"]
+    XML --> VTS["VTube Studio"]
+```
 
-### 5. Providers LLM
+---
 
-O seletor principal está em [src/providers/provider_selector.py](src/providers/provider_selector.py).
+## Modulos Principais
 
-Providers atualmente suportados:
+```text
+src/
+  brain/          pipeline LLM e tools
+  config/         persona, prompt e config principal
+  core/           profiles, capabilities e prompt builder
+  gui/            Control Center e abas
+  memory/         SQLite, RAG e knowledge graph
+  modules/
+    media/        jobs de musica
+    tools/        inbox e controle do PC
+    vision/       visao e geracao de imagem
+    voice/        STT, TTS e stop global
+  providers/      adapters LLM
+  utils/          texto, stream, tags e UI de terminal
+```
 
-- `google_cloud`
-- `groq`
-- `openrouter`
-- `cerebras`
+---
 
-#### Google dual-mode
+## Tags XML Silenciosas
 
-O provider do Google em [src/providers/google_provider.py](src/providers/google_provider.py) agora trabalha em arquitetura **dual-mode**:
-
-- `gemini_api`
-- `vertex_ai`
-- `auto`
-
-Ele já usa ou prepara suporte para:
-
-- `max_output_tokens`;
-- `thinking_config`;
-- `response_mime_type`;
-- `response_schema`;
-- `count_tokens`;
-- upload nativo de arquivos quando o backend/modelo suportam;
-- roteamento de tarefa por contexto da requisição.
-
-Observação importante:
-
-- o projeto **não depende obrigatoriamente** de Vertex AI para funcionar;
-- o backend `vertex_ai` só entra quando as credenciais e o projeto estão configurados.
-
-### 6. Geração de imagem
-
-A Hana gera e edita imagem via XML no fluxo do runtime e da GUI.
-
-Exemplos:
+A Hana pode falar uma coisa para o usuario e executar outra por baixo, sem vazar comando no TTS.
 
 ```xml
-<gerar_imagem>prompt em inglês para criar a imagem</gerar_imagem>
-<editar_imagem>prompt em inglês para editar a última imagem</editar_imagem>
+<salvar_memoria>O Nakamura prefere respostas curtas no terminal.</salvar_memoria>
+<gerar_imagem>anime portrait of Hana with golden hair and white flowers</gerar_imagem>
+<gerar_musica>soft dreamy lofi song for sleeping</gerar_musica>
+<acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
 ```
 
-As tags são silenciosas:
+Regras importantes:
 
-- no terminal, o conteúdo interno não deve ser falado no TTS;
-- na GUI, a imagem pode aparecer inline na própria conversa.
-
-### 7. VTube Studio
-
-O runtime da integração está em [src/modules/vts_controller.py](src/modules/vts_controller.py).
-
-Hoje a integração trabalha com:
-
-- conexão por `host` e `port`;
-- autenticação por token;
-- heartbeat;
-- reconexão com backoff;
-- estado persistido em `data/vts_state.json`;
-- leitura de hotkeys, expressões e parâmetros;
-- tentativa de lipsync usando o parâmetro de boca detectado;
-- animação idle + animação durante fala;
-- exibição do estado real na aba VTube da GUI.
+- tags XML so valem para o pedido atual;
+- acoes antigas nao devem ser repetidas depois de pausa longa;
+- `run_command` e operacoes perigosas passam por guardrails;
+- o texto dentro das tags nao deve ser falado pelo TTS.
 
 ---
 
-## Arquitetura resumida
+## Voz E TTS
 
-### Fluxo do terminal
+Fallback atual:
 
-1. usuário fala;
-2. STT transcreve;
-3. memória monta contexto;
-4. provider gera resposta em stream;
-5. `SentenceDivider` separa frases visíveis e bloqueia XML silencioso;
-6. emoção e VTS são acionados;
-7. TTS fala só o texto limpo;
-8. XML é processado no final como ação.
+```text
+edge -> elevenlabs -> google -> azure -> openai
+```
 
-### Fluxo do chat da GUI
+ElevenLabs suporta configuracao manual pela GUI:
 
-1. usuário digita ou arrasta arquivos;
-2. a GUI classifica a tarefa;
-3. decide se mantém o modelo atual ou se auto-roteia mídia pesada;
-4. monta prompt específico de GUI;
-5. envia request com perfil explícito de canal;
-6. renderiza resposta com markdown e anexos;
-7. executa ações XML;
-8. salva interação na memória compartilhada.
+- `voice_id`
+- `model_id`
+- `rate`
+- `stability`
+- `similarity_boost`
+- `style`
+- `speaker_boost`
 
-### Perfis de canal
+O hotkey `F8` usa stop global para tentar parar:
 
-Os perfis de canal estão em [src/core/request_profiles.py](src/core/request_profiles.py).
-
-Hoje o projeto diferencia explicitamente:
-
-- `terminal_voice`
-- `control_center_chat`
-
-Isso evita que a GUI herde comportamento de terminal e vice-versa.
+- fala do terminal;
+- fala do chat da GUI;
+- preview de audio;
+- musica ou playback iniciado pela Hana.
 
 ---
 
-## Requisitos
+## Memoria
 
-### Sistema
+A memoria da Hana usa tres camadas:
 
-- Windows 10 ou 11
-- Python 3.10 recomendado
-- Git
-- microfone, se quiser usar STT
-- VTube Studio, se quiser avatar ao vivo
+| Camada | Funcao |
+| --- | --- |
+| SQLite | historico cronologico recente |
+| RAG | busca semantica por conversas antigas |
+| Knowledge Graph | fatos permanentes e relacionamentos |
 
-### Dependências principais
-
-Instaladas por:
-
-```bash
-pip install -r requirements.txt
-```
-
-O `requirements.txt` já inclui os blocos principais do projeto, como:
-
-- `google-genai`
-- `groq`
-- `openai`
-- `customtkinter`
-- `tkinterdnd2`
-- `pygame`
-- `chromadb`
-- `sentence-transformers`
-- `networkx`
-
-### Dependências opcionais que podem ser necessárias
-
-Alguns recursos dependem de libs que hoje podem precisar de instalação manual, dependendo do seu uso:
-
-```bash
-pip install pyvts pypdf PyPDF2 youtube-transcript-api
-```
-
-Esses pacotes são úteis para:
-
-- `pyvts`: integração com VTube Studio;
-- `pypdf` / `PyPDF2`: leitura de PDF;
-- `youtube-transcript-api`: análise de vídeos do YouTube.
+O terminal tambem recebe contexto temporal: se passou muito tempo desde a ultima fala, a Hana trata a nova mensagem como novo contexto e evita continuar tarefas antigas automaticamente.
 
 ---
 
-## Instalação
+## Instalacao
 
-### 1. Clone o projeto
+### 1. Clone
 
 ```bash
 git clone https://github.com/NakamuraIA/HanaNakamura-VTuber-OSS.git
 cd HanaNakamura-VTuber-OSS
 ```
 
-### 2. Crie um ambiente virtual
+### 2. Ambiente virtual
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### 3. Instale as dependências
+### 3. Dependencias
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Se você for usar PDF, VTS ou YouTube transcript, instale também:
+Dependencias opcionais:
 
 ```bash
 pip install pyvts pypdf PyPDF2 youtube-transcript-api
 ```
 
-### 4. Configure o `.env`
+---
 
-Existe um arquivo [.env.example](.env.example). Copie para `.env`:
+## Variaveis De Ambiente
+
+Guia completo: [`docs/INSTALL.md`](docs/INSTALL.md)
+
+Copie:
 
 ```bash
 copy .env.example .env
 ```
 
-Preencha as variáveis de ambiente que você realmente vai usar.
-
-#### Mínimo para começar com Gemini API
-
-```env
-GEMINI_API_KEY=sua_chave
-GOOGLE_APPLICATION_CREDENTIALS=src/config/service_account.json
-```
-
-#### Outras variáveis suportadas
+Exemplo:
 
 ```env
 GROQ_API_KEY=sua_chave
+GEMINI_API_KEY=sua_chave
 OPENROUTER_API_KEY=sua_chave
+OPENAI_API_KEY=sua_chave
 CEREBRAS_API_KEY=sua_chave
+ELEVENLABS_API_KEY=sua_chave
 TAVILY_API_KEY=sua_chave
-GOOGLE_APPLICATION_CREDENTIALS=caminho\\para\\service_account.json
 GOOGLE_CLOUD_PROJECT=seu_projeto
 GOOGLE_CLOUD_LOCATION=global
 ```
 
-### 5. Configure credenciais do Google TTS
+Nunca commite seu `.env`.
 
-O TTS do projeto usa `google-cloud-texttospeech`.
-
-Você precisa de um arquivo JSON de service account e apontar para ele em:
-
-```env
-GOOGLE_APPLICATION_CREDENTIALS=src/config/service_account.json
-```
-
-Se quiser usar o backend `vertex_ai`, o mesmo caminho de credenciais pode ser reutilizado junto com:
-
-```env
-GOOGLE_CLOUD_PROJECT=seu_projeto
-GOOGLE_CLOUD_LOCATION=global
-```
+Para o setup minimo, apenas `GROQ_API_KEY` e obrigatoria. O TTS publico default e `edge`, sem chave.
 
 ---
 
-## Como executar
+## Como Rodar
 
 ### Terminal runtime
 
@@ -346,117 +281,92 @@ GOOGLE_CLOUD_LOCATION=global
 python main.py
 ```
 
-Esse modo é o mais próximo do runtime “ao vivo” da Hana:
-
-- escuta no microfone;
-- responde em texto e voz;
-- usa memória compartilhada;
-- dispara VTS e ferramentas;
-- processa tags XML no final.
-
-### Hana Control Center
+### Control Center
 
 ```bash
 python -m src.gui.hana_gui
 ```
 
-Esse modo abre o painel gráfico.
+### GUI sem terminal visivel
 
-O chat da GUI hoje é o melhor lugar para:
-
-- mandar mensagens grandes;
-- arrastar arquivos;
-- anexar áudio, PDF, DOCX, imagens e outros documentos;
-- ver geração de imagem inline;
-- acompanhar provider/model/backend usado em cada resposta.
+```bash
+cscript //nologo run_hana_gui_hidden.vbs
+```
 
 ---
 
-## Configuração principal
+## Configuracao Principal
 
-O arquivo principal é [src/config/config.json](src/config/config.json).
+Arquivo: [`src/config/config.json`](src/config/config.json)
 
-### Blocos mais importantes
+No clone publico, os defaults ficam em [`src/config/config.example.json`](src/config/config.example.json). O arquivo `src/config/config.json` e local e ignorado pelo Git.
 
-#### Provider principal do terminal
+Guias detalhados: [`docs/CONFIG.md`](docs/CONFIG.md), [`docs/PROVIDERS.md`](docs/PROVIDERS.md), [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 
-```json
-"LLM_PROVIDER": "google_cloud"
-```
-
-#### Providers disponíveis
+Blocos importantes:
 
 ```json
-"LLM_PROVIDERS": {
-  "groq": { ... },
-  "cerebras": { ... },
-  "openrouter": { ... },
-  "google_cloud": {
-    "backend": "auto",
-    "modelo": "...",
-    "modelo_vision": "...",
-    "modelo_chat": "..."
+{
+  "LLM_PROVIDER": "groq",
+  "TTS_PROVIDER": "edge",
+  "CHAT": {
+    "LLM_PROVIDER": "groq",
+    "response_mode": "adaptive",
+    "auto_route_media": true
+  },
+  "GUI": {
+    "stop_hotkey_enabled": true,
+    "stop_hotkey": "F8"
   }
 }
 ```
 
-#### Configuração do chat da GUI
+---
 
-```json
-"CHAT": {
-  "LLM_PROVIDER": "google_cloud",
-  "LLM_MODEL": "gemini-3.1-pro-preview",
-  "LLM_TEMPERATURE": 0.85,
-  "usa_mesmo_prompt_terminal": false,
-  "response_mode": "adaptive",
-  "auto_route_media": true,
-  "media_model": "gemini-2.5-flash",
-  "max_output_tokens_normal": 2048,
-  "max_output_tokens_media": 8192,
-  "markdown_enabled": true
-}
-```
+## Providers
 
-#### TTS
+| Provider | Uso |
+| --- | --- |
+| `google_cloud` | Gemini API, Vertex AI, visao e midia |
+| `groq` | respostas rapidas e modelos open |
+| `openrouter` | acesso a varios modelos por gateway |
+| `openai` | modelos OpenAI diretos |
+| `cerebras` | inferencia rapida quando configurado |
 
-```json
-"TTS_PROVIDER": "google",
-"GOOGLE_TTS_VOICE": "pt-BR-Neural2-C",
-"GOOGLE_TTS_LANG": "pt-BR"
-```
+O provider Google trabalha em modo:
 
-#### VTube Studio
+- `gemini_api`
+- `vertex_ai`
+- `auto`
 
-```json
-"VTUBE_STUDIO": {
-  "host": "localhost",
-  "port": 8001,
-  "emotion_map": {
-    "HAPPY": "happy"
-  }
-}
-```
+---
 
-#### Inbox / mídia
+## VTube Studio
 
-```json
-"HANA_INBOX_ROOT": "",
-"HANA_INBOX_MODEL": "gemini-2.5-flash"
-```
+A integracao fica em [`src/modules/vts_controller.py`](src/modules/vts_controller.py).
 
-Se `HANA_INBOX_ROOT` estiver vazio, a pasta padrão é:
+Ela inclui:
+
+- autenticacao por token;
+- heartbeat;
+- reconexao;
+- leitura de hotkeys;
+- expressoes;
+- parametros;
+- tentativa de lipsync;
+- estado salvo em [`data/vts_state.json`](data/vts_state.json).
+
+---
+
+## Hana Inbox
+
+Pasta padrao:
 
 ```text
 %USERPROFILE%\Desktop\hana_inbox
 ```
 
----
-
-## Como usar a Hana Inbox
-
-O resolvedor fica em [src/modules/tools/inbox_manager.py](src/modules/tools/inbox_manager.py).
-
-Estrutura esperada:
+Estrutura:
 
 ```text
 hana_inbox/
@@ -468,192 +378,75 @@ hana_inbox/
   video/
 ```
 
-A Hana consegue:
-
-- procurar o arquivo mais recente por categoria;
-- ler `.txt`, `.md`, `.json`, `.xml`, `.yaml`, `.csv`, `.log`, `.docx`;
-- extrair texto de PDF;
-- rastrear “arquivo ativo” por categoria.
-
-Na GUI, você também pode **arrastar o arquivo direto no chat** sem depender da inbox.
+A GUI tambem aceita arrastar arquivos direto no chat, entao a inbox e util, mas nao obrigatoria.
 
 ---
 
-## Como configurar o VTube Studio
-
-### No VTube Studio
-
-1. abra o app;
-2. ative o **Plugin API**;
-3. confirme que a porta está em `8001` ou ajuste o `config.json`;
-4. permita a autenticação quando a Hana pedir acesso.
-
-### No projeto
-
-Ative:
-
-```json
-"VTUBESTUDIO_ATIVO": true
-```
-
-E configure:
-
-```json
-"VTUBE_STUDIO": {
-  "host": "localhost",
-  "port": 8001,
-  "emotion_map": {
-    "HAPPY": "happy",
-    "SAD": "sad",
-    "ANGRY": "angry"
-  }
-}
-```
-
-### Estado em runtime
-
-O estado mais recente fica em:
-
-- [data/vts_state.json](data/vts_state.json)
-
-Ele registra:
-
-- `status`
-- `connected`
-- `authenticated`
-- `last_heartbeat_at`
-- `reconnect_attempts`
-- `mouth_parameter`
-- `tracking_mode`
-- `last_error`
-
----
-
-## Providers e roteamento
-
-### Terminal
-
-O terminal usa o provider configurado em `LLM_PROVIDER`.
-
-### GUI
-
-A GUI pode usar um provider diferente do terminal.
-
-Além disso, quando `CHAT.auto_route_media = true`, a GUI pode:
-
-- manter o modelo atual em conversa normal;
-- trocar automaticamente para o modelo de mídia quando detectar áudio, vídeo ou PDF pesado;
-- exibir na própria resposta qual provider/model/backend foi usado.
-
-### Google / Vertex
-
-O provider `google_cloud` pode operar assim:
-
-- `gemini_api`: usa `GEMINI_API_KEY`;
-- `vertex_ai`: usa `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT` e `GOOGLE_CLOUD_LOCATION`;
-- `auto`: tenta `vertex_ai` quando o ambiente está pronto, e cai para `gemini_api` quando não está.
-
----
-
-## Estrutura de diretórios
-
-Resumo das pastas mais importantes:
-
-```text
-src/
-  brain/          -> base do pipeline LLM e tools
-  config/         -> persona, prompt, config principal
-  core/           -> perfis de request e capabilities
-  gui/            -> painel gráfico e abas
-  memory/         -> SQLite, RAG, grafo
-  modules/
-    tools/        -> inbox, tools auxiliares
-    vision/       -> visão e geração de imagem
-    voice/        -> STT / TTS
-  providers/      -> adapters dos LLMs
-  utils/          -> limpeza de texto, console, streaming
-
-data/
-  image/          -> assets visuais
-  memory/         -> base do Chroma / vetores
-  vts_state.json  -> estado do VTS
-```
-
----
-
-## Situação atual do projeto
-
-Pontos fortes do estado atual:
-
-- GUI e terminal agora têm canais diferentes;
-- chat da GUI aceita anexos e suporta respostas mais estruturadas;
-- provider Google já tem base para Gemini API e Vertex AI;
-- filtro de stream evita vazamento de XML silencioso;
-- VTS tem heartbeat e reconexão em vez de status fake simples;
-- memória híbrida já está integrada ao fluxo principal.
-
-Limitações e observações honestas:
-
-- o projeto ainda é mais estável em **Windows** do que em outras plataformas;
-- recursos como VTube Studio dependem do modelo Live2D expor parâmetros compatíveis;
-- `vertex_ai` precisa de credenciais reais para funcionar;
-- alguns recursos opcionais exigem dependências extras ainda não listadas no `requirements.txt`;
-- a qualidade de resumo de mídia depende bastante do provider/modelo escolhido e do tipo de arquivo.
-
----
-
-## Comandos úteis
-
-### Rodar terminal
+## Comandos Uteis
 
 ```bash
 python main.py
-```
-
-### Rodar GUI
-
-```bash
 python -m src.gui.hana_gui
-```
-
-### Reinstalar dependências principais
-
-```bash
-pip install -r requirements.txt
-```
-
-### Instalar dependências opcionais
-
-```bash
-pip install pyvts pypdf PyPDF2 youtube-transcript-api
-```
-
-### Compilar o projeto para smoke check
-
-```bash
 python -m compileall main.py src
+python -m pytest -q
 ```
 
 ---
 
-## Contribuição
+## Roadmap
 
-Se for contribuir, o mais importante é manter coerência entre:
-
-- runtime do terminal;
-- chat da GUI;
-- memória compartilhada;
-- providers;
-- filtros de XML silencioso;
-- estado do VTS.
-
-Se você mudar comportamento de prompt, provider ou canal, ajuste também a documentação e o `config.json`.
+- Melhorar fila visual de midia na GUI.
+- Criar painel de historico para imagem e musica.
+- Refinar interrupcao por voz com VAD seguro.
+- Criar editor visual de memorias.
+- Melhorar benchmark de visao desktop.
+- Evoluir o modelo Live2D da Hana.
+- Criar pipeline de aprovacao para publicar musicas e assets.
 
 ---
 
-## Licença
+## Status Honesto
 
-Consulte a licença do repositório e os termos dos providers externos que você decidir usar.
+O projeto ja e funcional, mas ainda esta em evolucao rapida.
+
+Pontos fortes:
+
+- desktop-first;
+- GUI e terminal separados por contrato;
+- memoria hibrida;
+- tags XML silenciosas;
+- providers multiplos;
+- stop global;
+- foco real em VTuber e assistente residente.
+
+Limites atuais:
+
+- foco principal em Windows;
+- alguns providers exigem chave paga;
+- Live2D depende de modelo e parametros corretos;
+- algumas automacoes desktop ainda precisam de mais guardrails.
+
+---
+
+## Contribuicao
+
+Contribuicoes devem preservar a separacao entre:
+
+- terminal de voz;
+- chat visual da GUI;
+- memoria;
+- providers;
+- TTS;
+- tags XML;
+- controle do PC.
+
+Se mudar comportamento de prompt, canal ou provider, atualize a documentacao junto.
+
+---
+
+## Licenca
+
+Consulte a licenca do repositorio e os termos dos providers externos usados.
 
 <div align="center">
   <img src="https://count.getloli.com/get/@Rukafuu?theme=booru-lewd" alt="Moe Counter" />

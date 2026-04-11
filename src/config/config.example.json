@@ -1,0 +1,139 @@
+{
+    "_titulo": "Hana - Configuracao publica padrao",
+    "_nota": "Copie para src/config/config.json para ajustes locais. Nunca coloque chaves aqui.",
+    "user_role_name": "Usuario",
+    "assistant_role_name": "Hana",
+    "LLM_PROVIDER": "groq",
+    "LLM_TEMPERATURE": 0.85,
+    "LLM_PROVIDERS": {
+        "groq": {
+            "modelo": "llama-3.1-8b-instant",
+            "modelo_chat": "llama-3.1-8b-instant",
+            "modelo_vision": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "modelo_web": "groq/compound-mini"
+        },
+        "google_cloud": {
+            "backend": "auto",
+            "modelo": "gemini-2.5-flash",
+            "modelo_chat": "gemini-2.5-flash",
+            "modelo_vision": "gemini-2.5-flash"
+        },
+        "openrouter": {
+            "modelo": "google/gemini-2.5-flash",
+            "modelo_chat": "google/gemini-2.5-flash",
+            "modelo_vision": "google/gemini-2.5-flash"
+        },
+        "openai": {
+            "modelo": "gpt-4.1-mini",
+            "modelo_chat": "gpt-4.1-mini",
+            "modelo_vision": "gpt-4.1-mini"
+        },
+        "cerebras": {
+            "modelo": "llama3.1-8b",
+            "modelo_chat": "llama3.1-8b",
+            "modelo_vision": ""
+        }
+    },
+    "CHAT": {
+        "LLM_PROVIDER": "groq",
+        "LLM_MODEL": "llama-3.1-8b-instant",
+        "LLM_TEMPERATURE": 0.85,
+        "usa_mesmo_prompt_terminal": false,
+        "response_mode": "adaptive",
+        "auto_route_media": true,
+        "media_model": "gemini-2.5-flash",
+        "max_output_tokens_normal": 4096,
+        "max_output_tokens_media": 8192,
+        "markdown_enabled": true
+    },
+    "TTS_PROVIDER": "edge",
+    "TTS_SETTINGS": {
+        "edge": {
+            "voice": "pt-BR-ThalitaNeural",
+            "rate": "+0%",
+            "pitch": "+0Hz",
+            "volume": "+0%"
+        },
+        "google": {
+            "voice": "pt-BR-Neural2-C",
+            "language_code": "pt-BR",
+            "rate": 1.2,
+            "pitch": 1.0
+        },
+        "azure": {
+            "voice": "pt-BR-LeticiaNeural",
+            "rate": "+0%",
+            "pitch": "+0Hz"
+        },
+        "openai": {
+            "model": "gpt-4o-mini-tts",
+            "voice": "coral",
+            "rate": 1.0,
+            "pitch": 0.0,
+            "style": "natural e clara"
+        },
+        "elevenlabs": {
+            "voice_id": "",
+            "voice": "",
+            "model_id": "eleven_flash_v2_5",
+            "rate": 1.0,
+            "pitch": 0.0,
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.0,
+            "speaker_boost": true
+        }
+    },
+    "TTS_ATIVO": true,
+    "STT_ATIVO": true,
+    "STT_MODEL": "whisper-large-v3",
+    "STT_LANGUAGE": "pt",
+    "MIC_DEVICE_INDEX": null,
+    "TAXA_AMOSTRAGEM": 44100,
+    "VISAO_ATIVA": false,
+    "VISAO_MONITOR": 1,
+    "VTUBESTUDIO_ATIVO": false,
+    "VTUBE_STUDIO": {
+        "host": "localhost",
+        "port": 8001,
+        "emotion_map": {
+            "HAPPY": "happy",
+            "SAD": "sad",
+            "ANGRY": "angry",
+            "SHY": "shy",
+            "SURPRISED": "surprised",
+            "SMUG": "smug",
+            "NEUTRAL": "neutral",
+            "LOVE": "love"
+        }
+    },
+    "GUI": {
+        "accent_color": "#f472b6",
+        "bg_opacity": 1.0,
+        "ptt_key": "F2",
+        "ptt_enabled": false,
+        "stop_hotkey_enabled": true,
+        "stop_hotkey": "F8"
+    },
+    "PC_CONTROL": {
+        "brave_path": ""
+    },
+    "MEDIA": {
+        "enabled": true,
+        "auto_open_terminal_outputs": true,
+        "queue": {
+            "max_concurrent_jobs": 1
+        },
+        "music": {
+            "enabled": true,
+            "backend": "gemini_api",
+            "model": "lyria-3-pro-preview",
+            "output_dir": ""
+        }
+    },
+    "HANA_INBOX_ROOT": "",
+    "HANA_INBOX_MODEL": "gemini-2.5-flash",
+    "Modo_discord": false,
+    "precione_para_falar": false,
+    "TECLA_PTT": "F2"
+}

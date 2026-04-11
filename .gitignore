@@ -19,6 +19,9 @@ venv.bak/
 # Credentials and Sensitive Files
 .env
 src/config/service_account.json
+src/config/service_account_*.json
+src/config/config.json
+src/config/config.local.json
 *.pem
 *.key
 *.p12
@@ -57,3 +60,4 @@ src/config/persona.txt
 
 # Test scripts (local only)
 test_*.py
+data/emotion_state.json
