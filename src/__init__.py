@@ -1,1 +1,1 @@
-"""Pacote principal da Hana."""
+"""Pacote principal da Lira."""

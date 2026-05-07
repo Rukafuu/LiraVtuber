@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.gui.design import COLORS, FONT_TITLE, FONT_BODY, FONT_SMALL, FONT_MONO, FONT_HEADER
 
-REF_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "persona", "nyra_refs", "ref_01.jpg")
+REF_IMAGE_PATH = r"C:\Users\conta\OneDrive\Imagens\Lira\Lira.png"
 
 
 class TabPerfil(ctk.CTkFrame):
@@ -23,7 +23,7 @@ class TabPerfil(ctk.CTkFrame):
         self.grid_columnconfigure(1, weight=1)
 
         # ─── HEADER ───
-        header = ctk.CTkLabel(self, text="Perfil da Nyra", font=FONT_TITLE, text_color=COLORS["text_primary"])
+        header = ctk.CTkLabel(self, text="Perfil da Lira", font=FONT_TITLE, text_color=COLORS["text_primary"])
         header.grid(row=0, column=0, columnspan=2, padx=25, pady=(20, 5), sticky="w")
         sub = ctk.CTkLabel(self, text="Identidade visual e personalidade", font=FONT_SMALL, text_color=COLORS["text_muted"])
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 20), sticky="w")
@@ -53,8 +53,8 @@ class TabPerfil(ctk.CTkFrame):
         nome_frame = ctk.CTkFrame(card_foto, fg_color="transparent")
         nome_frame.pack(pady=(0, 15))
 
-        ctk.CTkLabel(nome_frame, text="N Y R A", font=FONT_HEADER, text_color=COLORS["purple_neon"]).pack()
-        ctk.CTkLabel(nome_frame, text="IA Assistente Autônoma  •  v2.0", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack()
+        ctk.CTkLabel(nome_frame, text="L I R A", font=FONT_HEADER, text_color=COLORS["purple_neon"]).pack()
+        ctk.CTkLabel(nome_frame, text="Entidade Digital  •  v1.0", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack()
 
         # ═══ COLUNA DIREITA: Info + Cores ═══
         card_info = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
@@ -64,14 +64,14 @@ class TabPerfil(ctk.CTkFrame):
 
         # Info cards
         infos = [
-            ("Nome", "Nyra"),
-            ("Função", "Assistente IA Autônoma"),
-            ("Criador", "Nakamura (Mestre)"),
-            ("LLM Base", "Gemini 2.5 Flash"),
-            ("Memória", "GraphRAG V2 Híbrido"),
-            ("TTS", "Google Cloud"),
-            ("Visão", "Modo 2 (Sob Demanda)"),
-            ("Personalidade", "Tsundere Gamer"),
+            ("Nome", "Lira"),
+            ("Função", "Entidade Digital"),
+            ("Criador", "reskyume (pai)"),
+            ("LLM Base", "Qwen 2.5 7B (local)"),
+            ("Memória", "GraphRAG Híbrido"),
+            ("TTS", "Edge TTS — Giovanna"),
+            ("STT", "Whisper Local"),
+            ("Personalidade", "Gentil & Melancólica"),
         ]
 
         for label, valor in infos:

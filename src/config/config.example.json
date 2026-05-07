@@ -1,8 +1,8 @@
 {
-    "_titulo": "Hana - Configuracao publica padrao",
+    "_titulo": "Lira - Configuracao publica padrao",
     "_nota": "Copie para src/config/config.json para ajustes locais. Nunca coloque chaves aqui.",
     "user_role_name": "Usuario",
-    "assistant_role_name": "Hana",
+    "assistant_role_name": "Lira",
     "LLM_PROVIDER": "groq",
     "LLM_TEMPERATURE": 0.85,
     "LLM_PROVIDERS": {
@@ -131,8 +131,8 @@
             "output_dir": ""
         }
     },
-    "HANA_INBOX_ROOT": "",
-    "HANA_INBOX_MODEL": "gemini-2.5-flash",
+    "LIRA_INBOX_ROOT": "",
+    "LIRA_INBOX_MODEL": "gemini-2.5-flash",
     "Modo_discord": false,
     "precione_para_falar": false,
     "TECLA_PTT": "F2"

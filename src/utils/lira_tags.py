@@ -1,5 +1,5 @@
 """
-Tags XML oficiais e helpers de parsing da Hana.
+Tags XML oficiais e helpers de parsing da Lira.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ MEDIA_XML_TAGS = (
     "editar_imagem",
     "gerar_musica",
 )
-ASSISTANT_HISTORY_ROLES = {"hana", "assistant", "model", "ai"}
+ASSISTANT_HISTORY_ROLES = {"lira", "assistant", "model", "ai"}
 
 
 def extract_xml_actions(texto: str, tag_names: tuple[str, ...] | list[str] | None = None) -> dict[str, list[str]]:

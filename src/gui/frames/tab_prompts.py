@@ -1,5 +1,5 @@
 """
-Tab Prompts — Editor do prompt.json (regras operacionais da Hana).
+Tab Prompts — Editor do prompt.json (regras operacionais da Lira).
 Validação JSON antes de salvar. Mudanças captadas no próximo turno.
 """
 
@@ -16,7 +16,7 @@ PROMPT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "pro
 
 
 class TabPrompts(ctk.CTkFrame):
-    """Editor do prompt.json — regras operacionais da Hana."""
+    """Editor do prompt.json — regras operacionais da Lira."""
 
     def __init__(self, master, **kwargs):
         super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])

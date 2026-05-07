@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from src.config.config_loader import CONFIG
 
 
-DEFAULT_INBOX_ROOT = os.path.join(os.path.expanduser("~"), "Desktop", "hana_inbox")
+DEFAULT_INBOX_ROOT = os.path.join(os.path.expanduser("~"), "Desktop", "lira_inbox")
 
 
 @dataclass
@@ -17,7 +17,7 @@ class InboxSelection:
 
 
 class InboxManager:
-    """Resolve arquivos da Hana Inbox por categoria e rastreia o arquivo ativo."""
+    """Resolve arquivos da Lira Inbox por categoria e rastreia o arquivo ativo."""
 
     CATEGORY_DIRS = {
         "imagem": "imagem",
@@ -50,7 +50,7 @@ class InboxManager:
     }
 
     def __init__(self):
-        configured = CONFIG.get("HANA_INBOX_ROOT", "")
+        configured = CONFIG.get("LIRA_INBOX_ROOT", "")
         self.root_dir = configured if configured else DEFAULT_INBOX_ROOT
         self.active_files: dict[str, str] = {}
         self.last_active: InboxSelection | None = None

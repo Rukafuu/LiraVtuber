@@ -1,5 +1,5 @@
 """
-Tab Emoções — Aba "Mente da Hana".
+Tab Emoções — Aba "Mente da Lira".
 Mostra humor atual, último pensamento, histórico de emoções.
 Lê o estado via IPC (arquivo JSON) para funcionar em processo separado.
 """
@@ -18,7 +18,7 @@ STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "
 
 
 class TabEmocoes(ctk.CTkFrame):
-    """Aba Mente da Hana — visualização do estado emocional e pensamentos."""
+    """Aba Mente da Lira — visualização do estado emocional e pensamentos."""
 
     def __init__(self, master, **kwargs):
         super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
@@ -28,7 +28,7 @@ class TabEmocoes(ctk.CTkFrame):
         self._last_update_ts = 0.0  # Timestamp da ultima leitura do JSON
 
         # ─── HEADER ───
-        header = ctk.CTkLabel(self, text="💭  Mente da Hana", font=FONT_TITLE, text_color=COLORS["text_primary"])
+        header = ctk.CTkLabel(self, text="💭  Mente da Lira", font=FONT_TITLE, text_color=COLORS["text_primary"])
         header.grid(row=0, column=0, columnspan=2, padx=25, pady=(20, 5), sticky="w")
         sub = ctk.CTkLabel(self, text="Visualização em tempo real do estado emocional e pensamentos internos", font=FONT_SMALL, text_color=COLORS["text_muted"])
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 15), sticky="w")
@@ -80,7 +80,7 @@ class TabEmocoes(ctk.CTkFrame):
             corner_radius=8, wrap="word"
         )
         self._thought_box.pack(fill="both", expand=True, padx=15, pady=10)
-        self._thought_box.insert("1.0", "💭 A Hana ainda não pensou nada...")
+        self._thought_box.insert("1.0", "💭 A Lira ainda não pensou nada...")
         self._thought_box.configure(state="disabled")
 
         # ─── CARD: HISTÓRICO DE EMOÇÕES ───

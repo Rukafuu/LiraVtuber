@@ -1,6 +1,6 @@
 from chromadb.utils import embedding_functions
 
-from src.memory.rag_engine import HanaRAGEngine
+from src.memory.rag_engine import LiraRAGEngine
 
 
 def test_rag_engine_fallback_roundtrip(monkeypatch, tmp_path):
@@ -13,7 +13,7 @@ def test_rag_engine_fallback_roundtrip(monkeypatch, tmp_path):
         raise_embedding_error,
     )
 
-    engine = HanaRAGEngine(persist_directory=str(tmp_path / "chroma"))
+    engine = LiraRAGEngine(persist_directory=str(tmp_path / "chroma"))
     engine.upsert_memory(
         "cat-memory",
         "Meu gato Mimi dorme na janela da sala toda tarde.",

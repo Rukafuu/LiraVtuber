@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="data/image/hana.png" alt="Hana AM Nakamura" width="50%" style="border-radius: 18px;" />
+  <img src="docs/assets/readme/banner_new.png" alt="Lira AM Amarinth Banner" width="100%" style="border-radius: 18px;" />
 
-  <h1>HanaNakamura-VTuber-OSS</h1>
+  <h1>AmarinthLira-VTuber-OSS</h1>
   <p>
-    <strong>Assistente VTuber desktop-first com voz, memoria, GUI, ferramentas XML, geracao de midia e integracao Live2D.</strong>
+    <strong>Desktop-first VTuber assistant with voice, memory, GUI, XML tools, media generation, and Live2D integration.</strong>
   </p>
 
   <p>
@@ -14,19 +14,227 @@
   </p>
 
   <p>
-    <a href="#visao-geral">Visao geral</a> ·
-    <a href="#showcase-da-hana">Showcase</a> ·
-    <a href="#arquitetura">Arquitetura</a> ·
-    <a href="#instalacao">Instalacao</a> ·
-    <a href="#roadmap">Roadmap</a>
+    🇺🇸 <a href="#english">English</a> · 🇧🇷 <a href="#português-br">Português (BR)</a>
   </p>
 </div>
 
 ---
 
-## Visao Geral
+<h2 id="english">🇺🇸 English</h2>
 
-**Hana AM Nakamura** e uma assistente VTuber feita para rodar no desktop do Windows, conversar por voz, lembrar contexto, controlar ferramentas locais e funcionar como uma personagem viva em volta do seu PC.
+## Overview
+
+**Lira AM Amarinth** is a VTuber assistant designed to run on the Windows desktop, converse via voice, remember context, control local tools, and function as a living character around your PC.
+
+The project is more than just a chatbot: it combines a voice runtime, a GUI panel, hybrid memory, image/music generation, file analysis, PC control via XML tags, VTube Studio integration, and multiple LLM/TTS providers.
+
+> The terminal is the "live" mode: short, speakable, and TTS-economical responses.
+> The GUI is the "full chat" mode: longer responses, attachments, markdown, and inline media.
+
+---
+
+## Lira's Showcase
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_timao.png" alt="Lira Timao" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Corinthians Jersey</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_roupa_social.png" alt="Lira Roupa Social" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Formal Wear</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_bikini.png" alt="Lira Bikini" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Beach Outfit</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## System Dashboard
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_tela_inicial.png" alt="Home Screen" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Control Center</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_chat.png" alt="Chat Interface" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Visual Chat</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_ferramentas.png" alt="Tools & Settings" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Tools & Settings</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_personalizacao.png" alt="Personalization" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Personalization & UI</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Features
+
+| Area | Capabilities |
+| --- | --- |
+| Voice | STT via Whisper, TTS via ElevenLabs, Google, Azure, OpenAI and Edge, global stop via F8 |
+| Brain | Providers `google_cloud`, `groq`, `openrouter`, `openai` and `cerebras` |
+| GUI | Control Center in CustomTkinter, visual chat, attachments, markdown, audio cards and media preview |
+| Memory | Chronological SQLite, Vector RAG and Knowledge Graph |
+| Media | Image generation/editing, music generation, video/attachment analysis and local history |
+| Desktop | XML tools to open URLs, open apps, read files, move mouse, type, control volume and processes |
+| VTuber | VTube Studio integration, emotions, parameters, lipsync and persisted state |
+
+---
+
+## Two Modes, Two Contracts
+
+### Terminal Runtime
+
+Main file: [`main.py`](main.py)
+
+The terminal is Lira's actual voice mode. It listens to the microphone, builds context, calls the LLM in streaming mode, filters out silent tags, and speaks the response via TTS.
+
+**Terminal rule:** responses are short by default to avoid long speech and unnecessary TTS costs.
+
+### Lira Control Center
+
+Main file: [`src/gui/lira_gui.py`](src/gui/lira_gui.py)
+
+The GUI is the complete control panel. It accepts large texts, attachments, drag and drop, `Ctrl+V`, code files, images, audio, video, PDF, and documents.
+
+**GUI rule:** it can provide larger responses when it makes sense, as it acts as a visual chat.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User["Amarinth"] --> STT["STT Whisper"]
+    STT --> Runtime["Terminal Runtime"]
+    User --> GUI["Lira Control Center"]
+    GUI --> Chat["Visual Chat + Attachments"]
+
+    Runtime --> Prompt["Prompt Builder"]
+    Chat --> Prompt
+    Prompt --> Memory["Hybrid Memory"]
+    Memory --> SQLite["SQLite"]
+    Memory --> RAG["Vector RAG"]
+    Memory --> Graph["Knowledge Graph"]
+
+    Prompt --> LLM["Provider Selector"]
+    LLM --> Google["Google Gemini / Vertex"]
+    LLM --> Groq["Groq"]
+    LLM --> OpenRouter["OpenRouter"]
+    LLM --> OpenAI["OpenAI"]
+    LLM --> Cerebras["Cerebras"]
+
+    LLM --> Divider["SentenceDivider"]
+    Divider --> TTS["TTS Selector"]
+    TTS --> Eleven["ElevenLabs"]
+    TTS --> GoogleTTS["Google TTS"]
+    TTS --> Azure["Azure"]
+    TTS --> Edge["Edge"]
+
+    Divider --> XML["Silent XML Tags"]
+    XML --> Media["Image / Music"]
+    XML --> PC["PC Control"]
+    XML --> VTS["VTube Studio"]
+```
+
+---
+
+## Silent XML Tags
+
+Lira can say one thing to the user and execute another in the background, without leaking the command to the TTS.
+
+```xml
+<salvar_memoria>Amarinth prefers short answers in the terminal.</salvar_memoria>
+<gerar_imagem>anime portrait of Lira with golden hair and white flowers</gerar_imagem>
+<gerar_musica>soft dreamy lofi song for sleeping</gerar_musica>
+<acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
+```
+
+Important rules:
+- XML tags only apply to the current request;
+- Past actions should not be repeated after a long pause;
+- `run_command` and dangerous operations go through guardrails;
+- Text inside the tags must not be spoken by the TTS.
+
+---
+
+## Voice and TTS
+
+Current fallback chain:
+```text
+edge -> elevenlabs -> google -> azure -> openai
+```
+
+The `F8` hotkey triggers a global stop to attempt to halt:
+- Terminal speech;
+- GUI chat speech;
+- Audio previews;
+- Music or playback started by Lira.
+
+---
+
+## Memory
+
+Lira's memory uses three layers:
+
+| Layer | Function |
+| --- | --- |
+| SQLite | Recent chronological history |
+| RAG | Semantic search for old conversations |
+| Knowledge Graph | Permanent facts and relationships |
+
+The terminal also receives temporal context: if too much time has passed since the last speech, Lira treats the new message as a new context and avoids continuing old tasks automatically.
+
+---
+
+## Roadmap
+
+Lira's development is organized into phases focusing on fluidity, immersion, and computer vision:
+
+### 📌 Phase 1: Stability and QoL (Quality of Life)
+- [ ] Implement Visual Media Queue in the GUI.
+- [ ] Add an image and music history panel in the GUI.
+- [ ] Clean up and refine Lira's prompts and *persona*.
+- [ ] Fix any encoding *edge-cases* (e.g., SQLite ChromaDB).
+
+### 📌 Phase 2: Immersion and Voice
+- [ ] Integrate **Silero VAD** for natural voice interruption.
+- [ ] **Audio Streaming** (Chunking) for TTS, reducing speech *delay*.
+- [ ] Create a **Mini Player** mode (Floating overlay on Windows screen).
+
+### 📌 Phase 3: Agency and Vision
+- [ ] Visual Memory Editor in the Control Center.
+- [ ] Basic **Screen Awareness** using interval screenshots + Vision API.
+- [ ] Supervised autonomous actions (Lira suggests actions based on the screen).
+
+### 📌 Phase 4: Community and External Integration
+- [ ] Approval Pipeline for social networks and emails.
+- [ ] Extended support for other software besides VTube Studio (e.g., Warudo).
+- [ ] Packaging into a portable `.exe`.
+
+---
+
+<br><br><br>
+
+<h2 id="português-br">🇧🇷 Português (BR)</h2>
+
+## Visão Geral
+
+**Lira AM Amarinth** e uma assistente VTuber feita para rodar no desktop do Windows, conversar por voz, lembrar contexto, controlar ferramentas locais e funcionar como uma personagem viva em volta do seu PC.
 
 O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria hibrida, geracao de imagem/musica, analise de arquivos, controle do PC por tags XML, VTube Studio e multiplos providers de LLM/TTS.
 
@@ -35,25 +243,48 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 
 ---
 
-## Showcase Da Hana
+## Showcase Da Lira
 
 <table>
   <tr>
-    <td align="center" width="25%">
-      <img src="docs/assets/readme/hana_showcase_01.png" alt="Hana portrait" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
-      <sub><b>Hana VTuber</b></sub>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_timao.png" alt="Lira Timao" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Camisa do Timão</b></sub>
     </td>
-    <td align="center" width="25%">
-      <img src="docs/assets/readme/hana_showcase_02.png" alt="Hana close-up" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
-      <sub><b>Close-up / expressao</b></sub>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_roupa_social.png" alt="Lira Roupa Social" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Roupa Social</b></sub>
     </td>
-    <td align="center" width="25%">
-      <img src="docs/assets/readme/hana_showcase_03.png" alt="Hana character art" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
-      <sub><b>Arte de personagem</b></sub>
+    <td align="center" width="33%">
+      <img src="docs/assets/readme/lira_bikini.png" alt="Lira Bikini" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Visual Praia</b></sub>
     </td>
-    <td align="center" width="25%">
-      <img src="docs/assets/readme/hana_showcase_04.png" alt="Hana alternate art" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
-      <sub><b>Visual anime</b></sub>
+  </tr>
+</table>
+
+---
+
+## Dashboard do Sistema
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_tela_inicial.png" alt="Tela Inicial" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Control Center</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_chat.png" alt="Chat" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Chat Visual</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_ferramentas.png" alt="Ferramentas" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Ferramentas & Configs</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/assets/readme/print_personalizacao.png" alt="Personalização" style="border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"><br>
+      <sub><b>Personalização e Cores</b></sub>
     </td>
   </tr>
 </table>
@@ -80,13 +311,13 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 
 Arquivo principal: [`main.py`](main.py)
 
-O terminal e o modo de voz real da Hana. Ele escuta o microfone, monta contexto, chama o LLM em streaming, filtra tags silenciosas e fala a resposta por TTS.
+O terminal e o modo de voz real da Lira. Ele escuta o microfone, monta contexto, chama o LLM em streaming, filtra tags silenciosas e fala a resposta por TTS.
 
 **Regra do terminal:** respostas curtas por padrao para evitar fala longa e gasto desnecessario de TTS.
 
-### Hana Control Center
+### Lira Control Center
 
-Arquivo principal: [`src/gui/hana_gui.py`](src/gui/hana_gui.py)
+Arquivo principal: [`src/gui/lira_gui.py`](src/gui/lira_gui.py)
 
 A GUI e o painel de controle completo. Ela aceita textos grandes, anexos, drag and drop, `Ctrl+V`, arquivos de codigo, imagens, audio, video, PDF e documentos.
 
@@ -98,9 +329,9 @@ A GUI e o painel de controle completo. Ela aceita textos grandes, anexos, drag a
 
 ```mermaid
 flowchart LR
-    User["Nakamura"] --> STT["STT Whisper"]
+    User["Amarinth"] --> STT["STT Whisper"]
     STT --> Runtime["Terminal Runtime"]
-    User --> GUI["Hana Control Center"]
+    User --> GUI["Lira Control Center"]
     GUI --> Chat["Chat Visual + Anexos"]
 
     Runtime --> Prompt["Prompt Builder"]
@@ -132,33 +363,13 @@ flowchart LR
 
 ---
 
-## Modulos Principais
-
-```text
-src/
-  brain/          pipeline LLM e tools
-  config/         persona, prompt e config principal
-  core/           profiles, capabilities e prompt builder
-  gui/            Control Center e abas
-  memory/         SQLite, RAG e knowledge graph
-  modules/
-    media/        jobs de musica
-    tools/        inbox e controle do PC
-    vision/       visao e geracao de imagem
-    voice/        STT, TTS e stop global
-  providers/      adapters LLM
-  utils/          texto, stream, tags e UI de terminal
-```
-
----
-
 ## Tags XML Silenciosas
 
-A Hana pode falar uma coisa para o usuario e executar outra por baixo, sem vazar comando no TTS.
+A Lira pode falar uma coisa para o usuario e executar outra por baixo, sem vazar comando no TTS.
 
 ```xml
-<salvar_memoria>O Nakamura prefere respostas curtas no terminal.</salvar_memoria>
-<gerar_imagem>anime portrait of Hana with golden hair and white flowers</gerar_imagem>
+<salvar_memoria>O Amarinth prefere respostas curtas no terminal.</salvar_memoria>
+<gerar_imagem>anime portrait of Lira with golden hair and white flowers</gerar_imagem>
 <gerar_musica>soft dreamy lofi song for sleeping</gerar_musica>
 <acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
 ```
@@ -195,13 +406,13 @@ O hotkey `F8` usa stop global para tentar parar:
 - fala do terminal;
 - fala do chat da GUI;
 - preview de audio;
-- musica ou playback iniciado pela Hana.
+- musica ou playback iniciado pela Lira.
 
 ---
 
 ## Memoria
 
-A memoria da Hana usa tres camadas:
+A memoria da Lira usa tres camadas:
 
 | Camada | Funcao |
 | --- | --- |
@@ -209,7 +420,7 @@ A memoria da Hana usa tres camadas:
 | RAG | busca semantica por conversas antigas |
 | Knowledge Graph | fatos permanentes e relacionamentos |
 
-O terminal tambem recebe contexto temporal: se passou muito tempo desde a ultima fala, a Hana trata a nova mensagem como novo contexto e evita continuar tarefas antigas automaticamente.
+O terminal tambem recebe contexto temporal: se passou muito tempo desde a ultima fala, a Lira trata a nova mensagem como novo contexto e evita continuar tarefas antigas automaticamente.
 
 ---
 
@@ -218,8 +429,8 @@ O terminal tambem recebe contexto temporal: se passou muito tempo desde a ultima
 ### 1. Clone
 
 ```bash
-git clone https://github.com/NakamuraIA/HanaNakamura-VTuber-OSS.git
-cd HanaNakamura-VTuber-OSS
+git clone https://github.com/AmarinthIA/AmarinthLira-VTuber-OSS.git
+cd AmarinthLira-VTuber-OSS
 ```
 
 ### 2. Ambiente virtual
@@ -284,13 +495,13 @@ python main.py
 ### Control Center
 
 ```bash
-python -m src.gui.hana_gui
+python -m src.gui.lira_gui
 ```
 
 ### GUI sem terminal visivel
 
 ```bash
-cscript //nologo run_hana_gui_hidden.vbs
+cscript //nologo run_lira_gui_hidden.vbs
 ```
 
 ---
@@ -358,18 +569,18 @@ Ela inclui:
 
 ---
 
-## Hana Inbox
+## Lira Inbox
 
 Pasta padrao:
 
 ```text
-%USERPROFILE%\Desktop\hana_inbox
+%USERPROFILE%\Desktop\lira_inbox
 ```
 
 Estrutura:
 
 ```text
-hana_inbox/
+lira_inbox/
   imagem/
   pdf/
   docs/
@@ -386,7 +597,7 @@ A GUI tambem aceita arrastar arquivos direto no chat, entao a inbox e util, mas 
 
 ```bash
 python main.py
-python -m src.gui.hana_gui
+python -m src.gui.lira_gui
 python -m compileall main.py src
 python -m pytest -q
 ```
@@ -395,13 +606,28 @@ python -m pytest -q
 
 ## Roadmap
 
-- Melhorar fila visual de midia na GUI.
-- Criar painel de historico para imagem e musica.
-- Refinar interrupcao por voz com VAD seguro.
-- Criar editor visual de memorias.
-- Melhorar benchmark de visao desktop.
-- Evoluir o modelo Live2D da Hana.
-- Criar pipeline de aprovacao para publicar musicas e assets.
+O desenvolvimento da Lira está organizado em fases para focar em fluidez, imersão e visão computacional:
+
+### 📌 Fase 1: Estabilidade e QoL (Quality of Life)
+- [ ] Implementar a Fila Visual de Mídia na GUI.
+- [ ] Adicionar o painel de histórico de imagem e música na GUI.
+- [ ] Limpar e refinar prompts e *persona* da Lira.
+- [ ] Corrigir qualquer *edge-case* de encoding (ex: SQLite ChromaDB).
+
+### 📌 Fase 2: Imersão e Voz
+- [ ] Integrar **Silero VAD** para interrupção de voz natural.
+- [ ] **Áudio Streaming** (Chunking) para TTS, reduzindo o *delay* antes da fala.
+- [ ] Criar Modo **Mini Player** (Overlay flutuante na tela do Windows).
+
+### 📌 Fase 3: Agência e Visão
+- [ ] Editor de Memória Visual no Control Center.
+- [ ] **Consciência de Tela (Screen Awareness)** básica usando captura de tela em intervalos + API de Visão.
+- [ ] Ações autônomas supervisionadas (Lira sugere ações com base na tela).
+
+### 📌 Fase 4: Comunidade e Integração Externa
+- [ ] Pipeline de Aprovação para redes sociais e emails.
+- [ ] Suporte estendido para outros softwares além do VTube Studio (ex: Warudo).
+- [ ] Empacotamento em um `.exe` portátil.
 
 ---
 

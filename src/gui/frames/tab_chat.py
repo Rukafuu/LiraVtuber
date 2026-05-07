@@ -16,11 +16,11 @@ from src.core.provider_catalog import get_llm_providers, get_model_ids_for_provi
 from src.core.request_profiles import build_request_context, get_chat_settings
 from src.core.runtime_capabilities import get_provider_capabilities, get_stop_hotkey_settings
 from src.gui.design import COLORS, FONT_BODY, FONT_SMALL, FONT_TITLE
-from src.modules.media import HanaMusicGen
+from src.modules.media import LiraMusicGen
 from src.modules.tools.inbox_manager import InboxManager
 from src.modules.tools.pc_control import execute_pc_action, parse_pc_action_payload
 from src.modules.voice.audio_control import poll_external_stop, register_stop_callback, request_global_stop, unregister_stop_callback
-from src.utils.hana_tags import DISPLAY_XML_TAGS, MEDIA_XML_TAGS, extract_xml_actions, strip_xml_tags
+from src.utils.lira_tags import DISPLAY_XML_TAGS, MEDIA_XML_TAGS, extract_xml_actions, strip_xml_tags
 from src.utils.sentence_divider import SentenceDivider
 from src.utils.text import repair_mojibake_text
 
@@ -60,9 +60,9 @@ STRUCTURED_MEDIA_TASKS = {"analise_midia_estruturada"}
 CLIPBOARD_CACHE_DIR = os.path.join("temp", "clipboard_attachments")
 
 BUBBLE_USER = "#1A2744"
-BUBBLE_HANA = "#201933"
+BUBBLE_LIRA = "#201933"
 BUBBLE_BORDER_USER = "#2563EB"
-BUBBLE_BORDER_HANA = "#8B5CF6"
+BUBBLE_BORDER_LIRA = "#8B5CF6"
 
 
 class TabChat(ctk.CTkFrame):
@@ -118,7 +118,7 @@ class TabChat(ctk.CTkFrame):
         header = ctk.CTkFrame(top_panel, fg_color="transparent")
         header.grid(row=0, column=0, padx=16, pady=(12, 6), sticky="ew")
         ctk.CTkLabel(header, text="Control Center Chat", font=FONT_TITLE, text_color=COLORS["text_primary"]).pack(side="left")
-        ctk.CTkLabel(header, text="GUI da Hana", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(header, text="GUI da Lira", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(side="left", padx=(10, 0))
 
         self.toolbar = ctk.CTkFrame(
             top_panel,
@@ -252,13 +252,13 @@ class TabChat(ctk.CTkFrame):
         self.entry_msg.bind("<KeyRelease>", self._update_input_placeholder)
         self.entry_msg.bind("<Control-v>", self._on_paste)
         self.entry_msg.bind("<Control-V>", self._on_paste)
-        self.entry_placeholder = ctk.CTkLabel(textbox_frame, text="Digite uma mensagem para a Hana... (Shift+Enter quebra linha)", font=FONT_BODY, text_color=COLORS["text_muted"])
+        self.entry_placeholder = ctk.CTkLabel(textbox_frame, text="Digite uma mensagem para a Lira... (Shift+Enter quebra linha)", font=FONT_BODY, text_color=COLORS["text_muted"])
         self.entry_placeholder.place(x=12, y=12)
 
         self.btn_enviar = ctk.CTkButton(self.input_frame, text="Enviar", width=110, height=44, fg_color=COLORS["purple_dim"], hover_color=COLORS["purple_neon"], font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), command=self._enviar)
         self.btn_enviar.grid(row=0, column=3, padx=(0, 8), pady=8)
 
-        self._adicionar_msg("system", "Hana", "Control Center online. Este chat nao e o terminal.")
+        self._adicionar_msg("system", "Lira", "Lira online. Este chat nao e o terminal.")
 
     def _create_visual_shell(self, parent, *, outer_color, inner_color, corner_radius=12, padding=2):
         shell = ctk.CTkFrame(parent, fg_color=outer_color, corner_radius=corner_radius, border_width=0)
@@ -333,6 +333,10 @@ class TabChat(ctk.CTkFrame):
             from src.providers.openai_provider import OpenAIProvider
 
             return OpenAIProvider
+        if prov == "ollama":
+            from src.providers.ollama_provider import OllamaProvider
+
+            return OllamaProvider
         return None
 
     def _on_chat_prov_change(self, provedor):
@@ -380,21 +384,21 @@ class TabChat(ctk.CTkFrame):
 
     def _get_memory_manager(self):
         if self._memory_manager is None:
-            from src.memory.memory_manager import HanaMemoryManager
+            from src.memory.memory_manager import LiraMemoryManager
 
-            self._memory_manager = HanaMemoryManager("data/hana_memory.db")
+            self._memory_manager = LiraMemoryManager("data/lira_memory.db")
         return self._memory_manager
 
     def _get_image_gen(self):
         if self._image_gen is None:
-            from src.modules.vision.image_gen import HanaImageGen
+            from src.modules.vision.image_gen import LiraImageGen
 
-            self._image_gen = HanaImageGen()
+            self._image_gen = LiraImageGen()
         return self._image_gen
 
     def _get_music_gen(self):
         if self._music_gen is None:
-            self._music_gen = HanaMusicGen()
+            self._music_gen = LiraMusicGen()
         return self._music_gen
 
     def on_config_reload(self):
@@ -840,7 +844,7 @@ class TabChat(ctk.CTkFrame):
         if tag == "user":
             side, bg, border, padx, name_color = "right", BUBBLE_USER, BUBBLE_BORDER_USER, (150, 18), COLORS["blue_neon"]
         else:
-            side, bg, border, padx, name_color = "left", BUBBLE_HANA, BUBBLE_BORDER_HANA, (18, 150), COLORS["purple_neon"]
+            side, bg, border, padx, name_color = "left", BUBBLE_LIRA, BUBBLE_BORDER_LIRA, (18, 150), COLORS["purple_neon"]
 
         row_shell = ctk.CTkFrame(self.chat_scroll, fg_color="transparent")
         row_shell.grid(row=self._bubble_row, column=0, padx=padx, pady=(8, 4), sticky="ew")
@@ -879,7 +883,7 @@ class TabChat(ctk.CTkFrame):
         body.pack(fill="x")
         return bubble, body, meta_widget
 
-    def _add_hana_footer(self, bubble, texto):
+    def _add_lira_footer(self, bubble, texto):
         if not texto or not texto.strip():
             return
         footer = ctk.CTkFrame(bubble, fg_color="transparent")
@@ -897,7 +901,7 @@ class TabChat(ctk.CTkFrame):
         ).pack(side="left")
 
     def _create_streaming_bubble(self, request_id):
-        bubble, body, meta_widget = self._create_bubble_shell("hana", "Hana")
+        bubble, body, meta_widget = self._create_bubble_shell("lira", "Lira")
         label = ctk.CTkLabel(
             body,
             text="Processando resposta da GUI...",
@@ -950,7 +954,7 @@ class TabChat(ctk.CTkFrame):
     def _finalize_streaming_bubble(self, request_id, texto, generated_images=None, generated_media=None, request_meta=None):
         state = self._active_stream_state
         if not state or state.get("request_id") != request_id:
-            self._adicionar_msg("hana", "Hana", texto, generated_images=generated_images, generated_media=generated_media, request_meta=request_meta)
+            self._adicionar_msg("lira", "Lira", texto, generated_images=generated_images, generated_media=generated_media, request_meta=request_meta)
             return
 
         body = state["body"]
@@ -961,7 +965,7 @@ class TabChat(ctk.CTkFrame):
             self._render_generated_images(body, generated_images)
         if generated_media:
             self._render_generated_media(body, generated_media)
-        self._add_hana_footer(state["bubble"], texto)
+        self._add_lira_footer(state["bubble"], texto)
         self._active_stream_state = None
         self._scroll_to_bottom()
 
@@ -1000,8 +1004,8 @@ class TabChat(ctk.CTkFrame):
             self._render_generated_images(body, generated_images)
         if generated_media:
             self._render_generated_media(body, generated_media)
-        if tag == "hana" and texto.strip():
-            self._add_hana_footer(bubble, texto)
+        if tag == "lira" and texto.strip():
+            self._add_lira_footer(bubble, texto)
         self._scroll_to_bottom()
 
     def _clean_inline_markdown(self, text):
@@ -1274,8 +1278,8 @@ class TabChat(ctk.CTkFrame):
                 self.after(
                     0,
                     lambda: self._adicionar_msg(
-                        "hana",
-                        "Hana",
+                        "lira",
+                        "Lira",
                         f"{kind_label.capitalize()} {ready_text} aqui no chat.",
                         generated_media=generated_media,
                         request_meta=result_meta,
@@ -1291,7 +1295,7 @@ class TabChat(ctk.CTkFrame):
                 return
 
             if state == "cancelled":
-                self.after(0, lambda: self._adicionar_msg("system", "Hana", f"Geracao de {kind_label} cancelada."))
+                self.after(0, lambda: self._adicionar_msg("system", "Lira", f"Geracao de {kind_label} cancelada."))
                 self.after(
                     0,
                     lambda: self.lbl_chat_status.configure(
@@ -1302,7 +1306,7 @@ class TabChat(ctk.CTkFrame):
                 return
 
             error = status.get("error") or f"Falha ao gerar {kind_label}."
-            self.after(0, lambda err=error: self._adicionar_msg("system", "Hana", f"Falha ao gerar {kind_label}: {err}"))
+            self.after(0, lambda err=error: self._adicionar_msg("system", "Lira", f"Falha ao gerar {kind_label}: {err}"))
             self.after(
                 0,
                 lambda: self.lbl_chat_status.configure(
@@ -1315,14 +1319,14 @@ class TabChat(ctk.CTkFrame):
     def _queue_media_job(self, kind, prompt, request_meta=None):
         kind_label = self._media_kind_label(kind)
         if str(kind or "").strip().lower() != "music":
-            self.after(0, lambda: self._adicionar_msg("system", "Hana", f"Geracao de {kind_label} foi desativada nesta versao."))
+            self.after(0, lambda: self._adicionar_msg("system", "Lira", f"Geracao de {kind_label} foi desativada nesta versao."))
             return False
 
         generator = self._get_music_gen()
         try:
             job_id = generator.submit(prompt, origin="control_center_chat", request_meta=request_meta)
         except Exception as e:
-            self.after(0, lambda err=e: self._adicionar_msg("system", "Hana", f"Falha ao iniciar geracao de {kind_label}: {err}"))
+            self.after(0, lambda err=e: self._adicionar_msg("system", "Lira", f"Falha ao iniciar geracao de {kind_label}: {err}"))
             self.after(
                 0,
                 lambda: self.lbl_chat_status.configure(
@@ -1333,7 +1337,7 @@ class TabChat(ctk.CTkFrame):
             return False
 
         self._active_media_jobs[job_id] = {"kind": kind}
-        self.after(0, lambda: self._adicionar_msg("system", "Hana", f"{kind_label.capitalize()} em geracao em segundo plano. Quando terminar, eu te entrego aqui no chat."))
+        self.after(0, lambda: self._adicionar_msg("system", "Lira", f"{kind_label.capitalize()} em geracao em segundo plano. Quando terminar, eu te entrego aqui no chat."))
         self.after(
             0,
             lambda: self.lbl_chat_status.configure(
@@ -1431,7 +1435,7 @@ class TabChat(ctk.CTkFrame):
         self._anexos = []
         self._atualizar_container_anexos()
 
-        self._adicionar_msg("user", "Nakamura", texto, attachments=anexos_envio)
+        self._adicionar_msg("user", "reskyume", texto, attachments=anexos_envio)
         self.btn_enviar.configure(state="disabled", text="...")
         self.lbl_chat_status.configure(text="Processando resposta da GUI...", text_color=COLORS["yellow"])
 
@@ -1531,7 +1535,7 @@ class TabChat(ctk.CTkFrame):
                 queued_media = []
                 for fact in actions.get("salvar_memoria", []):
                     try:
-                        memory_manager.add_fact("hana_nota", "deve_lembrar", fact)
+                        memory_manager.add_fact("lira_nota", "deve_lembrar", fact)
                     except Exception as e:
                         logger.warning("[CHAT GUI] Falha ao salvar memoria manual: %s", e)
 
@@ -1568,10 +1572,10 @@ class TabChat(ctk.CTkFrame):
 
                 self._ultima_resposta = resposta
                 history_content = resp_display
-                self._session_history.append({"role": "Nakamura", "content": texto})
-                self._session_history.append({"role": "Hana", "content": history_content})
-                memory_manager.add_interaction("Nakamura", texto)
-                memory_manager.add_interaction("Hana", history_content)
+                self._session_history.append({"role": "reskyume", "content": texto})
+                self._session_history.append({"role": "Lira", "content": history_content})
+                memory_manager.add_interaction("reskyume", texto)
+                memory_manager.add_interaction("Lira", history_content)
 
                 self.after(
                     0,
@@ -1634,7 +1638,7 @@ class TabChat(ctk.CTkFrame):
 
     def _gravar_audio(self):
         self.btn_mic.configure(text="REC", text_color=COLORS["red"])
-        self._adicionar_msg("system", "Hana", "Gravando audio... aguarde.")
+        self._adicionar_msg("system", "Lira", "Gravando audio... aguarde.")
 
         def _capturar():
             texto_transcrito = ""

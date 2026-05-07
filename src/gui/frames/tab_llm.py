@@ -632,7 +632,7 @@ class TabLLM(ctk.CTkFrame):
             self.lbl_status.configure(text=f"Falha ao preparar teste de voz: {exc}", text_color=COLORS["red"])
             return
 
-        frase = "Oi, eu sou a Hana. Hoje eu vou falar com voce de um jeitinho doce e natural."
+        frase = "Entendi. Hoje eu vou falar com voce de um jeitinho doce e natural, entende?"
 
         def _run():
             ok = False

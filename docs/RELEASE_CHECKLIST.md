@@ -14,12 +14,21 @@ Use esta lista antes de publicar uma versao no GitHub.
 ## Setup publico
 
 - [ ] `src/config/config.example.json` existe e e valido.
+- [ ] `src/config/persona.example.txt` existe e o runtime usa fallback se `persona.txt` local nao existir.
 - [ ] `.env.example` so contem variaveis publicas/necessarias.
 - [ ] Setup minimo documentado com `GROQ_API_KEY` + `edge`.
 - [ ] `docs/INSTALL.md` explica instalacao do zero.
+- [ ] `docs/INSTALL.md` menciona Python, Node.js e Rust para a GUI Tauri.
 - [ ] `docs/CONFIG.md` explica config local.
 - [ ] `docs/PROVIDERS.md` explica providers opcionais.
 - [ ] `docs/TROUBLESHOOTING.md` explica erros comuns.
+
+## GUI Tauri
+
+- [ ] `control_panel` esta rastreado com `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` e `Cargo.lock`.
+- [ ] Nome do produto e identificador Tauri nao estao como template `control_panel`.
+- [ ] Assets padrao Vite/Tauri nao usados foram removidos.
+- [ ] `control_panel/node_modules`, `control_panel/dist` e `control_panel/src-tauri/target` nao estao rastreados.
 
 ## Video
 

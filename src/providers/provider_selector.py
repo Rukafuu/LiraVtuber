@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 
 class ProviderSelector:
     def __init__(self):
-        self.provedor_atual = CONFIG.get("LLM_PROVIDER", "groq")
+        self.provedor_atual = CONFIG.get("LLM_PROVIDER", "ollama")
         self.instancias = {}
         logger.info("[PROVIDER SELECTOR] Provedor LLM primário: %s", self.provedor_atual)
 
-    def get_provider(self):
-        """Retorna a instância do provedor atual. Lazy load para evitar init desnecessário."""
-        prov = str(self.provedor_atual or "groq").lower()
+    def get_provider(self, provider: str | None = None):
+        """Retorna a instancia do provedor solicitado ou atual, com lazy load."""
+        if provider is None:
+            self.provedor_atual = CONFIG.get("LLM_PROVIDER", self.provedor_atual)
+        prov = str(provider or self.provedor_atual or "ollama").lower()
 
         if prov in self.instancias:
             return self.instancias[prov].refresh_runtime_settings()
@@ -44,12 +46,16 @@ class ProviderSelector:
                 from src.providers.openai_provider import OpenAIProvider
 
                 self.instancias[prov] = OpenAIProvider()
-            else:
-                logger.error("[PROVIDER SELECTOR] Provedor '%s' não suportado. Fallback para Groq.", prov)
-                from src.providers.groq_provider import GroqProvider
+            elif prov == "ollama":
+                from src.providers.ollama_provider import OllamaProvider
 
-                self.instancias["groq"] = GroqProvider()
-                return self.instancias["groq"]
+                self.instancias[prov] = OllamaProvider()
+            else:
+                logger.error("[PROVIDER SELECTOR] Provedor '%s' não suportado. Fallback para Ollama.", prov)
+                from src.providers.ollama_provider import OllamaProvider
+
+                self.instancias["ollama"] = OllamaProvider()
+                return self.instancias["ollama"]
 
             return self.instancias[prov].refresh_runtime_settings()
 

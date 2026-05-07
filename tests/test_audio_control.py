@@ -5,7 +5,7 @@ from src.modules.voice.tts_selector import get_tts_settings
 
 
 def test_global_stop_notifies_callbacks(tmp_path, monkeypatch):
-    signal_path = tmp_path / "hana_stop.signal"
+    signal_path = tmp_path / "lira_stop.signal"
     monkeypatch.setattr(audio_control, "STOP_SIGNAL_PATH", signal_path)
     monkeypatch.setattr(audio_control, "_last_seen_signal_version", 0)
     audio_control.reset_stop_state()
@@ -24,7 +24,7 @@ def test_global_stop_notifies_callbacks(tmp_path, monkeypatch):
 
 
 def test_poll_external_stop_detects_new_signal(tmp_path, monkeypatch):
-    signal_path = tmp_path / "hana_stop_external.signal"
+    signal_path = tmp_path / "lira_stop_external.signal"
     monkeypatch.setattr(audio_control, "STOP_SIGNAL_PATH", signal_path)
     monkeypatch.setattr(audio_control, "_last_seen_signal_version", 0)
     audio_control.reset_stop_state()
@@ -39,7 +39,7 @@ def test_poll_external_stop_detects_new_signal(tmp_path, monkeypatch):
 
 
 def test_global_stop_signal_changes_on_repeated_requests(tmp_path, monkeypatch):
-    signal_path = tmp_path / "hana_stop_unique.signal"
+    signal_path = tmp_path / "lira_stop_unique.signal"
     monkeypatch.setattr(audio_control, "STOP_SIGNAL_PATH", signal_path)
     monkeypatch.setattr(audio_control, "_last_seen_signal_version", 0)
     audio_control.reset_stop_state()

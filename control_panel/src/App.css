@@ -1,0 +1,96 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  /* Cores Base e Gradientes Futuristas */
+  --bg-opacity: 1;
+  --bg-darkest-rgb: 6, 6, 9;
+  --bg-darkest: rgba(var(--bg-darkest-rgb), var(--bg-opacity));
+  --bg-sidebar: rgba(10, 10, 15, calc(var(--bg-opacity) * 0.6));
+  --border-strong: rgba(168, 85, 247, 0.2);
+  --border-glow: rgba(168, 85, 247, 0.4);
+  
+  --purple-neon: #c084fc;
+  --purple-glow: #a855f7;
+  --purple-dark: rgba(168, 85, 247, 0.1);
+  
+  --cyan-neon: #22d3ee;
+  --blue-neon: #3b82f6;
+  --red-neon: #ef4444;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* Background agora fica a cargo do CyberBackground.tsx para efeitos 3D, mas mantemos fallback aqui */
+  background-color: var(--bg-darkest);
+  color: var(--text-primary);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+
+/* Efeito Glow para Cards e Botões */
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(45deg, var(--purple-neon), var(--cyan-neon), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+}
+.glow-border:hover::before {
+  opacity: 1;
+}
+
+/* Animações CSS Globais */
+@keyframes fadeInSlideUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeInSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px var(--purple-dark); }
+  50% { box-shadow: 0 0 30px rgba(168, 85, 247, 0.4); }
+}
+
+.hover-glow:hover {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}

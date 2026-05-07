@@ -1,1 +1,1 @@
-# Hana Control Center GUI
+# Lira Control Center GUI
