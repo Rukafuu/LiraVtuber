@@ -37,15 +37,19 @@ The project is more than just a chatbot: it combines a voice runtime, a GUI pane
 
 <table>
   <tr>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/lira_fullbody.png" alt="Lira Fullbody" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Full Body</b></sub>
+    </td>
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_timao.png" alt="Lira Timao" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Corinthians Jersey</b></sub>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_roupa_social.png" alt="Lira Roupa Social" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Formal Wear</b></sub>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_bikini.png" alt="Lira Bikini" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Beach Outfit</b></sub>
     </td>
@@ -247,15 +251,19 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 
 <table>
   <tr>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
+      <img src="docs/assets/readme/lira_fullbody.png" alt="Lira Corpo Inteiro" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
+      <sub><b>Corpo Inteiro</b></sub>
+    </td>
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_timao.png" alt="Lira Timao" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Camisa do Timão</b></sub>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_roupa_social.png" alt="Lira Roupa Social" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Roupa Social</b></sub>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <img src="docs/assets/readme/lira_bikini.png" alt="Lira Bikini" width="160" style="border-radius: 18px; display: block; margin: 0 auto;"><br>
       <sub><b>Visual Praia</b></sub>
     </td>
