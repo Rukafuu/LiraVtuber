@@ -682,6 +682,17 @@ Se mudar comportamento de prompt, canal ou provider, atualize a documentacao jun
 
 Consulte a licenca do repositorio e os termos dos providers externos usados.
 
+<br>
+
 <div align="center">
+  <h2>⭐ Star History</h2>
+  <a href="https://star-history.com/#Rukafuu/LiraVtuber&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Rukafuu/LiraVtuber&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Rukafuu/LiraVtuber&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Rukafuu/LiraVtuber&type=Date" />
+    </picture>
+  </a>
+  <br><br>
   <img src="https://count.getloli.com/get/@Rukafuu?theme=booru-lewd" alt="Moe Counter" />
 </div>
