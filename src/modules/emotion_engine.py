@@ -1,5 +1,5 @@
 """
-Emotion Engine — Motor de emoções da Hana.
+Emotion Engine — Motor de emoções da Lira.
 
 Parseia tags [EMOTION:X] do texto da LLM, mantém estado de humor,
 e emite callbacks para o VTube Studio e GUI.
@@ -26,7 +26,7 @@ class EmotionEvent:
 
 
 class EmotionEngine:
-    """Motor de emoções da Hana. Thread-safe e observável."""
+    """Motor de emoções da Lira. Thread-safe e observável."""
 
     # Emoções válidas e seus valores de humor (-1.0 a 1.0)
     EMOTION_MOOD_MAP = {

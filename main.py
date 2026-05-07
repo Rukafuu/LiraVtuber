@@ -32,20 +32,20 @@ except Exception:
     pass
 
 from src.brain.tool_manager import ToolManager
-from src.memory.memory_manager import HanaMemoryManager
+from src.memory.memory_manager import LiraMemoryManager
 from src.modules.voice.stt_whisper import MotorSTTWhisper
 from src.modules.voice.audio_control import poll_external_stop, register_stop_callback, request_global_stop
 from src.modules.voice.tts_selector import get_tts
 from src.modules.vision.periodic_vision import VisaoNyra
-from src.modules.vision.image_gen import HanaImageGen
-from src.modules.media import HanaMusicGen, get_media_settings
+from src.modules.vision.image_gen import LiraImageGen
+from src.modules.media import LiraMusicGen, get_media_settings
 from src.modules.emotion_engine import EmotionEngine
 from src.modules.tools.pc_control import execute_pc_action
 from src.modules.vts_controller import VTSController
 from src.core.prompt_builder import build_terminal_system_prompt
 from src.providers.provider_selector import ProviderSelector
 from src.core.request_profiles import build_request_context
-from src.utils.hana_tags import extract_xml_actions
+from src.utils.lira_tags import extract_xml_actions
 from src.utils.text import limpar_texto_tts, ui
 from src.utils.sentence_divider import SentenceDivider
 from src.config.config_loader import CONFIG
@@ -58,17 +58,17 @@ except Exception:
 
 
 # === Sinais de Estado (Neuro style) ===
-class HanaSignals:
+class LiraSignals:
     def __init__(self):
-        self.HANA_SPEAKING = False
+        self.LIRA_SPEAKING = False
         self.STT_ACTIVE = True
 
-signals = HanaSignals()
+signals = LiraSignals()
 
 tts = get_tts()
 stt_motor = MotorSTTWhisper()
 llm_selector = ProviderSelector()
-memory_manager = HanaMemoryManager("data/hana_memory.db")
+memory_manager = LiraMemoryManager("data/lira_memory.db")
 tool_manager = ToolManager(memory_manager=memory_manager)
 visao = VisaoNyra()
 
@@ -83,8 +83,8 @@ def _trigger_vts_emotion(emotion: str):
 emotion_engine.registrar_callback_emocao(_trigger_vts_emotion)
 
 # === Gerador de Mídia ===
-image_gen = HanaImageGen()
-music_gen = HanaMusicGen()
+image_gen = LiraImageGen()
+music_gen = LiraMusicGen()
 
 
 def _classify_terminal_task(user_message: str) -> str:
@@ -120,7 +120,7 @@ def _monitor_terminal_media_job(kind: str, job_id: str):
 
         if state == "completed":
             output_path = status.get("output_path")
-            ui.print_info_livre(f"Hana: {kind_label.capitalize()} pronto em {output_path}")
+            ui.print_info_livre(f"Lira: {kind_label.capitalize()} pronto em {output_path}")
             if get_media_settings().get("auto_open_terminal_outputs"):
                 try:
                     os.startfile(output_path)
@@ -129,10 +129,10 @@ def _monitor_terminal_media_job(kind: str, job_id: str):
             return
 
         if state == "cancelled":
-            ui.print_info_livre(f"Hana: Geração de {kind_label} cancelada.")
+            ui.print_info_livre(f"Lira: Geração de {kind_label} cancelada.")
             return
 
-        ui.print_info_livre(f"Hana: Falha ao gerar {kind_label}: {status.get('error') or 'erro desconhecido'}")
+        ui.print_info_livre(f"Lira: Falha ao gerar {kind_label}: {status.get('error') or 'erro desconhecido'}")
         return
 
 
@@ -142,11 +142,11 @@ def _start_terminal_media_job(kind: str, prompt: str):
     try:
         job_id = generator.submit(prompt, origin="terminal_voice", request_meta=_build_media_request_meta(kind))
     except Exception as e:
-        ui.print_info_livre(f"Hana: Falha ao iniciar geração de {kind_label}: {e}")
+        ui.print_info_livre(f"Lira: Falha ao iniciar geração de {kind_label}: {e}")
         return
 
     ui.print_executando(f"gerar_{kind}")
-    ui.print_info_livre(f"Hana: Gerando {kind_label} em segundo plano. Eu te aviso quando terminar.")
+    ui.print_info_livre(f"Lira: Gerando {kind_label} em segundo plano. Eu te aviso quando terminar.")
     threading.Thread(
         target=_monitor_terminal_media_job,
         args=(kind, job_id),
@@ -174,7 +174,7 @@ if CONFIG.get("VTUBESTUDIO_ATIVO", False):
         vts_controller.start()
 
 # Banner
-_ultimo_provedor = CONFIG.get("LLM_PROVIDER", "groq")
+_ultimo_provedor = CONFIG.get("LLM_PROVIDER", "ollama")
 
 
 def _snapshot_tts_state():
@@ -191,7 +191,7 @@ def _snapshot_tts_state():
 _ultimo_tts_provider, _ultimo_tts_state = _snapshot_tts_state()
 _llm_model = CONFIG.get("LLM_PROVIDERS", {}).get(_ultimo_provedor, {}).get("modelo", "desconhecido")
 ui.set_banner(
-    stt_info="GROQ WHISPER",
+    stt_info="WHISPER LOCAL",
     tts_info=f"{tts.provedor.upper()} TTS",
     provider_info=llm_selector.provedor_atual.upper(),
     model_info=_llm_model
@@ -275,14 +275,14 @@ _sync_runtime_stop_hotkey_binding()
 threading.Thread(
     target=_runtime_stop_watchdog_loop,
     daemon=True,
-    name="HanaRuntimeStopWatchdog",
+    name="LiraRuntimeStopWatchdog",
 ).start()
 
 while True:
     try:
         # Hot-reload
         if CONFIG.reload():
-            novo_prov = CONFIG.get("LLM_PROVIDER", "groq")
+            novo_prov = CONFIG.get("LLM_PROVIDER", "ollama")
             if novo_prov != _ultimo_provedor:
                 llm_selector = ProviderSelector()
                 _ultimo_provedor = novo_prov
@@ -354,7 +354,7 @@ while True:
         ui.print_info_livre(f"Você: {user_message}")
 
         if "desligar sistema" in user_message.lower():
-            ui.print_info_livre("Hana: Desligando... Até logo, Nakamura-sama!")
+            ui.print_info_livre("Lira: Desligando... Até logo, Amarinth-sama!")
             break
 
         # --- MEMÓRIA HÍBRIDA ---
@@ -403,7 +403,7 @@ while True:
         full_raw_response = []
         full_tts_text = []  # Acumula tudo para falar uma vez só.
         divider = SentenceDivider(faster_first_response=True)
-        displayed_hana_prefix = False
+        displayed_lira_prefix = False
 
         token_stream = llm.gerar_resposta_stream(
             chat_history=raw_history,
@@ -433,8 +433,8 @@ while True:
 
                 # Imprimir no terminal em tempo real.
                 if chunk.text.strip():
-                    ui.print_hana_text(chunk.text, first_chunk=not displayed_hana_prefix)
-                    displayed_hana_prefix = True
+                    ui.print_lira_text(chunk.text, first_chunk=not displayed_lira_prefix)
+                    displayed_lira_prefix = True
                 full_raw_response.append(chunk.raw)
 
                 # Acumular texto limpo para TTS
@@ -446,9 +446,9 @@ while True:
         texto_final_tts = " ".join(full_tts_text)
         if texto_final_tts.strip() and CONFIG.get("TTS_ATIVO", True):
             ui.print_falando(tts.provedor)
-            signals.HANA_SPEAKING = True
+            signals.LIRA_SPEAKING = True
             tts.falar(texto_final_tts)
-            signals.HANA_SPEAKING = False
+            signals.LIRA_SPEAKING = False
 
         ai_response_falada = divider.complete_response or "".join(full_raw_response)
         actions = extract_xml_actions(
@@ -466,15 +466,15 @@ while True:
 
         # ==============================================================
         # PÓS-PROCESSAMENTO: parser XML de ações silenciosas.
-        # Processa tags embutidas na resposta da Hana.
+        # Processa tags embutidas na resposta da Lira.
         # ==============================================================
 
         # 1. <salvar_memoria>conteúdo</salvar_memoria>
         for conteudo in actions.get("salvar_memoria", []):
             if conteudo:
                 try:
-                    memory_manager.rag.add_memory(conteudo, metadata={"role": "hana", "source": "xml_tag"})
-                    memory_manager.graph.add_fact("hana_nota", "deve_lembrar", conteudo[:200])
+                    memory_manager.rag.add_memory(conteudo, metadata={"role": "lira", "source": "xml_tag"})
+                    memory_manager.graph.add_fact("lira_nota", "deve_lembrar", conteudo[:200])
                     logging.info(f"[XML] Memoria salva: {conteudo[:80]}...")
                 except Exception as e:
                     logging.error(f"[XML] Erro ao salvar memoria: {e}")
@@ -538,8 +538,8 @@ while True:
             continue
 
         # Salva na memória
-        memory_manager.add_interaction("Nakamura", user_message)
-        memory_manager.add_interaction("Hana", ai_response_falada)
+        memory_manager.add_interaction("Amarinth", user_message)
+        memory_manager.add_interaction("Lira", ai_response_falada)
 
     except KeyboardInterrupt:
         print("\n")

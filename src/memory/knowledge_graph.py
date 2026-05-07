@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple, Any
 
 logger = logging.getLogger(__name__)
 
-class HanaKnowledgeGraph:
+class LiraKnowledgeGraph:
     def __init__(self, persist_path: str = "data/memory/knowledge_graph.gml"):
         self.persist_path = os.path.abspath(persist_path)
         

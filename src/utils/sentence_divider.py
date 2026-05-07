@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Generator, List
 
-from src.utils.hana_tags import SILENT_XML_TAGS, THOUGHT_TAGS
+from src.utils.lira_tags import SILENT_XML_TAGS, THOUGHT_TAGS
 
 END_PUNCTUATION = {".", "!", "?", "...", "。", "！", "？"}
 COMMAS = {",", ";", "，", "、"}

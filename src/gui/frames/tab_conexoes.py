@@ -1,5 +1,5 @@
 """
-Tab Conexoes - switches de modulos e integracoes da Hana.
+Tab Conexoes - switches de modulos e integracoes da Lira.
 Cada toggle salva imediatamente no config.json.
 """
 

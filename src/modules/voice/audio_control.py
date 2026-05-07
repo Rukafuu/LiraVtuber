@@ -9,7 +9,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-STOP_SIGNAL_PATH = Path(tempfile.gettempdir()) / "hana_global_audio_stop.signal"
+STOP_SIGNAL_PATH = Path(tempfile.gettempdir()) / "lira_global_audio_stop.signal"
 
 _callbacks: dict[str, Callable] = {}
 _callbacks_lock = threading.RLock()

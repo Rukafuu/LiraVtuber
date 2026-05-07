@@ -90,7 +90,7 @@ class TabLogs(ctk.CTkFrame):
             root_logger.setLevel(logging.DEBUG)
 
         # Log inicial
-        self._append_log("📋 Hana Control Center — Sistema de Logs inicializado.\n", COLORS["green"])
+        self._append_log("📋 Lira Control Center — Sistema de Logs inicializado.\n", COLORS["green"])
         self._append_log("💡 Logs de ações da GUI (chat, config, módulos) aparecerão aqui.\n", COLORS["text_muted"])
         self._append_log(f"🔧 Config: {os.path.abspath(CONFIG.config_path)}\n", COLORS["text_muted"])
 

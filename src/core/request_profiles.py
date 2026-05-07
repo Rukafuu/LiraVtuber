@@ -48,7 +48,7 @@ def get_chat_settings() -> dict:
 
     media_model = (
         chat_cfg.get("media_model")
-        or CONFIG.get("HANA_INBOX_MODEL")
+        or CONFIG.get("LIRA_INBOX_MODEL")
         or "gemini-2.5-flash"
     )
 

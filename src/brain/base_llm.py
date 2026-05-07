@@ -89,7 +89,7 @@ class BaseLLM(ABC):
         role_raw = str(message.get("role", "")).strip().lower()
         content = message.get("content", "")
 
-        if role_raw == "nakamura":
+        if role_raw in {"amarinth", "reskyume", "user", "human", "usuario", "usuário"}:
             return {"role": "user", "content": content}
         if role_raw == "system":
             return {"role": "user", "content": f"[CONTEXTO DO SISTEMA]\n{content}"}
@@ -100,12 +100,19 @@ class BaseLLM(ABC):
         if not isinstance(prov_cfg, dict):
             return
 
+        normalize_model = getattr(self, "_normalize_model_id", None)
+
         modelo_chat = prov_cfg.get("modelo_chat", prov_cfg.get("modelo"))
         if modelo_chat:
+            if callable(normalize_model):
+                modelo_chat = normalize_model(modelo_chat, vision=False)
             self.modelo_chat = modelo_chat
 
         if hasattr(self, "modelo_vision"):
-            self.modelo_vision = prov_cfg.get("modelo_vision", getattr(self, "modelo_vision", self.modelo_chat))
+            modelo_vision = prov_cfg.get("modelo_vision", getattr(self, "modelo_vision", self.modelo_chat))
+            if callable(normalize_model):
+                modelo_vision = normalize_model(modelo_vision, vision=True)
+            self.modelo_vision = modelo_vision
 
     def refresh_runtime_settings(self, scope: str | None = None, sync_model_from_config: bool = True):
         if scope is not None:
@@ -153,8 +160,9 @@ class BaseLLM(ABC):
             if self._should_print_terminal(request_context):
                 ui.print_pensando(self.provedor.upper())
 
+            modelo_execucao = (request_context or {}).get("override_model") or self.modelo_chat
             stream = self._chamar_api_stream(
-                modelo=self.modelo_chat,
+                modelo=modelo_execucao,
                 mensagens=messages,
                 image_b64=image_b64,
                 arquivos_multimidia=arquivos_multimidia,
@@ -168,7 +176,7 @@ class BaseLLM(ABC):
                 return
 
             response = self._chamar_api(
-                modelo=self.modelo_chat,
+                modelo=modelo_execucao,
                 mensagens=messages,
                 image_b64=image_b64,
                 arquivos_multimidia=arquivos_multimidia,
@@ -207,8 +215,9 @@ class BaseLLM(ABC):
             if self._should_print_terminal(request_context):
                 ui.print_pensando(self.provedor.upper())
 
+            modelo_execucao = (request_context or {}).get("override_model") or self.modelo_chat
             response = self._chamar_api(
-                modelo=self.modelo_chat,
+                modelo=modelo_execucao,
                 mensagens=messages,
                 ferramentas=tools,
                 image_b64=image_b64,
@@ -248,7 +257,7 @@ class BaseLLM(ABC):
                 and not content.startswith("{")
                 and '"acao": "tool_call"' not in content
             ):
-                ui.print_hana_text(content, first_chunk=True)
+                ui.print_lira_text(content, first_chunk=True)
 
             return content
 

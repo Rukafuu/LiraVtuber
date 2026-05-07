@@ -48,7 +48,13 @@ Verifique:
 Rode:
 
 ```powershell
-python -m src.gui.hana_gui
+python main.py
+```
+
+Para testar o modo sem terminal visivel, rode:
+
+```powershell
+wscript run_lira_gui_hidden.vbs
 ```
 
 Se faltar dependencia, reinstale:

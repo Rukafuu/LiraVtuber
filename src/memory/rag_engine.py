@@ -11,7 +11,7 @@ from chromadb.utils import embedding_functions
 logger = logging.getLogger(__name__)
 
 
-class HanaRAGEngine:
+class LiraRAGEngine:
     # Tamanho minimo para armazenar (evita salvar "Oi", "Ok", etc.)
     MIN_TEXT_LENGTH = 15
     # Distancia maxima aceitavel (cosine distance: 0=identico, 2=oposto).
@@ -41,7 +41,7 @@ class HanaRAGEngine:
                 model_name=self.model_name
             )
             self.collection = self.client.get_or_create_collection(
-                name="hana_memories",
+                name="lira_memories",
                 embedding_function=self.embedding_fn,
                 metadata={"hnsw:space": "cosine"},
             )

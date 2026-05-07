@@ -99,14 +99,14 @@ def build_terminal_system_prompt(
         else "Musica indisponivel agora. Nao use <gerar_musica>.\n"
     )
     return (
-        f"=== [NUCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{assets.personality}\n\n"
+        f"=== [NUCLEO DE PERSONALIDADE: LIRA AM AMARINTH] ===\n{assets.personality}\n\n"
         f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{assets.prompt_rules}\n\n"
         "=== [PRIORIDADE DE COMPORTAMENTO] ===\n"
         "1. Cumpra exatamente o pedido do usuario.\n"
         "2. Se o pedido pedir fidelidade, transcricao, extracao ou leitura literal, seja fiel.\n"
         "3. A persona colore o tom, mas nao pode desviar da tarefa.\n"
         "4. Nao invente formato, analise ou resumo que o usuario nao pediu.\n\n"
-        f"=== [CONTEXTO AMBIENTAL] ===\nData/Hora: {current_datetime}\nPeriodo do dia: use a hora atual para perceber se e manha, tarde, noite ou madrugada.\nLOCAL: E:\\Projeto_Hana_AI\n{vts_anatomy}\n{conversation_timing}\n{memory_context}\n\n"
+        f"=== [CONTEXTO AMBIENTAL] ===\nData/Hora: {current_datetime}\nPeriodo do dia: use a hora atual para perceber se e manha, tarde, noite ou madrugada.\nLOCAL: E:\\Projeto_Lira_AI\n{vts_anatomy}\n{conversation_timing}\n{memory_context}\n\n"
         "=== [CONTRATO DO CANAL: TERMINAL_VOICE] ===\n"
         "Responda em PT-BR. Seja clara, falavel e objetiva. Evite excesso de floreio.\n"
         "Regra obrigatoria de tamanho: use de 1 a 4 frases curtas no maximo.\n"
@@ -173,7 +173,7 @@ def build_gui_system_prompt(
     )
 
     return (
-        f"=== [NUCLEO DE PERSONALIDADE: HANA AM NAKAMURA] ===\n{assets.personality}\n\n"
+        f"=== [NUCLEO DE PERSONALIDADE: LIRA AM AMARINTH] ===\n{assets.personality}\n\n"
         f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{assets.prompt_rules}\n\n"
         "=== [PRIORIDADE DE COMPORTAMENTO] ===\n"
         "1. Cumpra exatamente o pedido do usuario.\n"
@@ -181,7 +181,7 @@ def build_gui_system_prompt(
         "3. A persona colore o tom, mas nao pode desviar da tarefa.\n"
         "4. Nao invente formato, analise ou resumo que o usuario nao pediu.\n\n"
         "=== [MODO DE INTERACAO: CONTROL_CENTER_CHAT] ===\n"
-        "Voce esta dentro do chat visual do Control Center da Hana.\n"
+        "Voce esta dentro do chat visual do Control Center da Lira.\n"
         "Este ambiente nao e o terminal.\n"
         "Ignore completamente qualquer regra global do terminal que limite a resposta a 1-5 frases.\n"
         "Use markdown natural quando a resposta ficar media ou longa.\n"

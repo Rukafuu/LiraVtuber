@@ -2,7 +2,7 @@
 
 ## Minimo publico
 
-Para rodar a Hana no modo minimo, use apenas:
+Para rodar a Lira no modo minimo, use apenas:
 
 ```env
 GROQ_API_KEY=sua_chave

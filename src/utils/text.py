@@ -1,5 +1,5 @@
 """
-Utilitarios de texto e console compartilhados pela Hana.
+Utilitarios de texto e console compartilhados pela Lira.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import sys
 import textwrap
 import time
 
-from src.utils.hana_tags import SILENT_XML_TAGS
+from src.utils.lira_tags import SILENT_XML_TAGS
 
 
 def repair_mojibake_text(text: str) -> str:
@@ -66,12 +66,61 @@ def repair_mojibake_text(text: str) -> str:
     return repaired
 
 
+_INTERNAL_META_LINE_RE = re.compile(
+    r"^\s*(?:/?XML tags correct\?|[*-]\s*1 to 4 sentences max\?|[*-]\s*No questions at.*|[*-]\s*XML tags correct\?|Perfect\.?)\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def sanitize_visible_response_text(text: str) -> str:
+    """Remove lixo de formatacao interna antes de exibir no terminal ou GUI."""
+    if not text:
+        return ""
+
+    cleaned = repair_mojibake_text(str(text))
+    cleaned = re.sub(r"\[EMOTION:[^\]]*\]?", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[PARAM:[^\]]*\]?", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[INDEX_[^\]]*\]?", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[[A-Z_]+:[^\]]*$", "", cleaned)
+    cleaned = re.sub(r"<[^>\n]*$", "", cleaned)
+
+    for tag_name in SILENT_XML_TAGS:
+        cleaned = re.sub(
+            rf"<{tag_name}>.*?(?:</{tag_name}>|$)",
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+    cleaned = re.sub(r"<(?:think|pensamento|thought)>.*?(?:</(?:think|pensamento|thought)>|$)", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+    has_meta_checklist = bool(
+        re.search(r"XML tags correct\?|1 to 4 sentences max\?|No questions at", cleaned, flags=re.IGNORECASE)
+    )
+    lines = []
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _INTERNAL_META_LINE_RE.match(stripped):
+            continue
+        if has_meta_checklist and stripped.lower() in {"yes", "yes.", "perfect", "perfect."}:
+            continue
+        lines.append(line.rstrip())
+
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"\s+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
 def limpar_texto_tts(texto: str) -> str:
     """Remove canais silenciosos e ruido visual antes do envio ao TTS."""
     if not texto:
         return ""
 
-    texto_limpo = repair_mojibake_text(texto)
+    texto_limpo = sanitize_visible_response_text(repair_mojibake_text(texto))
     texto_limpo = re.sub(r"<think>.*?</think>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
     texto_limpo = re.sub(r"<pensamento>.*?</pensamento>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
     texto_limpo = re.sub(r"<thought>.*?</thought>", "", texto_limpo, flags=re.DOTALL | re.IGNORECASE)
@@ -112,7 +161,7 @@ class ConsoleUI:
     BOLD = "\033[1m"
     C_SYS = "\033[96m"
     C_STT = "\033[96m"
-    C_HANA = "\033[95m"
+    C_LIRA = "\033[95m"
     C_TTS = "\033[95m"
     C_MEM = "\033[94m"
     C_VIS = "\033[92m"
@@ -124,7 +173,7 @@ class ConsoleUI:
     C_RST = "\033[0m"
     _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
-    def __init__(self, prefix="[HANA]"):
+    def __init__(self, prefix="[LIRA]"):
         self.prefix = prefix
         self.turno_atual = 1
         self.tempo_inicio_turno = 0.0
@@ -176,7 +225,7 @@ class ConsoleUI:
         return wrapped
 
     def print_linha(self, estado: str, cor: str, modulo_dir: str, icone_esq: str, icone_dir: str):
-        prefix = f"{self.C_HANA}{self.prefix}{self.C_RST} {self.C_INFO}{self._obter_hora()}{self.C_RST}"
+        prefix = f"{self.C_LIRA}{self.prefix}{self.C_RST} {self.C_INFO}{self._obter_hora()}{self.C_RST}"
         rail = f"{icone_esq} {cor}{self.BOLD}{repair_mojibake_text(estado)}{self.C_RST} | Turno: {self.turno_atual} | {self.get_tempo_decorrido()} | {icone_dir} {cor}{repair_mojibake_text(modulo_dir)}{self.C_RST}"
         full = f"{prefix} {rail}"
         width = self._terminal_width()
@@ -219,7 +268,7 @@ class ConsoleUI:
             pass
 
     def print_falando(self, tts_provider: str = "TTS"):
-        self.print_linha("FALANDO", self.C_HANA, tts_provider.upper(), "🗣️", "🔊")
+        self.print_linha("FALANDO", self.C_LIRA, tts_provider.upper(), "🗣️", "🔊")
 
     def print_executando(self, tool_name: str):
         self.print_linha("EXECUTANDO", self.C_VIS, tool_name.upper(), "⚙️", "🔧")
@@ -251,8 +300,8 @@ class ConsoleUI:
             else:
                 self._write_line(f"{indent}{line}")
 
-    def print_hana_text(self, text: str, first_chunk: bool = False):
-        prefix = f"{self.C_HANA}[HANA]{self.C_RST}: " if first_chunk else " " * 8
+    def print_lira_text(self, text: str, first_chunk: bool = False):
+        prefix = f"{self.C_LIRA}[LIRA]{self.C_RST}: " if first_chunk else " " * 8
         width = max(20, self._terminal_width() - len(self._strip_ansi(prefix)))
         wrapped = self._wrap_text(text, width)
         for idx, line in enumerate(wrapped):
@@ -260,9 +309,9 @@ class ConsoleUI:
             self._write_line(f"{line_prefix}{line}")
 
     def set_banner(self, stt_info: str, tts_info: str, provider_info: str = "", model_info: str = ""):
-        border = f"{self.BOLD}{self.C_HANA}{'=' * 63}{self.C_RST}"
+        border = f"{self.BOLD}{self.C_LIRA}{'=' * 63}{self.C_RST}"
         print("\n" + border)
-        print(f" {self.C_SYS}✨ HANA ONLINE E PRONTA PARA OUVIR ✨{self.C_RST}")
+        print(f" {self.C_SYS}✨ LIRA ONLINE E PRONTA PARA OUVIR ✨{self.C_RST}")
         print(f" {self.C_INFO}STT: {self.BOLD}{repair_mojibake_text(stt_info)}{self.C_RST}{self.C_INFO} | TTS: {self.BOLD}{repair_mojibake_text(tts_info)}{self.C_RST}")
         if provider_info:
             print(

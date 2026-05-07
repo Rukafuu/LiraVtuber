@@ -3,24 +3,24 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from src.memory.knowledge_graph import HanaKnowledgeGraph
+from src.memory.knowledge_graph import LiraKnowledgeGraph
 from src.memory.memory import memory as SQLiteMemory
-from src.memory.rag_engine import HanaRAGEngine
-from src.utils.hana_tags import sanitize_history_message
+from src.memory.rag_engine import LiraRAGEngine
+from src.utils.lira_tags import sanitize_history_message
 
 logger = logging.getLogger(__name__)
 
 
-class HanaMemoryManager:
-    def __init__(self, db_path: str = "data/hana_memory.db"):
+class LiraMemoryManager:
+    def __init__(self, db_path: str = "data/lira_memory.db"):
         # Camada 1: Curto Prazo (Existente)
         self.sqlite = SQLiteMemory(db_path)
 
         # Camada 2: Semantica (Busca Vetorial)
-        self.rag = HanaRAGEngine()
+        self.rag = LiraRAGEngine()
 
         # Camada 3: Logica (Grafo de Conhecimento)
-        self.graph = HanaKnowledgeGraph()
+        self.graph = LiraKnowledgeGraph()
 
         # Sincroniza os fatos permanentes na base de dados de vetores
         self._sincronizar_grafo_rag()
@@ -45,17 +45,17 @@ class HanaMemoryManager:
     # Padroes de extracao automatica de fatos (PT-BR)
     FACT_PATTERNS = [
         # "meu nome e X" / "me chamo X"
-        (r"(?:meu nome (?:e|eh)|me chamo|pode me chamar de)\s+(\S+)", "nakamura", "tem_nome", 1),
+        (r"(?:meu nome (?:e|eh)|me chamo|pode me chamar de)\s+(\S+)", "amarinth", "tem_nome", 1),
         # "eu gosto de X" / "adoro X" / "amo X"
-        (r"(?:eu (?:gosto|adoro|amo|curto) (?:de |muito (?:de )?)?)(.+?)(?:\.|,|!|$)", "nakamura", "gosta_de", 1),
+        (r"(?:eu (?:gosto|adoro|amo|curto) (?:de |muito (?:de )?)?)(.+?)(?:\.|,|!|$)", "amarinth", "gosta_de", 1),
         # "eu moro em X" / "sou de X"
-        (r"(?:eu moro em|moro em|sou de|vivo em)\s+(.+?)(?:\.|,|!|$)", "nakamura", "mora_em", 1),
+        (r"(?:eu moro em|moro em|sou de|vivo em)\s+(.+?)(?:\.|,|!|$)", "amarinth", "mora_em", 1),
         # "meu aniversario e X" / "nasci em X"
-        (r"(?:meu anivers[aá]rio (?:e|eh)|nasci (?:em|dia)|fa[cç]o anivers[aá]rio (?:em |dia )?)\s*(.+?)(?:\.|,|!|$)", "nakamura", "aniversario_em", 1),
+        (r"(?:meu anivers[aá]rio (?:e|eh)|nasci (?:em|dia)|fa[cç]o anivers[aá]rio (?:em |dia )?)\s*(.+?)(?:\.|,|!|$)", "amarinth", "aniversario_em", 1),
         # "minha cor favorita e X"
-        (r"minha cor favorita (?:e|eh)\s+(.+?)(?:\.|,|!|$)", "nakamura", "cor_favorita", 1),
+        (r"minha cor favorita (?:e|eh)\s+(.+?)(?:\.|,|!|$)", "amarinth", "cor_favorita", 1),
         # "meu pet se chama X" / "meu gato e X"
-        (r"(?:meu (?:pet|gato|cachorro|cao) (?:se chama|e|eh)|tenho um (?:gato|cachorro) chamado)\s+(.+?)(?:\.|,|!|$)", "nakamura", "pet_nome", 1),
+        (r"(?:meu (?:pet|gato|cachorro|cao) (?:se chama|e|eh)|tenho um (?:gato|cachorro) chamado)\s+(.+?)(?:\.|,|!|$)", "amarinth", "pet_nome", 1),
     ]
 
     def add_interaction(self, role: str, content: str):
@@ -73,7 +73,7 @@ class HanaMemoryManager:
             self.rag.add_memory(clean_content, metadata={"role": role})
 
         # Extracao automatica de fatos do texto do usuario
-        if role.lower() in ("nakamura", "user"):
+        if role.lower() in ("amarinth", "user"):
             self._extrair_fatos_auto(clean_content)
 
         logger.debug("[MEMORY MANAGER] Interacao salva para %s.", role)
@@ -101,7 +101,7 @@ class HanaMemoryManager:
             # Procura numeros na mensagem
             numeros = re.findall(r"\b\d{2,}\b", text)
             for num in numeros:
-                self.add_fact("nakamura", "numero_importante", num)
+                self.add_fact("amarinth", "numero_importante", num)
                 logger.info(f"[MEMORY MANAGER] Numero memorizado: {num}")
 
             # Se nao encontrou numeros, salva o conteudo relevante
@@ -114,7 +114,7 @@ class HanaMemoryManager:
                     count=1,
                 ).strip()
                 if len(conteudo) > 3:
-                    self.add_fact("hana_nota", "deve_lembrar", conteudo)
+                    self.add_fact("lira_nota", "deve_lembrar", conteudo)
                     logger.info(f"[MEMORY MANAGER] Nota memorizada: {conteudo}")
 
     def get_context(self, user_query: str, recent_limit: int = 100):
@@ -152,16 +152,16 @@ class HanaMemoryManager:
 
         # Metodo 3: resolve perguntas em primeira pessoa para o usuario principal
         if re.search(r"\b(eu|meu|minha|meus|minhas|mim)\b", text_lower):
-            for alias in ("nakamura", "criador", "mestre", "usuario", "usuário", "user"):
+            for alias in ("amarinth", "criador", "mestre", "usuario", "usuário", "user"):
                 if alias in self.graph.graph.nodes():
                     entities.add(alias)
-            if not any(alias in entities for alias in ("nakamura", "criador", "mestre", "usuario", "usuário", "user")):
-                entities.add("nakamura")
+            if not any(alias in entities for alias in ("amarinth", "criador", "mestre", "usuario", "usuário", "user")):
+                entities.add("amarinth")
 
-        # Metodo 4: resolve perguntas sobre a propria Hana
-        if re.search(r"\b(voc[eê]|vc|hana)\b", text_lower):
-            if "hana" in self.graph.graph.nodes():
-                entities.add("hana")
+        # Metodo 4: resolve perguntas sobre a propria Lira
+        if re.search(r"\b(voc[eê]|vc|lira)\b", text_lower):
+            if "lira" in self.graph.graph.nodes():
+                entities.add("lira")
 
         return list(entities)
 

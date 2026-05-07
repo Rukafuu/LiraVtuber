@@ -48,7 +48,7 @@ class TabMemoria(ctk.CTkFrame):
         lbl_fatos = ctk.CTkLabel(card_fatos, text="📊  Grafo de Conhecimento", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=COLORS["text_primary"])
         lbl_fatos.pack(anchor="w", padx=15, pady=(12, 5))
 
-        lbl_sub = ctk.CTkLabel(card_fatos, text="Fatos salvos permanentemente pela Hana", font=FONT_SMALL, text_color=COLORS["text_muted"])
+        lbl_sub = ctk.CTkLabel(card_fatos, text="Fatos salvos permanentemente pela Lira", font=FONT_SMALL, text_color=COLORS["text_muted"])
         lbl_sub.pack(anchor="w", padx=15, pady=(0, 8))
 
         # Status do grafo
@@ -108,13 +108,13 @@ class TabMemoria(ctk.CTkFrame):
         lbl_add = ctk.CTkLabel(card_add, text="➕  Adicionar Fato Manual", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=COLORS["text_primary"])
         lbl_add.pack(anchor="w", padx=15, pady=(12, 5))
 
-        lbl_add_sub = ctk.CTkLabel(card_add, text="Ensine algo à Hana que ela nunca esquecerá", font=FONT_SMALL, text_color=COLORS["text_muted"])
+        lbl_add_sub = ctk.CTkLabel(card_add, text="Ensine algo à Lira que ela nunca esquecerá", font=FONT_SMALL, text_color=COLORS["text_muted"])
         lbl_add_sub.pack(anchor="w", padx=15, pady=(0, 15))
 
         # Campo: Sujeito
         ctk.CTkLabel(card_add, text="Sujeito", font=FONT_SMALL, text_color=COLORS["text_secondary"]).pack(anchor="w", padx=15, pady=(5, 2))
         self.entry_sujeito = ctk.CTkEntry(
-            card_add, placeholder_text="Ex: Nakamura, Hana, Gato...",
+            card_add, placeholder_text="Ex: reskyume, Lira, Gato...",
             fg_color=COLORS["bg_darkest"], border_color=COLORS["border"],
             text_color=COLORS["text_primary"], font=FONT_BODY
         )
@@ -188,22 +188,22 @@ class TabMemoria(ctk.CTkFrame):
     def _auto_connect(self):
         """Conecta diretamente ao grafo GML, ChromaDB e SQLite no disco."""
         try:
-            from src.memory.knowledge_graph import HanaKnowledgeGraph
-            self._knowledge_graph = HanaKnowledgeGraph(persist_path=GRAPH_PATH)
+            from src.memory.knowledge_graph import LiraKnowledgeGraph
+            self._knowledge_graph = LiraKnowledgeGraph(persist_path=GRAPH_PATH)
         except Exception as e:
             logger.warning(f"[TAB MEMORIA] Não foi possível conectar ao grafo: {e}")
             self._knowledge_graph = None
 
         try:
-            from src.memory.rag_engine import HanaRAGEngine
-            self._rag_engine = HanaRAGEngine(persist_directory=CHROMA_PATH)
+            from src.memory.rag_engine import LiraRAGEngine
+            self._rag_engine = LiraRAGEngine(persist_directory=CHROMA_PATH)
         except Exception as e:
             logger.warning(f"[TAB MEMORIA] Não foi possível conectar ao RAG: {e}")
             self._rag_engine = None
 
         try:
             import sqlite3
-            db_path = os.path.join(BASE_PROJECT, "data", "hana_memory.db")
+            db_path = os.path.join(BASE_PROJECT, "data", "lira_memory.db")
             if os.path.exists(db_path):
                 self._sqlite_path = db_path
             else:
@@ -224,7 +224,7 @@ class TabMemoria(ctk.CTkFrame):
             widget.destroy()
 
         if not self._knowledge_graph:
-            lbl = ctk.CTkLabel(self.fatos_scroll, text="Sistema de memória não conectado.\nInicie a Hana (main.py) primeiro.", font=FONT_SMALL, text_color=COLORS["text_muted"])
+            lbl = ctk.CTkLabel(self.fatos_scroll, text="Sistema de memória não conectado.\nInicie a Lira (main.py) primeiro.", font=FONT_SMALL, text_color=COLORS["text_muted"])
             lbl.pack(pady=20)
             self.lbl_stats.configure(text="Nós: 0  |  Conexões: 0")
             return
@@ -235,7 +235,7 @@ class TabMemoria(ctk.CTkFrame):
         self.lbl_stats.configure(text=f"Nós: {num_nodes}  |  Conexões: {num_edges}")
 
         if num_edges == 0:
-            lbl = ctk.CTkLabel(self.fatos_scroll, text="Nenhum fato salvo ainda.\nPeça à Hana para decorar algo!", font=FONT_SMALL, text_color=COLORS["text_muted"])
+            lbl = ctk.CTkLabel(self.fatos_scroll, text="Nenhum fato salvo ainda.\nPeça à Lira para decorar algo!", font=FONT_SMALL, text_color=COLORS["text_muted"])
             lbl.pack(pady=20)
             return
 
@@ -325,7 +325,7 @@ class TabMemoria(ctk.CTkFrame):
                 row = ctk.CTkFrame(self.hist_scroll, fg_color=COLORS["bg_card"], corner_radius=6)
                 row.pack(fill="x", padx=4, pady=2)
 
-                color = COLORS["purple_neon"] if role and role.lower() == "hana" else COLORS["blue_neon"]
+                color = COLORS["purple_neon"] if role and role.lower() == "lira" else COLORS["blue_neon"]
                 display_role = role or "?"
                 preview = content or ""
                 

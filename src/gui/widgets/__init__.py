@@ -1,1 +1,1 @@
-"""Widgets compartilhados da GUI Hana."""
+"""Widgets compartilhados da GUI Lira."""

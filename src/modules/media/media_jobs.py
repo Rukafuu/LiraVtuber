@@ -1,5 +1,5 @@
 """
-Orquestrador e servicos de midia da Hana.
+Orquestrador e servicos de midia da Lira.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def _resolve_media_root(folder_name: str, fallback_root: str) -> str:
         return fallback
 
 
-DEFAULT_MUSIC_DIR = _resolve_media_root("Hana Music", "Music")
+DEFAULT_MUSIC_DIR = _resolve_media_root("Lira Music", "Music")
 
 
 def get_media_settings() -> dict:
@@ -338,7 +338,7 @@ class MediaJobManager:
             self._jobs[job_id] = job
             self._cancel_events[job_id] = cancel_event
 
-        threading.Thread(target=self._run_job, args=(job_id,), daemon=True, name=f"HanaMedia-{job_id}").start()
+        threading.Thread(target=self._run_job, args=(job_id,), daemon=True, name=f"LiraMedia-{job_id}").start()
         return job_id
 
     def get_status(self, job_id: str) -> dict:
@@ -440,7 +440,7 @@ def get_media_job_manager() -> MediaJobManager:
         return _MEDIA_JOB_MANAGER
 
 
-class HanaMusicGen:
+class LiraMusicGen:
     def __init__(self):
         self._manager = get_media_job_manager()
 

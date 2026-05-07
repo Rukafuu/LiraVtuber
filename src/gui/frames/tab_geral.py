@@ -1,5 +1,5 @@
 """
-Tab Geral — Dashboard de Status do Sistema Hana.
+Tab Geral — Dashboard de Status do Sistema Lira.
 Mostra CPU, RAM, módulos ativos e motor LLM em tempo real.
 """
 
@@ -21,7 +21,7 @@ from src.config.config_loader import CONFIG
 
 
 class TabGeral(ctk.CTkFrame):
-    """Dashboard — visão geral do sistema Hana."""
+    """Dashboard — visão geral do sistema Lira."""
 
     def __init__(self, master, **kwargs):
         super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
@@ -31,7 +31,7 @@ class TabGeral(ctk.CTkFrame):
         # ─── HEADER ───
         header = ctk.CTkLabel(self, text="🖥  Monitor Geral", font=FONT_TITLE, text_color=COLORS["text_primary"])
         header.grid(row=0, column=0, columnspan=2, padx=25, pady=(20, 5), sticky="w")
-        sub = ctk.CTkLabel(self, text="Status em tempo real de todos os subsistemas da Hana", font=FONT_SMALL, text_color=COLORS["text_muted"])
+        sub = ctk.CTkLabel(self, text="Status em tempo real de todos os subsistemas da Lira", font=FONT_SMALL, text_color=COLORS["text_muted"])
         sub.grid(row=1, column=0, columnspan=2, padx=25, pady=(0, 15), sticky="w")
 
         # ─── CARD: RECURSOS DO SISTEMA ───

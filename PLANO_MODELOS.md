@@ -9,11 +9,11 @@ Atualizar os catalogos de modelos exibidos nas telas:
 - `src/gui/frames/tab_llm.py`
 - `src/gui/frames/tab_chat.py`
 
-Sem alterar ainda a arquitetura principal da Hana.
+Sem alterar ainda a arquitetura principal da Lira.
 
-## Contexto da Hana
+## Contexto da Lira
 
-A Hana hoje opera em dois modos principais:
+A Lira hoje opera em dois modos principais:
 
 ### 1. Modo Terminal
 
@@ -27,7 +27,7 @@ Responsabilidades:
 - Receber resposta com tags XML
 - Executar acoes silenciosas a partir dessas tags
 
-Esse modo e o nucleo operacional da Hana.
+Esse modo e o nucleo operacional da Lira.
 
 ### 2. Modo GUI
 
@@ -46,7 +46,7 @@ Responsabilidades:
 - Conversa por chat visual
 - Ativacao e desativacao de funcoes
 
-Esse modo e o painel interativo e visual da Hana, separado do fluxo terminal.
+Esse modo e o painel interativo e visual da Lira, separado do fluxo terminal.
 
 ## Diagnostico Atual
 

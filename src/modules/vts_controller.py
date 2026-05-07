@@ -24,8 +24,8 @@ except ImportError:
 
 
 class VTSController:
-    PLUGIN_NAME = "HanaAI"
-    DEVELOPER_NAME = "Nakamura"
+    PLUGIN_NAME = "LiraAI"
+    DEVELOPER_NAME = "Amarinth"
     TOKEN_PATH = os.path.abspath("data/vts_token.txt")
     STATE_PATH = os.path.abspath("data/vts_state.json")
     HEARTBEAT_SECONDS = 4.0
@@ -343,7 +343,7 @@ class VTSController:
             current_y += (target_y - current_y) * 0.1
             angle_z = math.sin(t * 0.5) * 4
             breath = (math.sin(t * 1.5) + 1) / 2
-            is_speaking = bool(self.signals and getattr(self.signals, "HANA_SPEAKING", False))
+            is_speaking = bool(self.signals and getattr(self.signals, "LIRA_SPEAKING", False))
 
             eye_open = 1.0
             if random.random() < 0.02 or (t % 4.0 < 0.15):

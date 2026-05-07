@@ -1,5 +1,5 @@
 """
-Tab Persona — Editor da personalidade da Hana (persona.txt).
+Tab Persona — Editor da personalidade da Lira (persona.txt).
 Mudanças são captadas pelo terminal no próximo turno automaticamente.
 """
 
@@ -15,7 +15,7 @@ PERSONA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "pe
 
 
 class TabPersona(ctk.CTkFrame):
-    """Editor da personalidade da Hana — persona.txt."""
+    """Editor da personalidade da Lira — persona.txt."""
 
     def __init__(self, master, **kwargs):
         super().__init__(master, corner_radius=12, fg_color=COLORS["bg_dark"], border_width=2, border_color=COLORS["border_strong"])
@@ -23,11 +23,11 @@ class TabPersona(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
 
         # ─── HEADER ───
-        header = ctk.CTkLabel(self, text="📝  Persona — Personalidade da Hana", font=FONT_TITLE, text_color=COLORS["text_primary"])
+        header = ctk.CTkLabel(self, text="📝  Persona — Personalidade da Lira", font=FONT_TITLE, text_color=COLORS["text_primary"])
         header.grid(row=0, column=0, padx=25, pady=(20, 2), sticky="w")
         sub = ctk.CTkLabel(
             self,
-            text="Edite a personalidade da Hana. O terminal usa a versão salva no próximo turno automaticamente.",
+            text="Edite a personalidade da Lira. O terminal usa a versão salva no próximo turno automaticamente.",
             font=FONT_SMALL, text_color=COLORS["text_muted"]
         )
         sub.grid(row=1, column=0, padx=25, pady=(0, 12), sticky="w")
@@ -96,7 +96,7 @@ class TabPersona(ctk.CTkFrame):
                 self.lbl_status.configure(text=f"✓ Carregado ({len(conteudo)} chars)", text_color=COLORS["green"])
             else:
                 self.editor.delete("1.0", "end")
-                self.editor.insert("1.0", "Eu sou a Hana AM Nakamura...")
+                self.editor.insert("1.0", "Eu sou a Lira AM Amarinth...")
                 self.lbl_status.configure(text="Arquivo não encontrado — template criado", text_color=COLORS["yellow"])
         except Exception as e:
             self.lbl_status.configure(text=f"Erro: {e}", text_color=COLORS["red"])

@@ -1,4 +1,4 @@
-﻿# Configuracao da Hana
+﻿# Configuracao da Lira
 
 Os defaults publicos ficam em `src/config/config.example.json`. O arquivo real do usuario e `src/config/config.json`.
 

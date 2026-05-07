@@ -19,4 +19,4 @@ def test_video_generation_jobs_are_rejected():
     manager = MediaJobManager()
 
     with pytest.raises(MediaJobError):
-        manager.submit("video", "trailer da Hana", "test")
+        manager.submit("video", "trailer da Lira", "test")

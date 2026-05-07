@@ -64,6 +64,16 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
     ModelSpec("gpt-4o-mini", "GPT-4o Mini", "openai", "openai_api", "gpt", 128000, "fast", supports_vision=True),
     ModelSpec("o3", "o3", "openai", "openai_api", "o-series", 200000, "medium"),
     ModelSpec("o4-mini", "o4 Mini", "openai", "openai_api", "o-series", 200000, "fast"),
+    # Ollama (local)
+    ModelSpec("llama3.2", "Llama 3.2 3B", "ollama", "ollama_local", "llama", 131072, "fast"),
+    ModelSpec("llama3.2:1b", "Llama 3.2 1B", "ollama", "ollama_local", "llama", 131072, "fast"),
+    ModelSpec("llama3.1:8b", "Llama 3.1 8B", "ollama", "ollama_local", "llama", 131072, "medium"),
+    ModelSpec("llama3.1:70b", "Llama 3.1 70B", "ollama", "ollama_local", "llama", 131072, "slow"),
+    ModelSpec("gemma3:4b", "Gemma 3 4B", "ollama", "ollama_local", "gemma", 131072, "fast"),
+    ModelSpec("gemma3:12b", "Gemma 3 12B", "ollama", "ollama_local", "gemma", 131072, "medium"),
+    ModelSpec("mistral", "Mistral 7B", "ollama", "ollama_local", "mistral", 32768, "medium"),
+    ModelSpec("qwen2.5:7b", "Qwen 2.5 7B", "ollama", "ollama_local", "qwen", 131072, "medium"),
+    ModelSpec("phi4", "Phi-4 14B", "ollama", "ollama_local", "phi", 131072, "medium"),
     # OpenRouter
     ModelSpec("openai/gpt-5.4", "OpenAI GPT-5.4", "openrouter", "openrouter_api", "gpt", 1048576, "medium", supports_vision=True),
     ModelSpec("openai/gpt-5.4-mini", "OpenAI GPT-5.4 Mini", "openrouter", "openrouter_api", "gpt", 400000, "fast", supports_vision=True),
@@ -169,7 +179,7 @@ VOICE_CATALOG: tuple[VoiceSpec, ...] = (
 
 
 def get_llm_providers() -> list[str]:
-    return ["groq", "google_cloud", "cerebras", "openrouter", "openai"]
+    return ["ollama", "groq", "google_cloud", "cerebras", "openrouter", "openai"]
 
 
 def get_tts_providers() -> list[str]:

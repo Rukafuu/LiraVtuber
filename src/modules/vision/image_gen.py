@@ -1,10 +1,10 @@
 """
-Módulo de Geração e Edição de Imagens da Hana — via Gemini 2.5 Flash Image.
+Módulo de Geração e Edição de Imagens da Lira — via Gemini 2.5 Flash Image.
 
 Usa o SDK google.genai com response_modalities=["TEXT", "IMAGE"]
 para gerar e editar imagens.
 
-Salva as imagens em: ~/Pictures/Hana Artista (auto-detectado)
+Salva as imagens em: ~/Pictures/Lira Artista (auto-detectado)
 """
 
 import datetime
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_output_dir():
-    """Auto-detecta a pasta Pictures do usuário e cria 'Hana Artista' dentro."""
+    """Auto-detecta a pasta Pictures do usuário e cria 'Lira Artista' dentro."""
     try:
-        pictures = os.path.join(os.path.expanduser("~"), "Pictures", "Hana Artista")
+        pictures = os.path.join(os.path.expanduser("~"), "Pictures", "Lira Artista")
         os.makedirs(pictures, exist_ok=True)
         return pictures
     except Exception:
-        fallback = os.path.join("C:\\", "Hana Artista")
+        fallback = os.path.join("C:\\", "Lira Artista")
         os.makedirs(fallback, exist_ok=True)
         return fallback
 
@@ -35,7 +35,7 @@ def _resolve_output_dir():
 DEFAULT_OUTPUT_DIR = _resolve_output_dir()
 
 
-class HanaImageGen:
+class LiraImageGen:
     """Gerador e editor de imagens usando gemini-2.5-flash-image."""
 
     def __init__(self, output_dir: str = DEFAULT_OUTPUT_DIR):

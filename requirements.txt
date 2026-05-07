@@ -1,4 +1,6 @@
+faster-whisper>=1.0.0
 azure-cognitiveservices-speech==1.48.2
+pyvts==0.3.3
 edge-tts==7.2.8
 google-cloud-texttospeech==2.34.0
 google-cloud-storage>=2.19.0
@@ -22,3 +24,8 @@ chromadb>=0.4.0
 networkx>=3.0
 sentence-transformers>=2.2.0
 scikit-learn>=1.0
+youtube-transcript-api>=0.6.0
+pytest>=8.0
+fastapi>=0.110.0
+uvicorn>=0.29.0
+websockets>=12.0

@@ -1,15 +1,15 @@
 """
-Hana Control Center — Painel Premium (CustomTkinter).
+Lira Control Center — Painel Premium (CustomTkinter).
 
 Janela principal com sidebar de navegação e 8 abas dinâmicas.
 Design: Dark Mode com acento customizável, transparência via pywinstyles.
 
 Uso standalone:
-    python -m src.gui.hana_gui
+    python -m src.gui.lira_gui
 
 Uso integrado:
-    from src.gui.hana_gui import HanaControlCenter
-    gui = HanaControlCenter()
+    from src.gui.lira_gui import LiraControlCenter
+    gui = LiraControlCenter()
     gui.mainloop()
 """
 
@@ -27,8 +27,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.config.config_loader import CONFIG
 from src.gui.design import COLORS, FONT_SMALL, reload_colors
 
-# Caminho da foto de perfil da Hana
-PROFILE_PHOTO_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "image", "hana_perfil.png")
+# Caminho da foto de perfil da Lira
+PROFILE_PHOTO_PATH = r"C:\Users\conta\OneDrive\Imagens\Lira\lira icon new.png"
 
 # =====================================================
 # JANELA PRINCIPAL
@@ -52,8 +52,8 @@ def _hide_console_window():
         logger.debug("[GUI] Nao foi possivel esconder o console: %s", exc)
 
 
-class HanaControlCenter(ctk.CTk):
-    """Painel de Controle Premium da Hana."""
+class LiraControlCenter(ctk.CTk):
+    """Painel de Controle Premium da Lira."""
 
     def __init__(self):
         super().__init__()
@@ -64,7 +64,7 @@ class HanaControlCenter(ctk.CTk):
         reload_colors(accent)
 
         # --- Janela ---
-        self.title("HANA OS — Control Center")
+        self.title("LIRA — Control Center")
         self.geometry("1200x750")
         self.minsize(950, 650)
         self.configure(fg_color=COLORS["bg_darkest"])
@@ -89,7 +89,7 @@ class HanaControlCenter(ctk.CTk):
         self.sidebar.grid_rowconfigure(15, weight=1)
         self.sidebar.grid_propagate(False)
 
-        # ── Foto de Perfil da Hana ──
+        # ── Foto de Perfil da Lira ──
         try:
             photo_path = os.path.abspath(PROFILE_PHOTO_PATH)
             if os.path.exists(photo_path):
@@ -114,9 +114,9 @@ class HanaControlCenter(ctk.CTk):
             )
             self.logo_img.grid(row=0, column=0, padx=20, pady=(20, 3))
 
-        # Nome da Hana abaixo da foto
+        # Nome da Lira abaixo da foto
         self.logo_name = ctk.CTkLabel(
-            self.sidebar, text="HANA OS",
+            self.sidebar, text="LIRA",
             font=ctk.CTkFont(family="Consolas", size=18, weight="bold"),
             text_color=COLORS["purple_neon"]
         )
@@ -140,7 +140,7 @@ class HanaControlCenter(ctk.CTk):
             ("🖥  Monitor Geral",     4,  "geral"),
             ("🧠  Cérebro",           5,  "llm"),
             ("💾  Memória",           6,  "memoria"),
-            ("💭  Mente da Hana",    7,  "emocoes"),
+            ("💭  Mente da Lira",    7,  "emocoes"),
             ("🎭  VTube Studio",     8,  "vtube"),
             ("💬  Chat do Controle",  9,  "chat"),
             ("📝  Persona",          10, "persona"),
@@ -318,9 +318,9 @@ class HanaControlCenter(ctk.CTk):
 
 def main():
     """Abre o painel em modo standalone."""
-    if "--hide-console" in sys.argv or os.environ.get("HANA_GUI_HIDE_CONSOLE") == "1":
+    if "--hide-console" in sys.argv or os.environ.get("LIRA_GUI_HIDE_CONSOLE") == "1":
         _hide_console_window()
-    app = HanaControlCenter()
+    app = LiraControlCenter()
     app.mainloop()
 
 

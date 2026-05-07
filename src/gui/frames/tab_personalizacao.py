@@ -1,5 +1,5 @@
 """
-Tab Personalização — Cores, opacidade e tema visual da Hana Control Center.
+Tab Personalização — Cores, opacidade e tema visual da Lira Control Center.
 Mudanças são aplicadas em tempo real e salvas no config.json.
 """
 
@@ -18,7 +18,7 @@ try:
 except ImportError:
     HAS_PIL = False
 
-HANA_PHOTO_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "image", "hana_foto_01.png")
+LIRA_PHOTO_PATH = r"C:\Users\conta\OneDrive\Imagens\Lira\Lira.png"
 
 # Paleta de cores pré-definidas
 PRESET_COLORS = [
@@ -122,26 +122,26 @@ class TabPersonalizacao(ctk.CTkFrame):
         self.lbl_status = ctk.CTkLabel(card_cores, text="", font=FONT_SMALL, text_color=COLORS["green"])
         self.lbl_status.pack(pady=(0, 10))
 
-        # ═══ COLUNA DIREITA: Foto da Hana ═══
+        # ═══ COLUNA DIREITA: Foto da Lira ═══
         card_foto = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=12, border_width=2, border_color=COLORS["border"])
         card_foto.grid(row=2, column=1, padx=(8, 15), pady=8, sticky="nsew")
 
         try:
-            path = os.path.abspath(HANA_PHOTO_PATH)
+            path = os.path.abspath(LIRA_PHOTO_PATH)
             if os.path.exists(path) and HAS_PIL:
                 pil_img = PILImage.open(path)
                 img_ctk = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(320, 400))
                 lbl_img = ctk.CTkLabel(card_foto, image=img_ctk, text="")
                 lbl_img.pack(padx=20, pady=20)
             else:
-                lbl_img = ctk.CTkLabel(card_foto, text="🌸\n\nHana Nakamura", font=FONT_TITLE, text_color=COLORS["text_muted"])
+                lbl_img = ctk.CTkLabel(card_foto, text="🌸\n\nLira", font=FONT_TITLE, text_color=COLORS["text_muted"])
                 lbl_img.pack(padx=20, pady=60)
         except Exception:
-            lbl_img = ctk.CTkLabel(card_foto, text="🌸\n\nHana Nakamura", font=FONT_TITLE, text_color=COLORS["text_muted"])
+            lbl_img = ctk.CTkLabel(card_foto, text="🌸\n\nLira", font=FONT_TITLE, text_color=COLORS["text_muted"])
             lbl_img.pack(padx=20, pady=60)
 
-        ctk.CTkLabel(card_foto, text="H A N A", font=("Consolas", 24, "bold"), text_color=COLORS["purple_neon"]).pack(pady=(0, 5))
-        ctk.CTkLabel(card_foto, text="Drowsy Onee-san  •  v1.0", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(pady=(0, 15))
+        ctk.CTkLabel(card_foto, text="L I R A", font=("Consolas", 24, "bold"), text_color=COLORS["purple_neon"]).pack(pady=(0, 5))
+        ctk.CTkLabel(card_foto, text="Entidade Digital  •  v1.0", font=FONT_SMALL, text_color=COLORS["text_muted"]).pack(pady=(0, 15))
 
     def _selecionar_cor(self, hex_cor: str):
         """Seleciona uma cor de acento e atualiza o preview."""
