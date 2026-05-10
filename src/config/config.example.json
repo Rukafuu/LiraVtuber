@@ -3,7 +3,7 @@
     "_nota": "Copie para src/config/config.json para ajustes locais. Nunca coloque chaves aqui.",
     "user_role_name": "Usuario",
     "assistant_role_name": "Lira",
-    "LLM_PROVIDER": "groq",
+    "LLM_PROVIDER": "openrouter",
     "LLM_TEMPERATURE": 0.85,
     "LLM_PROVIDERS": {
         "groq": {
@@ -19,9 +19,9 @@
             "modelo_vision": "gemini-2.5-flash"
         },
         "openrouter": {
-            "modelo": "google/gemini-2.5-flash",
-            "modelo_chat": "google/gemini-2.5-flash",
-            "modelo_vision": "google/gemini-2.5-flash"
+            "modelo": "openrouter/owl-alpha",
+            "modelo_chat": "openrouter/owl-alpha",
+            "modelo_vision": "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free"
         },
         "openai": {
             "modelo": "gpt-4.1-mini",
@@ -35,13 +35,13 @@
         }
     },
     "CHAT": {
-        "LLM_PROVIDER": "groq",
-        "LLM_MODEL": "llama-3.1-8b-instant",
+        "LLM_PROVIDER": "openrouter",
+        "LLM_MODEL": "openrouter/owl-alpha",
         "LLM_TEMPERATURE": 0.85,
         "usa_mesmo_prompt_terminal": false,
         "response_mode": "adaptive",
         "auto_route_media": true,
-        "media_model": "gemini-2.5-flash",
+        "media_model": "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free",
         "max_output_tokens_normal": 4096,
         "max_output_tokens_media": 8192,
         "markdown_enabled": true
