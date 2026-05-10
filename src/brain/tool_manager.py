@@ -50,6 +50,18 @@ FERRAMENTAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "ler_tela_ocr",
+            "description": "Tira uma captura da tela e extrai todo o texto visivel usando uma IA focada em OCR. Use isso quando o usuario pedir para 'ler a tela', 'ver o que esta escrito', ou extrair um texto que esta na tela do computador dele.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -83,8 +95,63 @@ class ToolManager:
         if nome_tool == "pesquisa_web":
             return self._despachar_web(args)
 
+        if nome_tool == "ler_tela_ocr":
+            return self._despachar_ocr(args)
+
         logger.warning(f"[TOOL MANAGER] Tool desconhecida: {nome_tool}")
         return ("Menu_Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
+
+    def _despachar_ocr(self, args: dict) -> tuple:
+        import os
+        import json
+        import urllib.request
+        from src.modules.vision.periodic_vision import VisaoNyra
+
+        try:
+            visao = VisaoNyra()
+            captura = visao.capturar()
+            if not captura.get("sucesso"):
+                return ("Erro ao capturar tela.", "Não consegui olhar para a tela agora.")
+                
+            b64 = captura.get("b64")
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                return ("OPENROUTER_API_KEY ausente.", "Minha chave de visão OCR não está configurada.")
+
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                data=json.dumps({
+                    "model": "baidu/qianfan-ocr-fast:free",
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extraia todo o texto desta imagem. Apenas o texto, sem formatação extra."},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+                        ]
+                    }]
+                }).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/rukafuu/HanaNakamura-VTuber-OSS",
+                    "X-Title": "Hana Nakamura"
+                },
+                method="POST"
+            )
+
+            with urllib.request.urlopen(req, timeout=15) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                texto_extraido = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            if not texto_extraido or len(texto_extraido.strip()) < 2:
+                return ("Nenhum texto encontrado.", "Olhei para a tela, mas não consegui ler nenhum texto lá.")
+                
+            bloco_retorno = f"--- TEXTO EXTRAÍDO DA TELA (OCR) ---\n{texto_extraido}\n--- FIM ---"
+            return (bloco_retorno, "Acabei de dar uma lida na sua tela, processando os textos...")
+
+        except Exception as e:
+            logger.error(f"[TOOL OCR] Erro: {e}")
+            return (f"Erro no OCR: {e}", "Tive um problema ao tentar ler a sua tela.")
 
     def _despachar_web(self, args: dict) -> tuple:
         query = args.get("query", "")
