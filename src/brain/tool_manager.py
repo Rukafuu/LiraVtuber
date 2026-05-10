@@ -62,6 +62,35 @@ FERRAMENTAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "gerar_imagem",
+            "description": (
+                "Gera uma imagem usando IA (modelo FLUX via Pollinations.ai) com base em uma descricao em texto. "
+                "Use quando o usuario pedir para 'criar uma imagem', 'gerar uma foto', 'desenhar', 'mostrar como ficaria', etc. "
+                "Retorna o caminho local da imagem gerada para exibicao na interface."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Descricao detalhada da imagem a ser gerada, preferencialmente em ingles para melhor resultado.",
+                    },
+                    "largura": {
+                        "type": "integer",
+                        "description": "Largura da imagem em pixels (padrao: 768). Use 512 para rapido, 1024 para alta qualidade.",
+                    },
+                    "altura": {
+                        "type": "integer",
+                        "description": "Altura da imagem em pixels (padrao: 768).",
+                    }
+                },
+                "required": ["prompt"],
+            },
+        },
+    },
 ]
 
 
@@ -98,8 +127,48 @@ class ToolManager:
         if nome_tool == "ler_tela_ocr":
             return self._despachar_ocr(args)
 
+        if nome_tool == "gerar_imagem":
+            return self._despachar_imagem(args)
+
         logger.warning(f"[TOOL MANAGER] Tool desconhecida: {nome_tool}")
         return ("Menu_Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
+
+    def _despachar_imagem(self, args: dict) -> tuple:
+        """Gera uma imagem via Pollinations.ai (FLUX) — gratuito, sem chave API."""
+        import urllib.request
+        import urllib.parse
+        import os
+        import time
+
+        prompt = args.get("prompt", "")
+        if not prompt:
+            return ("Prompt vazio.", "Me diz o que você quer que eu desenhe!")
+
+        largura = args.get("largura", 768)
+        altura = args.get("altura", 768)
+        seed = int(time.time())
+
+        try:
+            encoded = urllib.parse.quote(prompt)
+            url = f"https://image.pollinations.ai/prompt/{encoded}?width={largura}&height={altura}&model=flux&nologo=true&seed={seed}"
+            logger.info(f"[TOOL IMAGEM] Gerando: {prompt[:60]}...")
+
+            os.makedirs("temp", exist_ok=True)
+            caminho = os.path.join("temp", f"imagem_gerada_{seed}.jpg")
+
+            req = urllib.request.Request(url, headers={"User-Agent": "HanaNakamura/1.0"})
+            with urllib.request.urlopen(req, timeout=60) as response:
+                with open(caminho, "wb") as f:
+                    f.write(response.read())
+
+            caminho_abs = os.path.abspath(caminho)
+            logger.info(f"[TOOL IMAGEM] Imagem salva em: {caminho_abs}")
+            bloco_retorno = f"[IMAGEM_GERADA:{caminho_abs}]"
+            return (bloco_retorno, f"Criei uma imagem com o tema: {prompt[:60]}. Deixa eu te mostrar!")
+
+        except Exception as e:
+            logger.error(f"[TOOL IMAGEM] Erro: {e}")
+            return (f"Erro ao gerar imagem: {e}", "Tive um probleminha ao tentar criar a imagem, desculpa!")
 
     def _despachar_ocr(self, args: dict) -> tuple:
         import os
