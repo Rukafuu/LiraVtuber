@@ -305,18 +305,31 @@ class MotorSTTWhisper:
         if not caminho_wav:
             return ""
 
-        ui.print_linha("PROCESSANDO", ui.C_STT, "WHISPER LOCAL", "⚙️", "🎙️")
+        ui.print_linha("PROCESSANDO", ui.C_STT, "GROQ/WHISPER", "⚙️", "🎙️")
 
         texto_transcrito = ""
         try:
-            model = _get_whisper_model()
-            segments, _ = model.transcribe(
-                caminho_wav,
-                language=self.idioma,
-                beam_size=5,
-                vad_filter=True,
-            )
-            texto_transcrito = " ".join(seg.text.strip() for seg in segments).strip()
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key:
+                from openai import OpenAI
+                client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+                with open(caminho_wav, "rb") as audio_file:
+                    transcription = client.audio.transcriptions.create(
+                        model="whisper-large-v3-turbo", 
+                        file=audio_file,
+                        language=self.idioma
+                    )
+                texto_transcrito = transcription.text.strip()
+            else:
+                model = _get_whisper_model()
+                segments, _ = model.transcribe(
+                    caminho_wav,
+                    language=self.idioma,
+                    beam_size=5,
+                    vad_filter=True,
+                )
+                texto_transcrito = " ".join(seg.text.strip() for seg in segments).strip()
+
             texto_limpo = texto_transcrito.lower().strip()
 
             if texto_limpo in FRASES_FANTASMAS_STT or self._eh_frase_fantasma(texto_transcrito):
