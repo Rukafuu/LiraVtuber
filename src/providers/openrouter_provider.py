@@ -17,9 +17,9 @@ class OpenRouterProvider(BaseLLM):
     def __init__(self):
         self.provedor = "openrouter"
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-        self.modelo_chat = prov_cfg.get("modelo", prov_cfg.get("modelo_chat", "google/gemini-3.1-pro-preview"))
-        self.modelo_vision = prov_cfg.get("modelo_vision", "google/gemini-3.1-pro-preview")
-        self.modelo_fallback_vision = prov_cfg.get("modelo_vision", "google/gemini-3.1-pro-preview")
+        self.modelo_chat = prov_cfg.get("modelo", prov_cfg.get("modelo_chat", "openrouter/owl-alpha"))
+        self.modelo_vision = prov_cfg.get("modelo_vision", "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free")
+        self.modelo_fallback_vision = prov_cfg.get("modelo_fallback_vision", "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free")
         super().__init__()
 
     def _criar_cliente(self):
@@ -46,15 +46,27 @@ class OpenRouterProvider(BaseLLM):
         payload_messages = list(mensagens)
         if image_b64:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-            modelo_exec = prov_cfg.get("modelo_vision", modelo)
+            # Força o uso do modelo de visão se estiver configurado, senão tenta o atual
+            modelo_exec = prov_cfg.get("modelo_vision", self.modelo_vision or modelo)
+            
+            # Tenta detectar se é PNG ou JPEG pelo começo do base64 (simplificado)
+            mime_type = "image/png"
+            if image_b64.startswith("/9j/"):
+                mime_type = "image/jpeg"
+            elif image_b64.startswith("iVBOR"):
+                mime_type = "image/png"
+            elif image_b64.startswith("R0lGOD"):
+                mime_type = "image/gif"
+                
             ultima_msg = payload_messages[-1]
             payload_messages[-1] = {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": ultima_msg["content"]},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}},
                 ],
             }
+            logger.info(f"[OPENROUTER] Ativando modo VISÃO com modelo: {modelo_exec}")
         return modelo_exec, payload_messages
 
     def _chamar_api(
@@ -95,20 +107,27 @@ class OpenRouterProvider(BaseLLM):
         request_context: dict | None = None,
     ):
         modelo_exec, payload_messages = self._prepare_messages(modelo, mensagens, image_b64=image_b64)
+        print(f"\n[DEBUG OPENROUTER] Modelo: {modelo_exec}")
+        print(f"[DEBUG OPENROUTER] Tem Imagem: {bool(image_b64)}")
+        
         self.last_request_meta = {
             "provider": self.provedor,
             "model": modelo_exec,
             "backend": "openrouter_api",
             "routed": False,
         }
-        stream = self.cliente.chat.completions.create(
-            model=modelo_exec,
-            messages=payload_messages,
-            temperature=self.temperatura,
-            max_tokens=(request_context or {}).get("max_output_tokens", 8192),
-            stream=True,
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
-                yield delta.content
+        try:
+            stream = self.cliente.chat.completions.create(
+                model=modelo_exec,
+                messages=payload_messages,
+                temperature=self.temperatura,
+                max_tokens=(request_context or {}).get("max_output_tokens", 8192),
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    yield delta.content
+        except Exception as api_err:
+            print(f"[DEBUG OPENROUTER] ERRO FATAL API: {api_err}")
+            raise api_err
