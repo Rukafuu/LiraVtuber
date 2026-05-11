@@ -13,9 +13,18 @@ import uvicorn
 
 import os
 import sys
+import io
 import datetime
 import threading
 import uuid
+
+# Força o console a usar UTF-8 para evitar erros com emojis no Windows
+if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.config.config_loader import CONFIG
@@ -109,10 +118,15 @@ async def get_chat_history(limit: int = 50):
 
 @app.post("/api/whatsapp/chat")
 async def whatsapp_chat(payload: dict):
+    print('\n--- [WHATSAPP] NOVA MENSAGEM ---', flush=True)
     """Recebe mensagens do bridge do WhatsApp e retorna a resposta da Lira."""
     user_message = payload.get("message", "").strip()
     sender_name = payload.get("sender", "Usuário do WhatsApp")
     jid = payload.get("jid", sender_name)
+    image_b64 = payload.get("image_b64")
+    
+    if image_b64:
+        print("[WHATSAPP] Imagem detectada no anexo!", flush=True)
     
     if not user_message:
         return {"status": "error", "message": "Mensagem vazia"}
@@ -263,19 +277,21 @@ async def whatsapp_chat(payload: dict):
         attachments_overview="Nenhum anexo."
     )
 
-    # Prepara mensagens para o provedor
     messages = [
         {"role": "system", "content": sistema_prompt},
         {"role": "user", "content": user_message}
     ]
 
     try:
-        # Chama a API de forma sincrona em thread (reusando a logica do Discord bot)
+        print("[PASSO 3] Chamando LLM API Multimodal...", flush=True)
+        # Chama a API passando a imagem explicitamente para o provedor
         resposta = await asyncio.to_thread(
             llm._chamar_api,
             model_id,
             messages,
+            image_b64=image_b64
         )
+        print("[PASSO 4] Resposta recebida da LLM.", flush=True)
         response_text = resposta.choices[0].message.content or ""
         
         # Gamificação: Ganho de XP (WhatsApp)
@@ -286,9 +302,11 @@ async def whatsapp_chat(payload: dict):
         image_path = None
         match_img = re.search(r'\[GEN_IMAGE:\s*(.*?)\]', response_text, flags=re.IGNORECASE)
         if match_img:
+            print("[PASSO 5] Intenção de imagem detectada.", flush=True)
             from src.modules.vision.image_gen import LiraImageGen
             igen = LiraImageGen()
             image_path = igen.generate(match_img.group(1))
+            print(f"[PASSO 5.1] Imagem gerada: {image_path}", flush=True)
 
         # Limpa as tags
         clean_response = re.sub(r'\[EMOTION:.*?\]', '', response_text, flags=re.IGNORECASE)
@@ -297,16 +315,42 @@ async def whatsapp_chat(payload: dict):
         clean_response = clean_response.strip()
         
         if leveled_up:
+            print("[PASSO 6] Processando subida de nível.", flush=True)
             user_data = lira_gamification.get_user(payload.get("jid", sender_name), "whatsapp")
             clean_response += f"\n\n✨ *SUBIU DE NÍVEL!* Parabéns, você agora é Nível *{user_data['level']}*! 🎉"
+
+        # --- GERAÇÃO DE VOZ (TTS) ---
+        print("[PASSO 7] Iniciando Geração de Voz (TTS)", flush=True)
+        audio_path = None
+        tts_ativo = CONFIG.get("TTS_ATIVO", True)
+        
+        if tts_ativo:
+            try:
+                from src.modules.voice.tts_selector import get_tts
+                tts_engine = get_tts()
+                
+                print(f"[WHATSAPP DEBUG] Usando motor TTS: {tts_engine.provedor}", flush=True)
+                # Gera o áudio mas não toca localmente (tocar_local=False)
+                print(f"[WHATSAPP DEBUG] Sintetizando: '{clean_response[:30]}...'", flush=True)
+                success = tts_engine.falar(clean_response, tocar_local=False)
+                print(f"[WHATSAPP DEBUG] Sucesso na síntese: {success}", flush=True)
+                
+                if success:
+                    audio_path = os.path.abspath("data/last_response.mp3")
+                    print(f"[WHATSAPP DEBUG] Audio Path: {audio_path}", flush=True)
+            except Exception as v_err:
+                print(f"[WHATSAPP DEBUG] Erro ao gerar voz: {v_err}", flush=True)
 
         return {
             "status": "ok", 
             "response": clean_response,
-            "image_path": os.path.abspath(image_path) if image_path else None
+            "image_path": os.path.abspath(image_path) if image_path else None,
+            "audio_path": audio_path
         }
     except Exception as e:
-        logger.error(f"[WhatsApp API] Erro ao processar chat: {e}")
+        print(f"[WHATSAPP ERRO FATAL] Erro ao processar chat: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 # === MEMORY REST ENDPOINTS ===
