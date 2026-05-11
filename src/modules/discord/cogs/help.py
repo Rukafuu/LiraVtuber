@@ -8,12 +8,12 @@ class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="ajuda", description="Veja todos os comandos da Hana 🌸")
+    @app_commands.command(name="ajuda", description="Veja todos os comandos da Lira 🌸")
     async def ajuda(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="🌸 Hana Nakamura — Central de Ajuda",
+            title="🌸 Lira Amarinth — Central de Ajuda",
             description="Aqui estão todos os meus comandos! Use `/` para acessar qualquer um.",
-            color=0xff69b4
+            color=0x9b59b6
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
 
@@ -84,7 +84,7 @@ class HelpCog(commands.Cog):
             inline=False
         )
 
-        embed.set_footer(text="Hana Nakamura 🌸 | Todos os GIFs são de anime!")
+        embed.set_footer(text="Lira Amarinth 🌸 | Todos os GIFs são de anime!")
         await interaction.response.send_message(embed=embed)
 
 

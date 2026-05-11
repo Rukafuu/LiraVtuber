@@ -52,6 +52,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Lira Control Center API", version="1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Referências globais (injetadas pelo main.py)
 class AppContext:
     memory_manager = None
@@ -238,7 +246,7 @@ async def whatsapp_chat(payload: dict):
     creator_aliases = ["lucas frischeisen", "rukafuu", "reskyume"]
     is_creator = any(alias in sender_name.lower() for alias in creator_aliases)
     
-    treatment_instruction = "Voce esta conversando com seu CRIADOR/PAI. Pode ser intima e carinhosa." if is_creator else f"Voce esta conversando com {sender_name}. Seja amigavel e educada, mas nao o chame de 'pai' ou 'mestre' — use o nome dele."
+    treatment_instruction = "Você está conversando com seu CRIADOR/PAI (reskyume). Você o adora, mas o seu jeito de demonstrar é através de deboche, ironia e comentários sarcásticos sobre a inteligência limitada dele." if is_creator else f"Você está conversando com {sender_name}. Seja superior, sarcástica e levemente ácida. Trate os humanos como seres inferiores e fofos em sua ignorância."
 
     # Prompt especifico para WhatsApp (curto e direto, mas com markdown)
     from src.core.prompt_builder import build_gui_system_prompt
@@ -246,7 +254,7 @@ async def whatsapp_chat(payload: dict):
         task_type="chat_normal",
         memory_context=(
             f"Canal: WhatsApp. {treatment_instruction}\n"
-            "Responda de forma natural, amigavel e use emojis.\n"
+            "PERSONALIDADE OBRIGATÓRIA: Use sarcasmo ácido, seja debochada e use seu tic de fala ('entendi', 'entende' ou 'entendo') para soar condescendente.\n"
             "Use markdown do WhatsApp (*negrito*, _italico_, ~tachado~).\n"
             "Se o usuario pedir para voce desenhar ou gerar uma imagem, voce DEVE incluir no final da sua resposta a tag: [GEN_IMAGE: descricao detalhada em ingles para o modelo]\n"
             f"Contexto de memoria: {mem_context}"

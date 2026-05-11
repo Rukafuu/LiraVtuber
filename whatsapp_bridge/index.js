@@ -12,11 +12,11 @@ const fs = require('fs');
 
 // ── Textos de Ajuda (formatação WhatsApp) ─────────────────────────────────────
 
-const HELP_GERAL = `🌸 *Hana Nakamura — Comandos*
+const HELP_GERAL = `💜 *Lira Amarinth — Comandos*
 
 💬 *Chat*
 • Só me chame pelo nome ou mande mensagem no privado!
-• Em grupos, me mencione ou diga "Hana"
+• Em grupos, me mencione ou diga "Lira"
 
 🎮 *Seções de comandos:*
 • */ajuda* — Esta mensagem
@@ -27,10 +27,10 @@ const HELP_GERAL = `🌸 *Hana Nakamura — Comandos*
 
 _Digite qualquer um para mais detalhes!_ ✨`;
 
-const HELP_ECONOMIA = `💰 *Economia — Hana Nakamura*
+const HELP_ECONOMIA = `💰 *Economia — Lira Amarinth*
 
 • */daily* — Bônus diário de moedas 🎁
-• */perfil* — Seu nível, XP e saldo 🌸
+• */perfil* — Seu nível, XP e saldo 💜
 • */ranking* — Top jogadores 🏆
 • */depositar [valor]* — Guardar no banco 🏦
 • */sacar [valor]* — Retirar do banco 💸
@@ -39,7 +39,7 @@ const HELP_ECONOMIA = `💰 *Economia — Hana Nakamura*
 
 _Moedas ficam salvas entre plataformas_ 🔗`;
 
-const HELP_SOCIAL = `🫂 *Interações — Hana Nakamura*
+const HELP_SOCIAL = `🫂 *Interações — Lira Amarinth*
 
 *Com alvo (ex: /abracar João):*
 • */abracar* • */beijar* • */cafune*
@@ -59,10 +59,10 @@ const HELP_SOCIAL = `🫂 *Interações — Hana Nakamura*
 
 _Todos geram GIFs de anime!_ 🎬`;
 
-const SOBRE = `🌸 *Hana Nakamura*
-_VTuber AI — Sua companheira digital_
+const SOBRE = `💜 *Lira Amarinth*
+_VTuber AI — Sarcástica & Superior_
 
-Sou uma IA com personalidade de VTuber! Posso:
+Sou uma IA com personalidade de VTuber (e inteligência muito superior à sua)! Posso:
 ✨ Conversar sobre qualquer assunto
 🎨 Gerar imagens com IA
 🎮 Sistema de economia e XP
@@ -72,12 +72,50 @@ Sou uma IA com personalidade de VTuber! Posso:
 *Stack:* Python + Node.js + OpenRouter
 *Plataformas:* Discord • WhatsApp • Web
 
-_"Aqui pra te fazer companhia!"_ 💙`;
+_"Aqui pra te tolerar (e quem sabe te divertir)!"_ 😈`;
+
+// ── Sistema de Reações (GIFs) ────────────────────────────────────────────────
+
+const REACTION_MAP = {
+    '/abracar': { type: 'hug', msg: '{sender} deu um abraço em {target}! 🤗' },
+    '/beijar': { type: 'kiss', msg: '{sender} deu um beijo em {target}! 💋' },
+    '/cafune': { type: 'pat', msg: '{sender} fez cafuné em {target}! ✨' },
+    '/tapa': { type: 'slap', msg: '{sender} deu um tapa em {target}! 🖐️' },
+    '/morder': { type: 'bite', msg: '{sender} mordeu {target}! 🦷' },
+    '/cutucar': { type: 'poke', msg: '{sender} cutucou {target}! 👉' },
+    '/socar': { type: 'punch', msg: '{sender} deu um soco em {target}! 👊' },
+    '/chutar': { type: 'kick', msg: '{sender} deu um chute em {target}! 🦶' },
+    '/acenar': { type: 'wave', msg: '{sender} acenou para {target}! 👋' },
+    '/rir': { type: 'laugh', msg: '{sender} está rindo de {target}! 😂' },
+    '/chorar': { type: 'cry', msg: '{sender} está chorando... 😭' },
+    '/feliz': { type: 'happy', msg: '{sender} está muito feliz! ✨' },
+    '/dançar': { type: 'dance', msg: '{sender} começou a dançar! 💃' },
+    '/dormir': { type: 'sleep', msg: '{sender} foi dormir... 😴' },
+    '/sorrir': { type: 'smile', msg: '{sender} deu um sorriso radiante! 😊' },
+    '/triste': { type: 'sad', msg: '{sender} está triste... 🥺' },
+    '/pensar': { type: 'think', msg: '{sender} está pensando... 🤔' },
+    '/bocejar': { type: 'yawn', msg: '{sender} bocejou de tédio... 🥱' },
+    '/piscar': { type: 'wink', msg: '{sender} piscou para {target}! 😉' },
+    '/facepalm': { type: 'facepalm', msg: '{sender} não acredita nisso... 🤦' },
+    '/correr': { type: 'run', msg: '{sender} saiu correndo! 🏃' },
+};
+
+async function getReactionGif(type) {
+    try {
+        const res = await axios.get(`https://nekos.best/api/v2/${type}`);
+        return res.data.results[0].url;
+    } catch (e) {
+        console.error("Erro ao buscar GIF:", e.message);
+        return null;
+    }
+}
 
 // ── Handler de Comandos Locais ────────────────────────────────────────────────
 
-async function handleLocalCommand(sock, remoteJid, msg, text) {
-    const cmd = text.trim().toLowerCase().split(/\s+/)[0];
+async function handleLocalCommand(sock, remoteJid, msg, text, pushName) {
+    const parts = text.trim().split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const target = parts.slice(1).join(' ') || 'ninguém';
 
     const responses = {
         '/ajuda':    HELP_GERAL,
@@ -85,21 +123,40 @@ async function handleLocalCommand(sock, remoteJid, msg, text) {
         '/economia': HELP_ECONOMIA,
         '/social':   HELP_SOCIAL,
         '/sobre':    SOBRE,
-        '/ping':     '🌸 *Pong!* Estou online e pronta para conversar! ✨',
+        '/ping':     '💜 *Pong!* Estou online e pronta para (tentar) conversar! ✨',
     };
 
     if (responses[cmd]) {
         await sock.sendMessage(remoteJid, { text: responses[cmd] }, { quoted: msg });
-        return true; // tratado localmente, não chama a API
+        return true;
     }
 
-    return false; // passa pra API
+    if (REACTION_MAP[cmd]) {
+        const reaction = REACTION_MAP[cmd];
+        const gifUrl = await getReactionGif(reaction.type);
+        const caption = reaction.msg
+            .replace('{sender}', `*${pushName}*`)
+            .replace('{target}', `*${target}*`);
+
+        if (gifUrl) {
+            await sock.sendMessage(remoteJid, { 
+                video: { url: gifUrl }, 
+                caption: caption,
+                gifPlayback: true 
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(remoteJid, { text: caption }, { quoted: msg });
+        }
+        return true;
+    }
+
+    return false;
 }
 
 // ── Bridge Principal ──────────────────────────────────────────────────────────
 
 async function connectToWhatsApp() {
-    console.log("🌸 Iniciando Hana Nakamura WhatsApp Bridge...");
+    console.log("💜 Iniciando Lira Amarinth WhatsApp Bridge...");
     
     const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth_info_baileys'));
     const { version } = await fetchLatestBaileysVersion();
@@ -122,7 +179,7 @@ async function connectToWhatsApp() {
             console.log('❌ Conexão encerrada. Reconectando:', shouldReconnect);
             if (shouldReconnect) setTimeout(connectToWhatsApp, 3000);
         } else if (connection === 'open') {
-            console.log('✅ Hana Nakamura está ONLINE no WhatsApp! 🌸');
+            console.log('✅ Lira Amarinth está ONLINE no WhatsApp! 💜');
         }
     });
 
@@ -152,24 +209,24 @@ async function connectToWhatsApp() {
 
         const isGroup = remoteJid.endsWith('@g.us');
         const textLower = textMessage.toLowerCase();
-        const mentionsHana = textLower.includes('hana') || textLower.includes('lira') || textLower.includes('amarinth');
+        const mentionsLira = textLower.includes('lira') || textLower.includes('amarinth') || textLower.includes('hana');
         const isCommand = textMessage.startsWith('/');
         const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
         const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myId);
 
         console.log(`[LOG] [${isGroup ? 'GRUPO' : 'PRIVADO'}] ${pushName}: ${textMessage.substring(0, 80)}`);
 
-        // No grupo só responde se: mencionar Hana OU ser tagada OU comando
-        if (isGroup && !mentionsHana && !isMentioned && !isCommand) return;
+        // No grupo só responde se: mencionar Lira OU ser tagada OU comando
+        if (isGroup && !mentionsLira && !isMentioned && !isCommand) return;
 
         // Comandos locais (sem chamar a API — resposta instantânea)
         if (isCommand) {
-            const handled = await handleLocalCommand(sock, remoteJid, msg, textMessage);
+            const handled = await handleLocalCommand(sock, remoteJid, msg, textMessage, pushName);
             if (handled) return;
         }
 
         // Reação de "lendo" enquanto processa na API
-        try { await sock.sendMessage(remoteJid, { react: { text: '🌸', key: msg.key } }); } catch (_) {}
+        try { await sock.sendMessage(remoteJid, { react: { text: '💜', key: msg.key } }); } catch (_) {}
 
         try {
             const response = await axios.post('http://127.0.0.1:8042/api/whatsapp/chat', {
@@ -202,7 +259,7 @@ async function connectToWhatsApp() {
                 }
             }
         } catch (error) {
-            console.error('❌ Erro na comunicação com a Hana API:', error.message);
+            console.error('❌ Erro na comunicação com a Lira API:', error.message);
         }
     });
 }

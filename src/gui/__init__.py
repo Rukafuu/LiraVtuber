@@ -1,1 +1,0 @@
-# Lira Control Center GUI
