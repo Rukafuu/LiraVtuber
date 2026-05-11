@@ -20,7 +20,7 @@ class SileroVAD:
         try:
             # Tenta carregar localmente primeiro ou via torch hub
             model, utils = torch.hub.load(
-                repo_or_dir='snickersberg/silero-vad',
+                repo_or_dir='snakers4/silero-vad',
                 model='silero_vad',
                 force_reload=False,
                 onnx=True

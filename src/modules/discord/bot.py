@@ -6,6 +6,13 @@ import logging
 from dotenv import load_dotenv
 from .constants import logger, EMOJI
 
+import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 load_dotenv()
 
 class LiraBot(commands.Bot):
@@ -48,6 +55,14 @@ class LiraBot(commands.Bot):
         # Sincroniza em todos os servidores que o bot já está
         for guild in self.guilds:
             await self._sync_guild(guild)
+        
+        # Sincronização global extra
+        try:
+            await self.tree.sync()
+            logger.info("[DISCORD] 🌸 Sincronização global concluída!")
+        except Exception as e:
+            logger.warning(f"[DISCORD] Falha no sync global: {e}")
+
         await self.change_presence(
             activity=discord.Activity(type=discord.ActivityType.watching, name="você com carinho 🌸")
         )

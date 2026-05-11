@@ -34,6 +34,7 @@ except Exception:
 from src.brain.tool_manager import ToolManager
 from src.memory.memory_manager import LiraMemoryManager
 from src.modules.voice.stt_whisper import MotorSTTWhisper
+from src.modules.voice.tts_selector import get_tts
 from src.modules.voice.audio_control import poll_external_stop, register_stop_callback, request_global_stop
 from src.modules.vision.periodic_vision import VisaoNyra
 from src.modules.vision.awareness import start_awareness

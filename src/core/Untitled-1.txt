@@ -1,0 +1,3 @@
+# 
+
+{"llmProvider":"openrouter","llmModel":"inclusionai/ring-2.6-1t:free","llmFilter":"","llmTemperature":0.85,"visionModel":"","ttsProvider":"edge","ttsVoice":"pt-BR-GiovannaNeural","ttsModel":"","ttsFilter":"","ttsSpeed":"+10%","ttsPitch":"+2Hz","ttsStability":0.5,"ttsSimilarity":0.75,"ttsStyle":0.0,"ttsSpeakerBoost":true}
