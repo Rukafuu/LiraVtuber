@@ -20,12 +20,36 @@ const HELP_GERAL = `💜 *Lira Amarinth — Comandos*
 
 🎮 *Seções de comandos:*
 • */ajuda* — Esta mensagem
-• */economia* — Comandos de moedas e XP
-• */social* — Interações e reações
+• */economia* — Moedas e XP 💰
+• */social* — Interações 🫂
+• */midia* — Figurinhas e Downloads 🎬
+• */premium* — Vantagens VIP 💎
 • */sobre* — Quem sou eu?
-• */ping* — Verificar se estou online
 
 _Digite qualquer um para mais detalhes!_ ✨`;
+
+const HELP_MIDIA = `🎬 *Mídia — Lira Amarinth*
+
+• */f* — Transforma imagem/vídeo em figurinha (mande na legenda) 🖼️
+• */baixar [link]* — Baixa vídeo do Insta, Twitter, TikTok ou YT 🎥
+• */musica [link]* — Extrai o áudio em MP3 de vídeos 🎶
+
+_Funcionalidades exclusivas para membros VIP!_ 💜`;
+
+const HELP_PREMIUM = `💎 *Lira Premium — Assinatura*
+
+Torne-se um apoiador e desbloqueie o potencial máximo da Lira!
+
+✨ *Vantagens:*
+• Uso ilimitado no Privado
+• Permissão para me adicionar em novos grupos
+• Comandos de Mídia e Downloads
+• Prioridade no processamento
+
+💰 *Valor:* R$ 19,90/mês
+🏦 *PIX (Chave):* +5511981826659
+
+_Após o pagamento, envie o comprovante para meu criador!_ 👑`;
 
 const HELP_ECONOMIA = `💰 *Economia — Lira Amarinth*
 
@@ -122,6 +146,8 @@ async function handleLocalCommand(sock, remoteJid, msg, text, pushName) {
         '/help':     HELP_GERAL,
         '/economia': HELP_ECONOMIA,
         '/social':   HELP_SOCIAL,
+        '/midia':    HELP_MIDIA,
+        '/premium':  HELP_PREMIUM,
         '/sobre':    SOBRE,
         '/ping':     '💜 *Pong!* Estou online e pronta para (tentar) conversar! ✨',
     };
@@ -154,6 +180,9 @@ async function handleLocalCommand(sock, remoteJid, msg, text, pushName) {
 }
 
 // ── Bridge Principal ──────────────────────────────────────────────────────────
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function connectToWhatsApp() {
     console.log("💜 Iniciando Lira Amarinth WhatsApp Bridge...");
@@ -166,12 +195,20 @@ async function connectToWhatsApp() {
         printQRInTerminal: true,
         auth: state,
         logger: require('pino')({ level: 'silent' }),
-        markOnlineOnConnect: false
+        markOnlineOnConnect: false,
+        browser: ['Lira Amarinth', 'MacOS', '3.0.0']
     });
+
+    sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) qrcode.generate(qr, { small: true });
+        
+        if (qr) {
+            console.log('📱 Escaneie o QR Code abaixo para conectar:');
+            qrcode.generate(qr, { small: true });
+        }
+        
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error instanceof Boom) 
                 ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut 
@@ -182,8 +219,6 @@ async function connectToWhatsApp() {
             console.log('✅ Lira Amarinth está ONLINE no WhatsApp! 💜');
         }
     });
-
-    sock.ev.on('creds.update', saveCreds);
 
     const processedMessages = new Set();
 
@@ -214,7 +249,7 @@ async function connectToWhatsApp() {
         const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
         const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myId);
 
-        console.log(`[LOG] [${isGroup ? 'GRUPO' : 'PRIVADO'}] ${pushName}: ${textMessage.substring(0, 80)}`);
+        console.log(`[LOG] [${isGroup ? 'GRUPO' : 'PRIVADO'}] ${pushName} (${remoteJid}): ${textMessage.substring(0, 80)}`);
 
         // No grupo só responde se: mencionar Lira OU ser tagada OU comando
         if (isGroup && !mentionsLira && !isMentioned && !isCommand) return;
@@ -232,18 +267,68 @@ async function connectToWhatsApp() {
         let imageB64 = null;
         const isImage = !!msg.message.imageMessage;
         
-        if (isImage) {
+        if (isImage || !!msg.message.videoMessage) {
+            const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
             try {
                 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-                const stream = await downloadContentFromMessage(msg.message.imageMessage, 'image');
+                const mType = isImage ? 'image' : 'video';
+                const stream = await downloadContentFromMessage(isImage ? msg.message.imageMessage : msg.message.videoMessage, mType);
                 let buffer = Buffer.from([]);
                 for await (const chunk of stream) {
                     buffer = Buffer.concat([buffer, chunk]);
                 }
+                
+                if (isStickerCmd) {
+                    console.log(`[STICKER] Criando figurinha via FFmpeg...`);
+                    const { spawn } = require('child_process');
+                    const tempInput = path.join(__dirname, `temp_sticker_${Date.now()}.png`);
+                    const tempOutput = path.join(__dirname, `temp_sticker_${Date.now()}.webp`);
+                    
+                    fs.writeFileSync(tempInput, buffer);
+                    
+                    // Comando FFmpeg para converter para WebP (512x512, mantendo proporção e com transparência se houver)
+                    const ffmpeg = spawn('ffmpeg', [
+                        '-i', tempInput,
+                        '-vcodec', 'libwebp',
+                        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+                        '-lossless', '1',
+                        '-y',
+                        tempOutput
+                    ]);
+
+                    ffmpeg.on('close', async (code) => {
+                        if (code === 0 && fs.existsSync(tempOutput)) {
+                            await sock.sendMessage(remoteJid, { sticker: fs.readFileSync(tempOutput) }, { quoted: msg });
+                            console.log(`[STICKER] Figurinha enviada!`);
+                        } else {
+                            console.error(`[STICKER] Erro no FFmpeg (code ${code})`);
+                            await sock.sendMessage(remoteJid, { text: "❌ Erro ao processar a figurinha." }, { quoted: msg });
+                        }
+                        // Limpeza
+                        if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
+                        if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+                    });
+                    return;
+                }
+                
                 imageB64 = buffer.toString('base64');
-                console.log(`[LOG] Imagem capturada e convertida para Base64.`);
+                console.log(`[LOG] Mídia capturada e convertida para Base64.`);
             } catch (imgErr) {
-                console.error(`❌ Erro ao baixar imagem do WhatsApp:`, imgErr.message);
+                console.error(`❌ Erro ao baixar mídia do WhatsApp:`, imgErr.message);
+            }
+        }
+
+        // Detectar se o dono está no grupo (para liberar Premium automático)
+        let isOwnerPresent = false;
+        if (isGroup) {
+            try {
+                const groupMetadata = await sock.groupMetadata(remoteJid);
+                const ownerJid = '5511981826659@s.whatsapp.net';
+                const ownerLid = '38620983517314@lid';
+                isOwnerPresent = groupMetadata.participants.some(p => p.id.includes(ownerJid.split('@')[0]) || p.id === ownerLid);
+                if (isOwnerPresent) console.log(`[VIP-RADAR] 👑 Dono detectado no grupo! Liberando Premium.`);
+            } catch (e) {
+                console.error("[VIP-RADAR] Erro ao buscar participantes:", e.message);
             }
         }
 
@@ -252,7 +337,8 @@ async function connectToWhatsApp() {
                 message: textMessage,
                 sender: pushName,
                 jid: remoteJid,
-                image_b64: imageB64
+                image_b64: imageB64,
+                is_owner_present: isOwnerPresent
             });
 
             console.log(`[API] Resposta recebida da Lira.`);
@@ -262,23 +348,60 @@ async function connectToWhatsApp() {
                 console.log(`[DEBUG] Data:`, JSON.stringify(data, null, 2));
                 
                 if (data.image_path) {
-                    console.log(`[IMG] Tentando enviar imagem: ${data.image_path}`);
-                    if (fs.existsSync(data.image_path)) {
+                    const isUrl = data.image_path.startsWith('http');
+                    let mediaBuffer;
+                    let mediaPath = data.image_path;
+
+                    if (isUrl) {
+                        console.log(`[MIDIA] Baixando mídia externa: ${data.image_path}`);
                         try {
-                            await sock.sendMessage(remoteJid, { 
-                                image: fs.readFileSync(data.image_path), 
-                                caption: data.response 
-                            }, { quoted: msg });
-                            console.log(`[IMG] Imagem enviada com sucesso!`);
+                            const resMedia = await axios.get(data.image_path, { 
+                                responseType: 'arraybuffer',
+                                headers: {
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                                }
+                            });
+                            mediaBuffer = Buffer.from(resMedia.data);
+                            console.log(`[MIDIA] Download concluído. Tamanho: ${mediaBuffer.length} bytes.`);
+                        } catch (e) {
+                            console.error(`❌ Erro ao baixar mídia externa (${data.image_path}):`, e.message);
+                        }
+                    } else if (fs.existsSync(data.image_path)) {
+                        mediaBuffer = fs.readFileSync(data.image_path);
+                    }
+
+                    if (mediaBuffer) {
+                        const isVideo = mediaPath.endsWith('.mp4') || mediaPath.endsWith('.mkv') || mediaPath.endsWith('.gif');
+                        try {
+                            if (isVideo) {
+                                await sock.sendMessage(remoteJid, { 
+                                    video: mediaBuffer, 
+                                    caption: data.response,
+                                    gifPlayback: mediaPath.endsWith('.gif')
+                                }, { quoted: msg });
+                            } else {
+                                await sock.sendMessage(remoteJid, { 
+                                    image: mediaBuffer, 
+                                    caption: data.response 
+                                }, { quoted: msg });
+                            }
+                            console.log(`[MIDIA] Arquivo enviado com sucesso!`);
                         } catch (sendError) {
-                            console.error(`❌ Erro ao enviar imagem:`, sendError.message);
-                            await sock.sendMessage(remoteJid, { text: data.response + "\n\n⚠️ (Erro ao enviar a imagem)" }, { quoted: msg });
+                            console.error(`❌ Erro ao enviar mídia:`, sendError.message);
+                            await sock.sendMessage(remoteJid, { text: data.response + "\n\n⚠️ (Erro ao enviar a mídia)" }, { quoted: msg });
                         }
                     } else {
-                        await sock.sendMessage(remoteJid, { text: data.response + "\n\n❌ Imagem não encontrada." }, { quoted: msg });
+                        console.error(`[MIDIA] Mídia não encontrada ou falha no download: ${data.image_path}`);
+                        await sock.sendMessage(remoteJid, { text: data.response + "\n\n❌ Mídia não encontrada." }, { quoted: msg });
                     }
                 } else {
-                    await sock.sendMessage(remoteJid, { text: data.response }, { quoted: msg });
+                    console.log(`[TEXTO] Enviando resposta de texto...`);
+                    try {
+                        await sock.sendMessage(remoteJid, { text: data.response }, { quoted: msg });
+                        console.log(`[TEXTO] Resposta de texto enviada!`);
+                    } catch (txtErr) {
+                        console.error(`❌ Erro ao enviar texto:`, txtErr.message);
+                    }
                 }
 
                 // Envio de Áudio (Voz da Lira)
@@ -287,9 +410,10 @@ async function connectToWhatsApp() {
                     try {
                         await sock.sendMessage(remoteJid, { 
                             audio: fs.readFileSync(data.audio_path),
-                            mimetype: 'audio/mp4',
+                            mimetype: 'audio/mpeg',
                             ptt: true 
                         }, { quoted: msg });
+                        console.log(`[AUDIO] Voz enviada com sucesso!`);
                     } catch (audioError) {
                         console.error(`❌ Erro ao enviar áudio:`, audioError.message);
                     }

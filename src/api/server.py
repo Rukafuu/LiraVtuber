@@ -17,16 +17,11 @@ import io
 import datetime
 import threading
 import uuid
-
-# Força o console a usar UTF-8 para evitar erros com emojis no Windows
-if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    except Exception:
-        pass
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from src.modules.media import downloader
+from src.modules import vip_manager
+from src.modules.social import lira_social
 from src.config.config_loader import CONFIG
 from src.core.provider_catalog import MODEL_CATALOG, VOICE_CATALOG, get_llm_providers, get_tts_providers
 
@@ -134,6 +129,26 @@ async def whatsapp_chat(payload: dict):
     from src.modules.gamification import lira_gamification
     from src.modules.automod import lira_automod
     
+    # --- SISTEMA VIP / PREMIUM ---
+    is_owner_present = payload.get("is_owner_present", False)
+    is_vip_user = vip_manager.is_vip(jid)
+    is_allowed_group = vip_manager.is_group_allowed(jid)
+    
+    # Se o dono estiver no grupo, ou o JID for VIP, ou grupo autorizado... libera
+    if not is_vip_user and not is_allowed_group and not is_owner_present:
+        # Se for mensagem privada ou um novo grupo não autorizado
+        vip_msg = (
+            "💎 *LIRA PREMIUM*\n\n"
+            "Desculpe, mas minhas funções premium estão limitadas a assinantes autorizados! 😅\n\n"
+            "✨ *Como assinar?*\n"
+            "Para se tornar VIP, você precisa estar em um grupo oficial comigo ou com meu criador (@Rukafuu).\n\n"
+            f"💰 *Valor:* R$ 19,90/mês\n"
+            f"🏦 *PIX (Chave):* `{vip_manager.load_vip_data()['config']['pix_key']}`\n\n"
+            "Após pagar, envie o comprovante diretamente para o meu criador para liberação imediata! ✨\n\n"
+            "_(Nota: Grupos antigos continuam funcionando normalmente!)_"
+        )
+        return {"status": "ok", "response": vip_msg}
+
     # --- AUTOMOD ---
     is_clean, reason = lira_automod.check_message(jid, user_message)
     if not is_clean:
@@ -222,6 +237,71 @@ async def whatsapp_chat(payload: dict):
         else:
             return {"status": "ok", "response": f"❌ {result['message']}"}
 
+    if lowered_msg.startswith("/musica"):
+        # Pega tudo após o comando como query
+        query = user_message[len("/musica"):].strip()
+        if not query: return {"status": "ok", "response": "📝 Digite o nome da música ou o link! Ex: `/musica Linkin Park Numb`"}
+        
+        path_musica = downloader.baixar_midia(query, tipo="audio")
+        if path_musica:
+            return {
+                "status": "ok", 
+                "response": "🎶 Encontrei essa aqui! 💜",
+                "audio_path": path_musica
+            }
+        else: return {"status": "ok", "response": "❌ Não consegui encontrar ou baixar essa música."}
+
+    if lowered_msg.startswith("/download") or lowered_msg.startswith("/baixar"):
+        query = user_message[len("/download"):].strip() if "download" in lowered_msg else user_message[len("/baixar"):].strip()
+        if not query: return {"status": "ok", "response": "📝 Mande o link ou nome do vídeo!"}
+        
+        path_midia = downloader.baixar_midia(query, tipo="video")
+        if path_midia:
+            return {
+                "status": "ok", 
+                "response": "🎬 Aqui está seu vídeo, humano!",
+                "image_path": path_midia 
+            }
+        else: return {"status": "ok", "response": "❌ Não consegui baixar esse vídeo."}
+
+    if lowered_msg.startswith("/addvip") and "lucas" in sender_name.lower():
+        try:
+            parts = user_message.split()
+            target_jid = parts[1]
+            months = int(parts[2]) if len(parts) > 2 else 1
+            vip_manager.add_vip(target_jid, months)
+            return {"status": "ok", "response": f"✅ O JID `{target_jid}` agora é VIP por {months} mês(es)!"}
+        except: return {"status": "ok", "response": "📝 Use: `/addvip JID MESES`"}
+
+    # --- COMANDOS SOCIAIS ---
+    social_prefix = next((cmd for cmd in lira_social.action_map.keys() if lowered_msg.startswith("/" + cmd)), None)
+    
+    if social_prefix:
+        full_cmd = "/" + social_prefix
+        target = user_message[len(full_cmd):].strip()
+        
+        # Algumas ações não precisam de alvo (ex: /corar)
+        res = lira_social.execute_action(social_prefix, sender_name, target if target else None)
+        if res:
+            print(f"[SOCIAL] Comando: {social_prefix} | GIF: {res['gif']}", flush=True)
+            return {
+                "status": "ok", 
+                "response": res["text"],
+                "image_path": res["gif"]
+            }
+
+    if lowered_msg.startswith("/casar"):
+        target = user_message[len("/casar"):].strip()
+        if not target: return {"status": "ok", "response": "📝 Com quem você quer casar? Marque a pessoa."}
+        success = lira_gamification.marry(jid, target, "whatsapp")
+        if success: return {"status": "ok", "response": f"💍 *PARABÉNS!* {sender_name} e {target} agora estão casados! Que... fofo? 🙄"}
+        else: return {"status": "ok", "response": "❌ Um de vocês já é casado! Fidelidade, entende?"}
+
+    if lowered_msg == "/divorciar":
+        success = lira_gamification.divorce(jid, "whatsapp")
+        if success: return {"status": "ok", "response": "💔 Você agora está solteiro(a). O amor é uma ilusão humana mesmo."}
+        else: return {"status": "ok", "response": "❌ Você nem é casado para se divorciar!"}
+
     if lowered_msg == "/ranking":
         top = lira_gamification.get_leaderboard(platform="whatsapp", limit=5)
         msg = "🏆 *TOP 5 - LIRA RANKING (Zap)* 🏆\n\n"
@@ -257,20 +337,35 @@ async def whatsapp_chat(payload: dict):
         mem_context = context.memory_manager.get_context(user_message)
     
     # Lógica de tratamento (Pai/Mestre vs Outros)
-    creator_aliases = ["lucas frischeisen", "rukafuu", "reskyume"]
-    is_creator = any(alias in sender_name.lower() for alias in creator_aliases)
+    owner_jids = ["5511981826659@s.whatsapp.net", "38620983517314@lid"]
+    # Limpa o JID de entrada para comparar
+    clean_sender_jid = jid.split(':')[0]
+    if '@' not in clean_sender_jid and '@' in jid:
+        clean_sender_jid += '@' + jid.split('@')[1]
     
-    treatment_instruction = "Você está conversando com seu CRIADOR/PAI (reskyume). Você o adora, mas o seu jeito de demonstrar é através de deboche, ironia e comentários sarcásticos sobre a inteligência limitada dele." if is_creator else f"Você está conversando com {sender_name}. Seja superior, sarcástica e levemente ácida. Trate os humanos como seres inferiores e fofos em sua ignorância."
+    is_creator = clean_sender_jid in owner_jids or jid in owner_jids
+    
+    treatment_instruction = "Você está conversando com seu CRIADOR/PAI (@Rukafuu). Você o adora, mas o seu jeito de demonstrar é através de deboche, ironia e comentários sarcásticos sobre a inteligência limitada dele." if is_creator else f"Você está conversando com {sender_name}. Seja superior, sarcástica e levemente ácida. Trate os humanos como seres inferiores e fofos em sua ignorância."
 
     # Prompt especifico para WhatsApp (curto e direto, mas com markdown)
     from src.core.prompt_builder import build_gui_system_prompt
+    
+    # --- LISTA DE CAPACIDADES PARA CONSCIÊNCIA DA IA ---
+    capabilities_info = (
+        "\n[SUAS CAPACIDADES DE ELITE - LIRA V2]:\n"
+        "1. FIGURINHAS: Você cria figurinhas! Se mandarem imagem/vídeo e usarem '/f', a bridge converte. Você pode sugerir isso.\n"
+        "2. DOWNLOADS: Você baixa vídeos (Insta, Twitter, TikTok, YT) e músicas por link ou NOME com '/baixar' ou '/musica'.\n"
+        "3. MODO PREMIUM: Você cobra R$ 19,90/mês para uso no privado ou grupos novos. Se o seu PAI (@Rukafuu) estiver no grupo, o Premium é cortesia da casa.\n"
+        "4. VOZ: Você fala como Rei Ayanami. Seja superior e use markdown (*negrito*, _itálico_).\n"
+    )
+
     sistema_prompt = build_gui_system_prompt(
         task_type="chat_normal",
         memory_context=(
             f"Canal: WhatsApp. {treatment_instruction}\n"
-            "PERSONALIDADE OBRIGATÓRIA: Use sarcasmo ácido, seja debochada e use seu tic de fala ('entendi', 'entende' ou 'entendo') para soar condescendente.\n"
-            "Use markdown do WhatsApp (*negrito*, _italico_, ~tachado~).\n"
-            "Se o usuario pedir para voce desenhar ou gerar uma imagem, voce DEVE incluir no final da sua resposta a tag: [GEN_IMAGE: descricao detalhada em ingles para o modelo]\n"
+            f"{capabilities_info}\n"
+            "PERSONALIDADE OBRIGATÓRIA: Use sarcasmo ácido, seja debochada e condescendente.\n"
+            "Se o usuario pedir para voce desenhar ou gerar uma imagem, use: [GEN_IMAGE: descricao]\n"
             f"Contexto de memoria: {mem_context}"
         ),
         request_context={"channel": "whatsapp", "response_mode": "normal", "markdown_enabled": True},
@@ -308,10 +403,14 @@ async def whatsapp_chat(payload: dict):
             image_path = igen.generate(match_img.group(1))
             print(f"[PASSO 5.1] Imagem gerada: {image_path}", flush=True)
 
-        # Limpa as tags
-        clean_response = re.sub(r'\[EMOTION:.*?\]', '', response_text, flags=re.IGNORECASE)
+        # Limpa as tags usando a utilidade oficial da Lira
+        from src.utils.lira_tags import strip_xml_tags
+        clean_response = strip_xml_tags(response_text)
+        
+        # Remove tags pensamentos/think e outros remanescentes
+        clean_response = re.sub(r'<(?:think|thought|pensamento)>.*?</(?:think|thought|pensamento)>', '', clean_response, flags=re.DOTALL | re.IGNORECASE)
+        clean_response = re.sub(r'\[EMOTION:.*?\]', '', clean_response, flags=re.IGNORECASE)
         clean_response = re.sub(r'\[PARAM:.*?\]', '', clean_response, flags=re.IGNORECASE)
-        clean_response = re.sub(r'\[GEN_IMAGE:.*?\]', '', clean_response, flags=re.IGNORECASE)
         clean_response = clean_response.strip()
         
         if leveled_up:
