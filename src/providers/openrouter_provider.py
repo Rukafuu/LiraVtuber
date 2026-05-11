@@ -18,8 +18,8 @@ class OpenRouterProvider(BaseLLM):
         self.provedor = "openrouter"
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
         self.modelo_chat = prov_cfg.get("modelo", prov_cfg.get("modelo_chat", "openrouter/owl-alpha"))
-        self.modelo_vision = prov_cfg.get("modelo_vision", "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free")
-        self.modelo_fallback_vision = prov_cfg.get("modelo_fallback_vision", "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free")
+        self.modelo_vision = prov_cfg.get("modelo_vision", "nvidia/nemotron-nano-12b-v2-vl:free")
+        self.modelo_fallback_vision = prov_cfg.get("modelo_fallback_vision", "nvidia/nemotron-nano-12b-v2-vl:free")
         super().__init__()
 
     def _criar_cliente(self):

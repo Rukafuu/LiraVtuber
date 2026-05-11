@@ -228,15 +228,38 @@ async function connectToWhatsApp() {
         // Reação de "lendo" enquanto processa na API
         try { await sock.sendMessage(remoteJid, { react: { text: '💜', key: msg.key } }); } catch (_) {}
 
+        // Extração de imagem se houver
+        let imageB64 = null;
+        const isImage = !!msg.message.imageMessage;
+        
+        if (isImage) {
+            try {
+                const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+                const stream = await downloadContentFromMessage(msg.message.imageMessage, 'image');
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+                imageB64 = buffer.toString('base64');
+                console.log(`[LOG] Imagem capturada e convertida para Base64.`);
+            } catch (imgErr) {
+                console.error(`❌ Erro ao baixar imagem do WhatsApp:`, imgErr.message);
+            }
+        }
+
         try {
             const response = await axios.post('http://127.0.0.1:8042/api/whatsapp/chat', {
                 message: textMessage,
                 sender: pushName,
-                jid: remoteJid
+                jid: remoteJid,
+                image_b64: imageB64
             });
 
+            console.log(`[API] Resposta recebida da Lira.`);
+            
             if (response.data && response.data.status === 'ok') {
                 const data = response.data;
+                console.log(`[DEBUG] Data:`, JSON.stringify(data, null, 2));
                 
                 if (data.image_path) {
                     console.log(`[IMG] Tentando enviar imagem: ${data.image_path}`);
@@ -256,6 +279,20 @@ async function connectToWhatsApp() {
                     }
                 } else {
                     await sock.sendMessage(remoteJid, { text: data.response }, { quoted: msg });
+                }
+
+                // Envio de Áudio (Voz da Lira)
+                if (data.audio_path && fs.existsSync(data.audio_path)) {
+                    console.log(`[AUDIO] Enviando voz da Lira: ${data.audio_path}`);
+                    try {
+                        await sock.sendMessage(remoteJid, { 
+                            audio: fs.readFileSync(data.audio_path),
+                            mimetype: 'audio/mp4',
+                            ptt: true 
+                        }, { quoted: msg });
+                    } catch (audioError) {
+                        console.error(`❌ Erro ao enviar áudio:`, audioError.message);
+                    }
                 }
             }
         } catch (error) {

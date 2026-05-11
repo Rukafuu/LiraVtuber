@@ -36,10 +36,26 @@ class MotorTTSEdge:
             audio_control.reset_stop_state()
 
             output_file = "data/last_response.mp3"
-            asyncio.run(self._generate_audio(texto_limpo, output_file))
+            print(f"[DEBUG TTS EDGE] Texto para voz: {texto_limpo[:30]}...", flush=True)
+            
+            def run_tts_thread(text, path):
+                try:
+                    asyncio.run(self._generate_audio(text, path))
+                    print(f"[DEBUG TTS EDGE] Arquivo gerado com sucesso: {path}", flush=True)
+                except Exception as e:
+                    print(f"[DEBUG TTS EDGE] FALHA NA THREAD TTS: {e}", flush=True)
+
+            t = threading.Thread(target=run_tts_thread, args=(texto_limpo, output_file))
+            t.start()
+            t.join(timeout=15) # Espera no máximo 15 segundos
+
+            if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+                print(f"[DEBUG TTS EDGE] Erro crítico: Arquivo não existe ou está vazio após geração.", flush=True)
+                return False
 
             if self._stop_event.is_set() or audio_control.stop_requested():
                 return True
+            
             if tocar_local:
                 pygame.mixer.music.load(output_file)
                 pygame.mixer.music.play()

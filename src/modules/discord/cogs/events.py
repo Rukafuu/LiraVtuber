@@ -42,9 +42,25 @@ class EventsCog(commands.Cog):
                         message.author.display_name,
                         image_b64=image_b64
                     )
+                    
+                    # --- GERAÇÃO DE VOZ (TTS) ---
+                    audio_file = None
+                    from src.modules.voice.tts_selector import get_tts
+                    try:
+                        tts = get_tts()
+                        # Gera o áudio (salva em data/last_response.mp3)
+                        success = tts.falar(response, tocar_local=False)
+                        if success:
+                            audio_file = discord.File("data/last_response.mp3", filename="lira_voice.mp3")
+                    except Exception as v_err:
+                        logger.error(f"[DISCORD] Erro ao gerar voz: {v_err}")
+
                     # Deleta a mensagem de pensando e envia a real
                     await thinking_msg.delete()
-                    await message.reply(response[:2000])
+                    if audio_file:
+                        await message.reply(content=response[:2000], file=audio_file)
+                    else:
+                        await message.reply(response[:2000])
 
         # XP por mensagem
         lira_gamification.lira_gamification.add_xp(str(message.author.id), "discord", 10)
