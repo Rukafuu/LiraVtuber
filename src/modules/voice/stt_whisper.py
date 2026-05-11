@@ -11,6 +11,7 @@ import pyaudio
 from src.config.config_loader import CONFIG
 from src.core.runtime_capabilities import get_ptt_settings
 from src.utils.text import ui
+from src.modules.voice.vad_silero import get_vad
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,8 @@ class MotorSTTWhisper:
         ptt_cfg = get_ptt_settings()
         self.modo_ptt = bool(ptt_cfg["enabled"])
         self.tecla_ptt = str(ptt_cfg["key"]).lower()
+
+        self.vad = get_vad()
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.caminho_dicionario = os.path.join(base_dir, "config", "dicionário.json")
@@ -266,10 +269,19 @@ class MotorSTTWhisper:
                 volume = audio_rms(data, width)
 
                 if volume > self.limiar_volume:
-                    gravando = True
-                    silencio_frames = 0
-                    frames.append(data)
-                    volumes.append(volume)
+                    # Confirma com VAD se é voz real antes de ativar gravação pesada
+                    tem_voz = self.vad.is_speech(data)
+                    
+                    if tem_voz:
+                        gravando = True
+                        silencio_frames = 0
+                        frames.append(data)
+                        volumes.append(volume)
+                    elif gravando:
+                        # Se já estava gravando, mantemos o silêncio/ruído por um tempo
+                        silencio_frames += 1
+                        frames.append(data)
+                        volumes.append(volume)
                 elif gravando:
                     silencio_frames += 1
                     frames.append(data)
