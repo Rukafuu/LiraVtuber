@@ -35,8 +35,8 @@ from src.brain.tool_manager import ToolManager
 from src.memory.memory_manager import LiraMemoryManager
 from src.modules.voice.stt_whisper import MotorSTTWhisper
 from src.modules.voice.audio_control import poll_external_stop, register_stop_callback, request_global_stop
-from src.modules.voice.tts_selector import get_tts
 from src.modules.vision.periodic_vision import VisaoNyra
+from src.modules.vision.awareness import start_awareness
 from src.modules.vision.image_gen import LiraImageGen
 from src.modules.media import LiraMusicGen, get_media_settings
 from src.modules.emotion_engine import EmotionEngine
@@ -66,9 +66,34 @@ class LiraSignals:
 signals = LiraSignals()
 
 tts = get_tts()
+
+# --- MOTOR DE FALA EM FILA (AUDIO STREAMING / CHUNKING) ---
+import queue
+tts_queue = queue.Queue()
+
+def speaker_worker():
+    """Thread dedicada para processar falas em sequência sem travar o stream do terminal."""
+    while True:
+        try:
+            chunk_text = tts_queue.get()
+            if chunk_text is None:
+                break
+            
+            if CONFIG.get("TTS_ATIVO", True):
+                signals.LIRA_SPEAKING = True
+                # O tts.falar bloqueia até terminar a frase, o que é perfeito para a fila.
+                tts.falar(chunk_text)
+                signals.LIRA_SPEAKING = False
+            
+            tts_queue.task_done()
+        except Exception as e:
+            logging.error(f"[SPEAKER] Erro no processamento de fala: {e}")
+
+threading.Thread(target=speaker_worker, daemon=True, name="LiraSpeakerWorker").start()
 stt_motor = MotorSTTWhisper()
 llm_selector = ProviderSelector()
 memory_manager = LiraMemoryManager("data/lira_memory.db")
+start_awareness(memory_manager) # Inicia a consciência de tela em segundo plano
 tool_manager = ToolManager(memory_manager=memory_manager)
 visao = VisaoNyra()
 
@@ -200,7 +225,17 @@ ui.set_banner(
 
 def _handle_runtime_global_stop(*_args, **_kwargs):
     try:
+        # 1. Limpar falas pendentes na fila
+        while not tts_queue.empty():
+            try:
+                tts_queue.get_nowait()
+                tts_queue.task_done()
+            except:
+                break
+        
+        # 2. Parar o que estiver tocando agora
         tts.parar()
+        signals.LIRA_SPEAKING = False
     except Exception:
         logging.debug("[MAIN] Falha ao parar TTS do runtime.", exc_info=True)
 
@@ -437,18 +472,13 @@ while True:
                     displayed_lira_prefix = True
                 full_raw_response.append(chunk.raw)
 
-                # Acumular texto limpo para TTS
-                texto_tts = limpar_texto_tts(chunk.text)
-                if texto_tts.strip():
-                    full_tts_text.append(texto_tts.strip())
-
-        # FALA ÚNICA: junta tudo e fala uma vez só.
-        texto_final_tts = " ".join(full_tts_text)
-        if texto_final_tts.strip() and CONFIG.get("TTS_ATIVO", True):
-            ui.print_falando(tts.provedor)
-            signals.LIRA_SPEAKING = True
-            tts.falar(texto_final_tts)
-            signals.LIRA_SPEAKING = False
+                # ENVIAR PARA FILA DE FALA IMEDIATAMENTE (Audio Streaming/Chunking)
+                texto_chunk_tts = limpar_texto_tts(chunk.text)
+                if texto_chunk_tts.strip() and CONFIG.get("TTS_ATIVO", True):
+                    # Se for o primeiro pedaço, avisa que começou a falar
+                    if not signals.LIRA_SPEAKING and tts_queue.empty():
+                        ui.print_falando(tts.provedor)
+                    tts_queue.put(texto_chunk_tts.strip())
 
         ai_response_falada = divider.complete_response or "".join(full_raw_response)
         actions = extract_xml_actions(

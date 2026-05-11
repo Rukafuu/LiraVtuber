@@ -92,6 +92,7 @@
     "TAXA_AMOSTRAGEM": 44100,
     "VISAO_ATIVA": false,
     "VISAO_MONITOR": 1,
+    "AWARENESS_INTERVAL": 300,
     "VTUBESTUDIO_ATIVO": false,
     "VTUBE_STUDIO": {
         "host": "localhost",
