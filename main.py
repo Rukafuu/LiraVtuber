@@ -90,6 +90,35 @@ def speaker_worker():
             logging.error(f"[SPEAKER] Erro no processamento de fala: {e}")
 
 threading.Thread(target=speaker_worker, daemon=True, name="LiraSpeakerWorker").start()
+
+def interruption_monitor():
+    """Monitora o microfone para interrupção natural (duplex)."""
+    from src.modules.voice.vad_silero import get_vad
+    import pyaudio
+    import time
+
+    vad = get_vad()
+    pa = pyaudio.PyAudio()
+    chunk = 1024
+    rate = CONFIG.get("TAXA_AMOSTRAGEM", 44100)
+    
+    try:
+        stream = pa.open(format=pyaudio.paInt16, channels=1, rate=rate, input=True, frames_per_buffer=chunk)
+        while True:
+            # Só monitora se ela estiver falando E não for modo PTT (opcional)
+            if signals.LIRA_SPEAKING:
+                data = stream.read(chunk, exception_on_overflow=False)
+                if vad.is_speech(data, threshold=0.6):
+                    logging.info("[MAIN] Usuário interrompeu a Lira. Parando áudio.")
+                    _handle_runtime_global_stop()
+                    time.sleep(1.0) # Debounce
+            else:
+                time.sleep(0.1)
+    except Exception as e:
+        logging.debug(f"[MAIN] Monitor de interrupção falhou ou mic ocupado: {e}")
+
+threading.Thread(target=interruption_monitor, daemon=True, name="LiraInterruptionMonitor").start()
+
 stt_motor = MotorSTTWhisper()
 llm_selector = ProviderSelector()
 memory_manager = LiraMemoryManager("data/lira_memory.db")
