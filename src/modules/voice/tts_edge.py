@@ -50,7 +50,16 @@ class MotorTTSEdge:
             t.join(timeout=15) # Espera no máximo 15 segundos
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                print(f"[DEBUG TTS EDGE] Erro crítico: Arquivo não existe ou está vazio após geração.", flush=True)
+                print(f"[DEBUG TTS EDGE] Falha no Edge. Tentando FALLBACK para Google TTS...", flush=True)
+                try:
+                    from src.modules.voice.tts_google import MotorTTSGoogle
+                    google_tts = MotorTTSGoogle()
+                    success = google_tts.falar(texto_limpo, tocar_local=False)
+                    if success:
+                        print(f"[DEBUG TTS FALLBACK] Google TTS salvou o dia!", flush=True)
+                        return True
+                except Exception as gerr:
+                    print(f"[DEBUG TTS FALLBACK] Erro no fallback Google: {gerr}", flush=True)
                 return False
 
             if self._stop_event.is_set() or audio_control.stop_requested():

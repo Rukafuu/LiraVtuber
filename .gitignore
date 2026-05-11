@@ -39,6 +39,7 @@ data/cache/
 temp/ultima_visao.png
 ideias_para_atualização/
 data/memory/
+data/vip_users.json
 
 # Log files
 *.log
@@ -58,6 +59,12 @@ data/emotion_state.json
 temp/
 src/config/persona.txt
 
+# WhatsApp Bridge Specific
+whatsapp_bridge/auth_info_baileys/
+whatsapp_bridge/temp_sticker_*
+whatsapp_bridge/*.png
+whatsapp_bridge/*.webp
+whatsapp_bridge/node_modules/
+
 # Test scripts (local only)
 test_*.py
-data/emotion_state.json

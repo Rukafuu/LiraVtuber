@@ -75,6 +75,13 @@ def _ensure_tts_settings() -> dict:
     openai_cfg.setdefault("style", "natural e clara")
     tts_settings["openai"] = openai_cfg
 
+    rvc_cfg = tts_settings.get("rvc", {})
+    if not isinstance(rvc_cfg, dict):
+        rvc_cfg = {}
+    rvc_cfg.setdefault("model", "rei_br")
+    rvc_cfg.setdefault("pitch", 0)
+    tts_settings["rvc"] = rvc_cfg
+
     CONFIG["TTS_SETTINGS"] = tts_settings
     if not str(CONFIG.get("TTS_PROVIDER", "") or "").strip():
         CONFIG["TTS_PROVIDER"] = _default_provider_from_settings(tts_settings)
@@ -187,6 +194,10 @@ def _criar_tts(prov: str):
         from src.modules.voice.tts_openai import MotorTTSOpenAI
 
         return MotorTTSOpenAI()
+    if provider == "rvc":
+        from src.modules.voice.tts_rvc import MotorTTSRVC
+
+        return MotorTTSRVC()
     return _DummyTTS()
 
 
