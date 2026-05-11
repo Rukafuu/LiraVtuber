@@ -143,11 +143,12 @@ class LiraControlCenter(ctk.CTk):
             ("💭  Mente da Lira",    7,  "emocoes"),
             ("🎭  VTube Studio",     8,  "vtube"),
             ("💬  Chat do Controle",  9,  "chat"),
-            ("📝  Persona",          10, "persona"),
-            ("⚙  Prompts",           11, "prompts"),
-            ("🔌  Conexões",         12, "conexoes"),
-            ("🎨  Personalização",   13, "personalizacao"),
-            ("📋  Logs",             14, "logs"),
+            ("🎨  Estúdio de Mídia", 10, "midia"),
+            ("📝  Persona",          11, "persona"),
+            ("⚙  Prompts",           12, "prompts"),
+            ("🔌  Conexões",         13, "conexoes"),
+            ("🎨  Personalização",   14, "personalizacao"),
+            ("📋  Logs",             15, "logs"),
         ]
         for texto, row, key in menus:
             btn = ctk.CTkButton(
@@ -193,6 +194,7 @@ class LiraControlCenter(ctk.CTk):
         from src.gui.frames.tab_emocoes import TabEmocoes
         from src.gui.frames.tab_vtube import TabVTube
         from src.gui.frames.tab_chat import TabChat
+        from src.gui.frames.tab_midia import TabMidia
         from src.gui.frames.tab_persona import TabPersona
         from src.gui.frames.tab_prompts import TabPrompts
         from src.gui.frames.tab_conexoes import TabConexoes
@@ -206,6 +208,7 @@ class LiraControlCenter(ctk.CTk):
             "emocoes":        TabEmocoes,
             "vtube":          TabVTube,
             "chat":           TabChat,
+            "midia":          TabMidia,
             "persona":        TabPersona,
             "prompts":        TabPrompts,
             "conexoes":       TabConexoes,
