@@ -28,17 +28,22 @@ function MediaRenderer({ media }: { media: any }) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Corrige os IPs "chumbados" que o backend envia (127.0.0.1) para o IP correto da rede
+  const HOST = window.location.hostname;
+  const BACKEND_URL = `http://${HOST}:8042`;
+  const mediaUrl = media.url ? media.url.replace("http://127.0.0.1:8042", BACKEND_URL).replace("http://localhost:8042", BACKEND_URL) : "";
+
   if (media.type === "image") {
     return (
       <div className="mt-4 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/20">
-        <img src={media.url} alt="Lira Generated" className="w-full h-auto max-h-[400px] object-contain hover:scale-[1.02] transition-transform duration-500" />
+        <img src={mediaUrl} alt="Lira Generated" className="w-full h-auto max-h-[400px] object-contain hover:scale-[1.02] transition-transform duration-500" />
         <div className="p-3 flex justify-between items-center bg-white/5 backdrop-blur-md">
            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Imagem Gerada</span>
            <div className="flex gap-2">
-             <a href={media.url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-white">
+             <a href={mediaUrl} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-white">
                <ExternalLink size={14} />
              </a>
-             <a href={media.url} download className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-white">
+             <a href={mediaUrl} download className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-white">
                <Download size={14} />
              </a>
            </div>
@@ -59,10 +64,10 @@ function MediaRenderer({ media }: { media: any }) {
         <div className="flex-1 min-w-0">
           <p className="text-xs font-black text-white truncate uppercase tracking-wider mb-1">Música Gerada pela Lira</p>
           <p className="text-[10px] text-blue-300 font-mono opacity-70">ID: {media.job_id}</p>
-          {media.url && <audio ref={audioRef} src={media.url} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />}
+          {mediaUrl && <audio ref={audioRef} src={mediaUrl} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />}
         </div>
 
-        {media.url ? (
+        {mediaUrl ? (
           <button 
             onClick={() => {
               if (playing) audioRef.current?.pause();
@@ -108,11 +113,19 @@ export function TabChat() {
   const availableModels = MODEL_CATALOG.filter(m => m.provider === provider);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const scrollToBottom = () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      }
+    };
+    
+    scrollToBottom();
+    const timeout = setTimeout(scrollToBottom, 150);
+    
     // Salva as mensagens no LocalStorage
     localStorage.setItem("lira_chat_messages", JSON.stringify(messages));
+    
+    return () => clearTimeout(timeout);
   }, [messages, isTyping]);
 
   // Carrega as configurações de LLM e histórico do servidor
@@ -499,7 +512,7 @@ export function TabChat() {
                         a: ({node, ...props}) => <a {...props} target="_blank" rel="noreferrer" className="flex items-center gap-1 inline-flex" />
                       }}
                     >
-                      {msg.content}
+                      {msg.content.replace(/\[EMOTION:.*?\]/gi, '').replace(/\[PARAM:.*?\]/gi, '').trim()}
                     </ReactMarkdown>
                   </div>
 

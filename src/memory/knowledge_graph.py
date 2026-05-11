@@ -67,6 +67,28 @@ class LiraKnowledgeGraph:
             
         return facts
 
+    def get_all_facts(self) -> List[Dict[str, str]]:
+        """Retorna todos os fatos do grafo para a GUI."""
+        facts = []
+        for u, v, data in self.graph.edges(data=True):
+            facts.append({
+                "subject": str(u),
+                "relation": data.get("relation", "relacionado_a"),
+                "object": str(v)
+            })
+        return facts
+
+    def delete_fact(self, subject: str, relation: str, object_val: str):
+        """Remove um fato específico do grafo."""
+        s = subject.strip().lower()
+        o = object_val.strip().lower()
+        if self.graph.has_edge(s, o):
+            self.graph.remove_edge(s, o)
+            self.save()
+            logger.info(f"[KNOWLEDGE GRAPH] Fato removido: {s} --[{relation}]--> {o}")
+            return True
+        return False
+
     def save(self):
         """Salva o grafo em disco."""
         try:

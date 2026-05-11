@@ -26,7 +26,8 @@ export function TabVTube() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8042/api/vts/state");
+        const HOST = window.location.hostname;
+        const res = await fetch(`http://${HOST}:8042/api/vts/state`);
         if (res.ok) {
            const data = await res.json();
            setState(data);
@@ -158,7 +159,8 @@ export function TabVTube() {
         <div className="md:col-span-3 flex justify-end gap-3 mt-4">
            <button 
              onClick={async () => {
-                await fetch("http://127.0.0.1:8042/api/config/conexoes", {
+                const HOST = window.location.hostname;
+                await fetch(`http://${HOST}:8042/api/config/conexoes`, {
                    method: "POST",
                    headers: { "Content-Type": "application/json" },
                    body: JSON.stringify({ vts: true })
