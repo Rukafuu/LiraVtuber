@@ -54,6 +54,9 @@ export const MODEL_CATALOG: ModelSpec[] = [
   { id: "o4-mini", label: "o4 Mini", provider: "openai", supportsVision: false },
 
   // OpenRouter
+  { id: "inclusionai/ring-2.6-1t:free", label: "Ring-2.6 1T (Free)", provider: "openrouter", supportsVision: false },
+  { id: "google/gemini-2.0-flash-lite-preview-02-05:free", label: "Gemini 2.0 Flash Lite (Free)", provider: "openrouter", supportsVision: true },
+  { id: "meta-llama/llama-3.1-8b-instruct:free", label: "Llama 3.1 8B (Free)", provider: "openrouter", supportsVision: false },
   { id: "openai/gpt-5.4", label: "OpenAI GPT-5.4", provider: "openrouter", supportsVision: true },
   { id: "openai/gpt-4.1", label: "OpenAI GPT-4.1", provider: "openrouter", supportsVision: true },
   { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "openrouter", supportsVision: true },

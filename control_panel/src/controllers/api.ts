@@ -2,9 +2,10 @@
  * Controller principal da API (Camada de Controle - MVC)
  * Gerencia a comunicação entre a View (React) e o Backend (Rust/Python)
  */
+const HOST = window.location.hostname;
+const BACKEND_URL = `http://${HOST}:8042`;
+const WS_URL = `ws://${HOST}:8042`;
 
-const BACKEND_URL = "http://127.0.0.1:8042";
-const WS_URL = "ws://127.0.0.1:8042";
 
 export const ApiController = {
   // === WEBSOCKET ===

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.config.config_loader import CONFIG
 from src.core.provider_catalog import MODEL_CATALOG, VOICE_CATALOG, get_llm_providers, get_tts_providers
-from src.modules.voice import speech_state
+
 
 # === LOGGING INTERCEPTOR ===
 class MemoryLogHandler(logging.Handler):
@@ -96,6 +96,210 @@ async def get_chat_history(limit: int = 50):
     except Exception as e:
         logger.error(f"[API] Erro ao carregar historico: {e}")
         return {"messages": []}
+
+# === WHATSAPP REST ENDPOINT ===
+
+@app.post("/api/whatsapp/chat")
+async def whatsapp_chat(payload: dict):
+    """Recebe mensagens do bridge do WhatsApp e retorna a resposta da Lira."""
+    user_message = payload.get("message", "").strip()
+    sender_name = payload.get("sender", "Usuário do WhatsApp")
+    jid = payload.get("jid", sender_name)
+    
+    if not user_message:
+        return {"status": "error", "message": "Mensagem vazia"}
+        
+    from src.modules.gamification import lira_gamification
+    from src.modules.automod import lira_automod
+    
+    # --- AUTOMOD ---
+    is_clean, reason = lira_automod.check_message(jid, user_message)
+    if not is_clean:
+        return {"status": "ok", "response": f"⚠️ *AVISO AUTOMOD:* {sender_name}, sua mensagem violou as regras. Motivo: {reason}."}
+
+    # --- PROCESSAMENTO DE COMANDOS ---
+    lowered_msg = user_message.lower()
+    
+    if lowered_msg.startswith("/depositar"):
+        try:
+            val = int(lowered_msg.split()[1])
+            res = lira_gamification.bank_action(jid, "whatsapp", "deposit", val)
+            return {"status": "ok", "response": f"🏦 *BANCO:* Você guardou {val} moedas com segurança!" if res["success"] else f"❌ {res['message']}"}
+        except: return {"status": "ok", "response": "📝 Use: `/depositar QUANTIDADE`"}
+
+    if lowered_msg.startswith("/sacar"):
+        try:
+            val = int(lowered_msg.split()[1])
+            res = lira_gamification.bank_action(jid, "whatsapp", "withdraw", val)
+            return {"status": "ok", "response": f"🏧 *BANCO:* Você sacou {val} moedas!" if res["success"] else f"❌ {res['message']}"}
+        except: return {"status": "ok", "response": "📝 Use: `/sacar QUANTIDADE`"}
+
+    if lowered_msg.startswith("/roubar"):
+        # No WhatsApp o roubo é mais difícil pois precisa do nome/jid exato.
+        # Por enquanto, vamos permitir roubar por menção de nome se o bridge passar.
+        return {"status": "ok", "response": "🕵️ O sistema de roubo via WhatsApp está sendo aprimorado para identificar contatos. Por enquanto, use no Discord!"}
+
+    if lowered_msg.startswith("/imaginar"):
+        from src.modules.vision.image_gen import LiraImageGen
+        igen = LiraImageGen()
+        prompt = user_message[len("/imaginar"):].strip()
+        if not prompt: return {"status": "ok", "response": "📝 O que você quer que eu desenhe? Use: `/imaginar <descrição>`"}
+        
+        img_path = igen.generate(prompt)
+        if img_path:
+            return {
+                "status": "ok", 
+                "response": f"🎨 Aqui está sua arte: *{prompt}*",
+                "image_path": os.path.abspath(img_path)
+            }
+        else:
+            return {"status": "ok", "response": "❌ Desculpe, não consegui gerar essa imagem agora."}
+
+    if lowered_msg == "/perfil":
+        if not lira_automod.settings["economy"]:
+            return {"status": "ok", "response": "❌ O sistema de economia está desativado."}
+        from src.utils.profile_card import generate_profile_card
+        user_data = lira_gamification.get_user(jid, "whatsapp", sender_name)
+        needed_xp = lira_gamification.get_xp_for_level(user_data['level'] + 1)
+        card_path = generate_profile_card(
+            username=sender_name,
+            level=user_data['level'],
+            xp=user_data['xp'],
+            needed_xp=needed_xp
+        )
+        return {
+            "status": "ok", 
+            "response": f"🌸 *Perfil de {sender_name}*\n⭐ Nível: {user_data['level']}\n🪙 LiraCoins: {user_data['coins']}",
+            "image_path": os.path.abspath(card_path)
+        }
+        
+    if lowered_msg == "/suporte":
+        return {"status": "ok", "response": "📞 *SUPORTE LIRA AMARINTH*\n\n✉️ E-mail: amarinthlira@gmail.com\n💬 Fale com o desenvolvedor: @Rukafuu"}
+
+    if lowered_msg == "/premium":
+        return {"status": "ok", "response": "💎 *LIRA PREMIUM*\n\n🚧 *EM CONSTRUÇÃO*\nFuturos recursos: Treinamento personalizado, Memória infinita e Geração de Mídia!"}
+
+    if lowered_msg.startswith("/config"):
+        # No WhatsApp, apenas o Lucas pode configurar
+        creator_aliases = ["lucas frischeisen", "rukafuu", "reskyume"]
+        if not any(alias in sender_name.lower() for alias in creator_aliases):
+            return {"status": "ok", "response": "❌ Apenas meu criador pode alterar minhas configurações."}
+        
+        try:
+            parts = lowered_msg.split()
+            modulo = parts[1]
+            ativo = parts[2] == "on"
+            success = lira_automod.set_module(modulo, ativo)
+            return {"status": "ok", "response": f"⚙️ Módulo *{modulo}* agora está {'ATIVO' if ativo else 'DESATIVADO'}!" if success else f"❌ Módulo '{modulo}' não existe."}
+        except: return {"status": "ok", "response": "📝 Use: `/config modulo on/off`"}
+
+    if lowered_msg == "/daily":
+        result = lira_gamification.claim_daily(jid, "whatsapp")
+        if result["success"]:
+            return {"status": "ok", "response": f"🎁 *BÔNUS DIÁRIO!* Você recebeu {result['coins']} 🪙 e {result['xp']} ⭐ XP!"}
+        else:
+            return {"status": "ok", "response": f"❌ {result['message']}"}
+
+    if lowered_msg == "/ranking":
+        top = lira_gamification.get_leaderboard(platform="whatsapp", limit=5)
+        msg = "🏆 *TOP 5 - LIRA RANKING (Zap)* 🏆\n\n"
+        for i, u in enumerate(top, 1):
+            msg += f"#{i} *{u['username']}* - LVL {u['level']} ({u['xp']} XP)\n"
+        return {"status": "ok", "response": msg}
+
+    # --- CHAT NORMAL (LLM) ---
+    context = app.state.lira
+    # Garante que o llm_selector esteja inicializado
+    if not context.llm_selector:
+        from src.providers.provider_selector import ProviderSelector
+        context.llm_selector = ProviderSelector()
+    
+    llm = context.llm_selector.get_provider()
+    if not llm:
+        return {"status": "error", "message": "Provedor LLM nao inicializado"}
+
+    # Carrega configs do LLM (reusando do Discord/Terminal)
+    llm_config = CONFIG.get("LLM", {})
+    provider_name = llm_config.get("provider", "openrouter")
+    model_id = llm_config.get("model", "inclusionai/ring-2.6-1t:free")
+    temperature = llm_config.get("temperature", 0.8)
+    
+    # Atualiza o provider
+    llm.provedor = provider_name
+    llm.modelo = model_id
+    llm.temperatura = temperature
+
+    # Memoria e Prompt
+    mem_context = ""
+    if context.memory_manager:
+        mem_context = context.memory_manager.get_context(user_message)
+    
+    # Lógica de tratamento (Pai/Mestre vs Outros)
+    creator_aliases = ["lucas frischeisen", "rukafuu", "reskyume"]
+    is_creator = any(alias in sender_name.lower() for alias in creator_aliases)
+    
+    treatment_instruction = "Voce esta conversando com seu CRIADOR/PAI. Pode ser intima e carinhosa." if is_creator else f"Voce esta conversando com {sender_name}. Seja amigavel e educada, mas nao o chame de 'pai' ou 'mestre' — use o nome dele."
+
+    # Prompt especifico para WhatsApp (curto e direto, mas com markdown)
+    from src.core.prompt_builder import build_gui_system_prompt
+    sistema_prompt = build_gui_system_prompt(
+        task_type="chat_normal",
+        memory_context=(
+            f"Canal: WhatsApp. {treatment_instruction}\n"
+            "Responda de forma natural, amigavel e use emojis.\n"
+            "Use markdown do WhatsApp (*negrito*, _italico_, ~tachado~).\n"
+            "Se o usuario pedir para voce desenhar ou gerar uma imagem, voce DEVE incluir no final da sua resposta a tag: [GEN_IMAGE: descricao detalhada em ingles para o modelo]\n"
+            f"Contexto de memoria: {mem_context}"
+        ),
+        request_context={"channel": "whatsapp", "response_mode": "normal", "markdown_enabled": True},
+        attachments_overview="Nenhum anexo."
+    )
+
+    # Prepara mensagens para o provedor
+    messages = [
+        {"role": "system", "content": sistema_prompt},
+        {"role": "user", "content": user_message}
+    ]
+
+    try:
+        # Chama a API de forma sincrona em thread (reusando a logica do Discord bot)
+        resposta = await asyncio.to_thread(
+            llm._chamar_api,
+            model_id,
+            messages,
+        )
+        response_text = resposta.choices[0].message.content or ""
+        
+        # Gamificação: Ganho de XP (WhatsApp)
+        from src.modules.gamification import lira_gamification
+        leveled_up = lira_gamification.add_xp(payload.get("jid", sender_name), "whatsapp", 10)
+        
+        # Detecta intenção de gerar imagem no chat normal
+        image_path = None
+        match_img = re.search(r'\[GEN_IMAGE:\s*(.*?)\]', response_text, flags=re.IGNORECASE)
+        if match_img:
+            from src.modules.vision.image_gen import LiraImageGen
+            igen = LiraImageGen()
+            image_path = igen.generate(match_img.group(1))
+
+        # Limpa as tags
+        clean_response = re.sub(r'\[EMOTION:.*?\]', '', response_text, flags=re.IGNORECASE)
+        clean_response = re.sub(r'\[PARAM:.*?\]', '', clean_response, flags=re.IGNORECASE)
+        clean_response = re.sub(r'\[GEN_IMAGE:.*?\]', '', clean_response, flags=re.IGNORECASE)
+        clean_response = clean_response.strip()
+        
+        if leveled_up:
+            user_data = lira_gamification.get_user(payload.get("jid", sender_name), "whatsapp")
+            clean_response += f"\n\n✨ *SUBIU DE NÍVEL!* Parabéns, você agora é Nível *{user_data['level']}*! 🎉"
+
+        return {
+            "status": "ok", 
+            "response": clean_response,
+            "image_path": os.path.abspath(image_path) if image_path else None
+        }
+    except Exception as e:
+        logger.error(f"[WhatsApp API] Erro ao processar chat: {e}")
+        return {"status": "error", "message": str(e)}
 
 # === MEMORY REST ENDPOINTS ===
 
@@ -377,11 +581,39 @@ class VisibleStreamFilter:
                 self.hidden_tag = ""
                 continue
 
+            # Intercept VTube Studio bracket tags like [EMOTION:...] or [PARAM:...]
+            bracket_idx = self.buffer.find("[")
+            if bracket_idx >= 0:
+                # Se tem um colchete, vamos ver se fecha na mesma linha
+                close_bracket_idx = self.buffer.find("]", bracket_idx)
+                if close_bracket_idx >= 0:
+                    tag_content = self.buffer[bracket_idx:close_bracket_idx + 1]
+                    if tag_content.upper().startswith("[EMOTION:") or tag_content.upper().startswith("[PARAM:") or tag_content.upper().startswith("[INDEX_"):
+                        # E um tag do VTS, removemos!
+                        output.append(self.buffer[:bracket_idx])
+                        self.buffer = self.buffer[close_bracket_idx + 1:]
+                        continue
+                else:
+                    # Se nao fecha ainda, vamos ver se parece com uma tag do VTS
+                    partial = self.buffer[bracket_idx:].upper()
+                    if "[EMOTION:".startswith(partial) or "[PARAM:".startswith(partial) or "[INDEX_".startswith(partial) or partial.startswith("[EMOTION:") or partial.startswith("[PARAM:") or partial.startswith("[INDEX_"):
+                        # E possivelmente uma tag do VTS, seguramos no buffer
+                        output.append(self.buffer[:bracket_idx])
+                        self.buffer = self.buffer[bracket_idx:]
+                        break
+
             lt_idx = self.buffer.find("<")
             if lt_idx < 0:
                 output.append(self.buffer)
                 self.buffer = ""
                 break
+
+            # Se chegamos ate aqui, o bracket nao bloqueou, verificamos as tags XML
+            if bracket_idx >= 0 and bracket_idx < lt_idx:
+                # O bracket vem antes, entao liberamos ate ele (ja que nao foi segurado)
+                output.append(self.buffer[:bracket_idx + 1])
+                self.buffer = self.buffer[bracket_idx + 1:]
+                continue
 
             if lt_idx > 0:
                 output.append(self.buffer[:lt_idx])
@@ -413,6 +645,7 @@ class VisibleStreamFilter:
             return ""
         output = self.buffer
         self.buffer = ""
+        # Limpa o que sobrar no flush usando regex
         return _clean_visible_chunk(output)
 
 @app.post("/api/chat/cancel")
@@ -442,7 +675,7 @@ async def speak_tts(payload: dict):
         context.tts = tts_engine
 
     def _run_tts():
-        speech_state.set_speaking(True)
+
         if context.signals is not None:
             try:
                 context.signals.LIRA_SPEAKING = True
@@ -453,7 +686,7 @@ async def speak_tts(payload: dict):
         except Exception as exc:
             logger.error("[API] Erro ao reproduzir TTS: %s", exc)
         finally:
-            speech_state.set_speaking(False)
+
             if context.signals is not None:
                 try:
                     context.signals.LIRA_SPEAKING = False
@@ -476,6 +709,7 @@ async def _websocket_chat_legacy(websocket: WebSocket):
             data = json.loads(data_str)
             
             user_message = data.get("text", "")
+            logger.info(f"[DEBUG] Mensagem recebida: '{user_message}'")
             images_b64 = data.get("images_b64", [])
             
             # Classifica a tarefa para o prompt
@@ -519,8 +753,53 @@ async def _websocket_chat_legacy(websocket: WebSocket):
                 attachments_overview=f"{len(images_b64)} imagem(ns) enviadas pelo chat." if images_b64 else "- nenhum anexo"
             )
             
-            # Injecting Markdown instruction
-            sistema_prompt += "\n[ATENÇÃO]: Você está respondendo em um Chat Bot via GUI. Sinta-se livre para dar respostas mais longas se o contexto pedir, e VOCÊ DEVE OBRIGATORIAMENTE usar formatação Markdown (negrito, listas, códigos, etc) para deixar a resposta mais bonita."
+            # Injecting Markdown and Image instructions
+            sistema_prompt += (
+                "\n[REGRAS CRÍTICAS DE RESPOSTA]:\n"
+                "1. IDIOMA: Responda SEMPRE em Português do Brasil (PT-BR), mesmo que o modelo tente falar inglês.\n"
+                "2. PENSAMENTO: NUNCA mostre seu raciocínio interno ou pensamentos no chat. Responda apenas como Lira.\n"
+                "3. GERAÇÃO DE IMAGEM: Se o usuário pedir para desenhar/criar imagem, você DEVE encerrar com: <gerar_imagem>detalhes em inglês</gerar_imagem>.\n"
+                "4. FORMATO: Use Markdown rico (negrito, itálico) e emojis de kitsune/raposa.\n"
+            )
+            
+            # --- ARQUITETURA DE CÉREBRO DUPLO: VIGILÂNCIA DE IMAGEM ---
+            # Regex ultra-agressivo para não deixar passar nada
+            is_image_intent = re.search(r"\b(gera|gerar|cria|criar|faz|faca|imagine|imagina|draw|paint|desenha|mostra|refaz|refazer|novamente|novo|re-generate|again|tenta|tente)\b.*(imagem|foto|arte|desenho|kitsune|neko|personagem|waifu|garota|menina|ilustra|obra|ela|uma)\b", user_message.lower())
+            
+            # Se for apenas "tenta de novo", "não foi", "kd a imagem"
+            is_retry = re.search(r"\b(tenta|novo|novamente|refaz|repetir|cade|kd|não foi|n foi|gerou|gerar)\b", user_message.lower())
+
+            if is_image_intent or is_retry:
+                logger.info("[DUAL BRAIN] 🧠 Intenção de Arte detectada!")
+                
+                # Decidimos o prompt: se for retry, buscamos o contexto anterior
+                final_art_prompt = user_message
+                if is_retry and not is_image_intent:
+                    # Tenta pegar a última coisa que o usuário pediu
+                    for m in reversed(full_history):
+                        if m['role'] == 'user':
+                            final_art_prompt = m['content']
+                            break
+                
+                async def run_parallel_gen(prompt_text):
+                    try:
+                        logger.info(f"[DUAL BRAIN] 🎨 Iniciando geração para: {prompt_text[:50]}...")
+                        img_path = context.image_gen.generate(prompt_text)
+                        if img_path:
+                            filename = os.path.basename(img_path)
+                            await websocket.send_json({
+                                "type": "media",
+                                "media": [{"type": "image", "url": f"http://127.0.0.1:8042/media/images/{filename}"}]
+                            })
+                            logger.info("[DUAL BRAIN] ✅ Imagem enviada com sucesso!")
+                        else:
+                            logger.error("[DUAL BRAIN] ❌ O motor de imagem retornou vazio.")
+                    except Exception as e:
+                        logger.error(f"[DUAL BRAIN] Erro na geração paralela: {e}")
+
+                import asyncio
+                asyncio.create_task(run_parallel_gen(final_art_prompt))
+
 
             # Enviando Meta inicial
             await websocket.send_json({
@@ -575,6 +854,21 @@ async def _websocket_chat_legacy(websocket: WebSocket):
                 "editar_imagem_personagem", 
                 "gerar_musica"
             ))
+            
+            # Fallback para detectar a tag [GEN_IMAGE:...] caso ela use o formato simplificado
+            match_fallback = re.search(r'\[GEN_IMAGE:\s*(.*?)\]', ai_response, flags=re.IGNORECASE)
+            if match_fallback:
+                if "gerar_imagem" not in actions: actions["gerar_imagem"] = []
+                actions["gerar_imagem"].append(match_fallback.group(1))
+            
+            # --- AUTO-FIX: Se a IA esqueceu a tag mas a intenção era imagem ---
+            if task_type == "image_action" and not any(actions.values()):
+                logger.info("[API] 🛠️ Auto-Fix: IA esqueceu a tag. Gerando imagem automaticamente baseada no contexto.")
+                if "gerar_imagem" not in actions: actions["gerar_imagem"] = []
+                # Removemos tags e emoções para ter um prompt limpo
+                clean_prompt = re.sub(r'\[.*?\]|<.*?>', '', ai_response).strip()
+                if len(clean_prompt) > 300: clean_prompt = clean_prompt[:300]
+                actions["gerar_imagem"].append(clean_prompt)
             
             if any(actions.values()):
                 logger.info(f"[API] Ações detectadas no chat: {list(actions.keys())}")
@@ -655,9 +949,44 @@ async def websocket_chat(websocket: WebSocket):
 
             data = json.loads(await websocket.receive_text())
             user_message = str(data.get("text") or "").strip()
+            logger.info(f"[DEBUG] Mensagem recebida (Tauri): '{user_message}'")
             raw_images = data.get("images_b64", [])
             if not isinstance(raw_images, list):
                 raw_images = []
+
+            # --- ARQUITETURA DE CÉREBRO DUPLO: VIGILÂNCIA DE IMAGEM ---
+            is_image_intent = re.search(r"\b(gera|gerar|cria|criar|faz|faca|imagine|imagina|draw|paint|desenha|mostra|refaz|refazer|novamente|novo|re-generate|again|tenta|tente)\b.*(imagem|foto|arte|desenho|kitsune|neko|personagem|waifu|garota|menina|ilustra|obra|ela|uma)\b", user_message.lower())
+            is_retry = re.search(r"\b(tenta|novo|novamente|refaz|repetir|cade|kd|não foi|n foi|gerou|gerar)\b", user_message.lower())
+
+            if is_image_intent or is_retry:
+                logger.info("[DUAL BRAIN] 🧠 Intenção de Arte detectada no Chat Tauri!")
+                context = app.state.lira
+                
+                # Fallback de prompt: se for retry, tenta pegar do histórico enviado
+                final_art_prompt = user_message
+                history = data.get("history", [])
+                if is_retry and not is_image_intent and history:
+                    for m in reversed(history):
+                        if m.get('role') == 'user':
+                            final_art_prompt = m.get('content', user_message)
+                            break
+
+                async def run_parallel_gen(prompt_text):
+                    try:
+                        logger.info(f"[DUAL BRAIN] 🎨 Gerando em background: {prompt_text[:50]}...")
+                        img_path = context.image_gen.generate(prompt_text)
+                        if img_path:
+                            filename = os.path.basename(img_path)
+                            await websocket.send_json({
+                                "type": "media",
+                                "media": [{"type": "image", "url": f"http://127.0.0.1:8042/media/images/{filename}"}]
+                            })
+                            logger.info("[DUAL BRAIN] ✅ Arte enviada com sucesso!")
+                    except Exception as e:
+                        logger.error(f"[DUAL BRAIN] Erro: {e}")
+
+                import asyncio
+                asyncio.create_task(run_parallel_gen(final_art_prompt))
 
             images_b64: list[str] = []
             uploaded_image_paths: list[str] = []
@@ -721,17 +1050,27 @@ async def websocket_chat(websocket: WebSocket):
             visible_filter = VisibleStreamFilter()
             cancelled = False
 
-            for token in token_stream:
-                if _chat_cancel_event.is_set():
-                    logger.info("[API] Resposta do chat Tauri cancelada pelo usuario.")
-                    cancelled = True
-                    break
-                if not token:
-                    continue
-                full_raw_response.append(token)
-                visible_chunk = visible_filter.feed(token)
-                if visible_chunk:
-                    await websocket.send_json({"type": "chunk", "content": visible_chunk})
+            try:
+                for token in token_stream:
+                    if _chat_cancel_event.is_set():
+                        logger.info("[API] Resposta do chat Tauri cancelada pelo usuario.")
+                        cancelled = True
+                        break
+                    if not token:
+                        continue
+                    full_raw_response.append(token)
+                    visible_chunk = visible_filter.feed(token)
+                    if visible_chunk:
+                        await websocket.send_json({"type": "chunk", "content": visible_chunk})
+            except Exception as stream_exc:
+                logger.error(f"[API] Erro durante o stream: {stream_exc}")
+                await websocket.send_json({"type": "chunk", "content": "\n\n❌ **Erro ao processar imagem/resposta.** O modelo pode não suportar visão ou a API falhou."})
+
+            # Se terminou sem nada e não foi cancelado, manda um aviso
+            if not full_raw_response and not cancelled:
+                await websocket.send_json({"type": "chunk", "content": "*(Lira ficou em silêncio... Talvez o modelo não suporte imagens?)*"})
+                await websocket.send_json({"type": "done"})
+                continue
 
             tail = visible_filter.flush()
             if tail and not cancelled:
@@ -1178,6 +1517,25 @@ async def update_conexoes_config(payload: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+from pydantic import BaseModel
+class SpeakRequest(BaseModel):
+    text: str
+
+@app.post("/api/tts/speak")
+async def speak_text_api(req: SpeakRequest):
+    try:
+        from src.modules.voice.tts_selector import get_tts
+        tts = get_tts()
+        if tts and getattr(tts, 'config_valida', True):
+            import threading
+            threading.Thread(target=tts.falar, args=(req.text,), daemon=True).start()
+            return {"status": "ok", "message": "Falando..."}
+        else:
+            raise HTTPException(status_code=500, detail="Motor TTS nao configurado ou invalido.")
+    except Exception as e:
+        logger.error(f"[API] Erro ao reproduzir TTS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 def start_server(host="0.0.0.0", port=8042, context=None):
     if context:
@@ -1188,9 +1546,40 @@ def start_server(host="0.0.0.0", port=8042, context=None):
         app.state.lira.emotion_engine = context.get("emotion_engine")
         app.state.lira.tts = context.get("tts")
         app.state.lira.signals = context.get("signals")
+    else:
+        from src.providers.provider_selector import ProviderSelector
+        from src.modules.vision.image_gen import LiraImageGen
+        
+        app.state.lira.llm_selector = ProviderSelector()
+        app.state.lira.image_gen = LiraImageGen()
+        
+        # Carregamos os motores pesados em uma thread separada para não travar o loop principal
+        async def init_heavy_modules():
+            try:
+                from src.memory.memory_manager import LiraMemoryManager
+                from src.modules.emotion_engine import EmotionEngine
+                logger.info("[API] 🔄 Carregando motores pesados em THREAD separada...")
+                
+                # Roda o carregamento síncrono em uma thread do sistema
+                app.state.lira.memory_manager = await asyncio.to_thread(LiraMemoryManager)
+                app.state.lira.emotion_engine = await asyncio.to_thread(EmotionEngine)
+                
+                logger.info("[API] ✅ Motores carregados e ativos!")
+            except Exception as e:
+                logger.error(f"[API] Erro ao carregar motores pesados: {e}")
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(init_heavy_modules())
+        else:
+            # Se o loop ainda não estiver rodando, agendamos para o início
+            @app.on_event("startup")
+            async def startup_event():
+                asyncio.create_task(init_heavy_modules())
 
     logger.info(f"[API] Iniciando servidor FastAPI em http://{host}:{port}")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 if __name__ == "__main__":
     start_server()

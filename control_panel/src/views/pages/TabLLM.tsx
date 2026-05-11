@@ -224,7 +224,7 @@ export function TabLLM() {
                 onChange={(e) => updateField("llmTemperature", parseFloat(e.target.value))}
               />
               <span className="text-sm font-bold font-mono text-white bg-[var(--purple-neon)] px-2 py-1 rounded w-[50px] text-center shadow-[0_0_10px_var(--purple-neon)]">
-                {config.llmTemperature.toFixed(2)}
+                {Number(config.llmTemperature || 0).toFixed(2)}
               </span>
             </div>
           </div>
@@ -407,7 +407,7 @@ export function TabLLM() {
                 value={config.ttsSpeed}
                 onChange={(e) => updateField("ttsSpeed", parseFloat(e.target.value))}
               />
-              <span className="text-sm font-bold font-mono text-white bg-blue-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(59,130,246,0.8)]">{config.ttsSpeed.toFixed(2)}x</span>
+              <span className="text-sm font-bold font-mono text-white bg-blue-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(59,130,246,0.8)]">{Number(config.ttsSpeed || 1).toFixed(2)}x</span>
             </div>
 
             <span className="text-sm font-bold text-[var(--text-secondary)] md:pl-4 uppercase tracking-wider">Pitch:</span>
@@ -418,7 +418,7 @@ export function TabLLM() {
                 value={config.ttsPitch}
                 onChange={(e) => updateField("ttsPitch", parseFloat(e.target.value))}
               />
-              <span className="text-sm font-bold font-mono text-white bg-emerald-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(16,185,129,0.8)]">{config.ttsPitch.toFixed(1)}</span>
+              <span className="text-sm font-bold font-mono text-white bg-emerald-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(16,185,129,0.8)]">{Number(config.ttsPitch || 0).toFixed(1)}</span>
             </div>
 
             {config.ttsProvider === "elevenlabs" && (
@@ -426,19 +426,19 @@ export function TabLLM() {
                 <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wider">Stability:</span>
                 <div className="flex items-center gap-4 bg-[rgba(0,0,0,0.4)] p-2 rounded-lg border border-[var(--border-strong)] shadow-inner">
                   <input type="range" min="0" max="1" step="0.01" className="w-full accent-[var(--purple-neon)] h-2.5 bg-[rgba(255,255,255,0.05)] rounded-lg appearance-none cursor-pointer" value={config.ttsStability} onChange={(e) => updateField("ttsStability", parseFloat(e.target.value))} />
-                  <span className="text-sm font-bold font-mono text-white bg-[var(--purple-neon)] px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_var(--purple-neon)]">{config.ttsStability.toFixed(2)}</span>
+                  <span className="text-sm font-bold font-mono text-white bg-[var(--purple-neon)] px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_var(--purple-neon)]">{Number(config.ttsStability || 0).toFixed(2)}</span>
                 </div>
 
                 <span className="text-sm font-bold text-[var(--text-secondary)] md:pl-4 uppercase tracking-wider">Similarity:</span>
                 <div className="flex items-center gap-4 bg-[rgba(0,0,0,0.4)] p-2 rounded-lg border border-[var(--border-strong)] shadow-inner">
                   <input type="range" min="0" max="1" step="0.01" className="w-full accent-blue-400 h-2.5 bg-[rgba(255,255,255,0.05)] rounded-lg appearance-none cursor-pointer" value={config.ttsSimilarity} onChange={(e) => updateField("ttsSimilarity", parseFloat(e.target.value))} />
-                  <span className="text-sm font-bold font-mono text-white bg-blue-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(59,130,246,0.8)]">{config.ttsSimilarity.toFixed(2)}</span>
+                  <span className="text-sm font-bold font-mono text-white bg-blue-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(59,130,246,0.8)]">{Number(config.ttsSimilarity || 0).toFixed(2)}</span>
                 </div>
 
                 <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wider">Style:</span>
                 <div className="flex items-center gap-4 bg-[rgba(0,0,0,0.4)] p-2 rounded-lg border border-[var(--border-strong)] shadow-inner">
                   <input type="range" min="0" max="1" step="0.01" className="w-full accent-amber-500 h-2.5 bg-[rgba(255,255,255,0.05)] rounded-lg appearance-none cursor-pointer" value={config.ttsStyle} onChange={(e) => updateField("ttsStyle", parseFloat(e.target.value))} />
-                  <span className="text-sm font-bold font-mono text-white bg-amber-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(245,158,11,0.8)]">{config.ttsStyle.toFixed(2)}</span>
+                  <span className="text-sm font-bold font-mono text-white bg-amber-500 px-2 py-1 rounded w-[60px] text-center shadow-[0_0_10px_rgba(245,158,11,0.8)]">{Number(config.ttsStyle || 0).toFixed(2)}</span>
                 </div>
 
                 <div className="md:col-start-2 md:col-span-3 flex items-center pt-2">
