@@ -128,7 +128,9 @@ def build_terminal_system_prompt(
         '<acao_pc>{"action":"move_mouse","direction":"right","distance":120}</acao_pc>\n'
         '<acao_pc>{"action":"set_volume","delta":-6}</acao_pc>\n'
         '<acao_pc>{"action":"set_volume","level":30}</acao_pc>\n'
-        "<analisar_youtube>URL do video do YouTube que voce precisa analisar/ler</analisar_youtube>\n\n"
+        "<analisar_youtube>URL do video do YouTube que voce precisa analisar/ler</analisar_youtube>\n"
+        "<agendar_aviso>{\"tempo\": \"5m\", \"mensagem\": \"beber agua\"}</agendar_aviso>\n"
+        "<analisar_video>URL do video para ver os frames/conteudo visual</analisar_video>\n\n"
         "REGRA: Use <gerar_imagem> apenas quando o usuario pedir uma imagem explicitamente.\n"
         "REGRA: Use <editar_imagem> apenas para editar uma imagem existente.\n"
         "REGRA: Use <gerar_musica> apenas quando o usuario pedir uma musica explicitamente.\n"

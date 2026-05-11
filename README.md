@@ -90,10 +90,9 @@ The project is more than just a chatbot: it combines a voice runtime, a GUI pane
 | Area | Capabilities |
 | --- | --- |
 | Voice | STT via Whisper, TTS via ElevenLabs, Google, Azure, OpenAI and Edge, global stop via F8 |
-| Brain | Providers `google_cloud`, `groq`, `openrouter`, `openai` and `cerebras` |
-| GUI | Control Center in CustomTkinter, visual chat, attachments, markdown, audio cards and media preview |
+| Agency | **Autonomous ReAct Loops** (Think-Action-Observe), proactive reminders and task scheduling |
+| Multimodality | **Video Understanding** (frame extraction), image generation/editing, screen awareness and OCR |
 | Memory | Chronological SQLite, Vector RAG and Knowledge Graph |
-| Media | Image generation/editing, music generation, video/attachment analysis and local history |
 | Desktop | XML tools to open URLs, open apps, read files, move mouse, type, control volume and processes |
 | VTuber | VTube Studio integration, emotions, parameters, lipsync and persisted state |
 
@@ -164,8 +163,9 @@ Lira can say one thing to the user and execute another in the background, withou
 ```xml
 <salvar_memoria>Amarinth prefers short answers in the terminal.</salvar_memoria>
 <gerar_imagem>anime portrait of Lira with golden hair and white flowers</gerar_imagem>
-<gerar_musica>soft dreamy lofi song for sleeping</gerar_musica>
 <acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
+<analisar_video>https://youtube.com/watch?v=ID</analisar_video>
+<agendar_aviso>{"time": "10m", "message": "Take the cake out of the oven"}</agendar_aviso>
 ```
 
 Important rules:
@@ -209,26 +209,20 @@ The terminal also receives temporal context: if too much time has passed since t
 
 Lira's development is organized into phases focusing on fluidity, immersion, and computer vision:
 
-### 📌 Phase 1: Stability and QoL (Quality of Life)
-- [ ] Implement Visual Media Queue in the GUI.
-- [ ] Add an image and music history panel in the GUI.
-- [ ] Clean up and refine Lira's prompts and *persona*.
-- [ ] Fix any encoding *edge-cases* (e.g., SQLite ChromaDB).
+### 📌 Phase 5: Agency and Proactivity
+- [x] **Autonomous Tool Loops:** Sequential tool use in a single turn.
+- [x] **Lira Scheduler:** Proactive reminders and notifications.
+- [ ] Self-Memory Maintenance: Automated cleanup of old context.
 
-### 📌 Phase 2: Immersion and Voice
-- [ ] Integrate **Silero VAD** for natural voice interruption.
-- [ ] **Audio Streaming** (Chunking) for TTS, reducing speech *delay*.
-- [ ] Create a **Mini Player** mode (Floating overlay on Windows screen).
+### 📌 Phase 6: Multimodality 2.0
+- [x] **Video Understanding:** Frame extraction and visual commentary.
+- [x] **Voice-to-Voice (WA):** Native audio processing for WhatsApp.
+- [ ] Multimodal OCR: Deep reading of complex documents and screens.
 
-### 📌 Phase 3: Agency and Vision
-- [ ] Visual Memory Editor in the Control Center.
-- [ ] Basic **Screen Awareness** using interval screenshots + Vision API.
-- [ ] Supervised autonomous actions (Lira suggests actions based on the screen).
-
-### 📌 Phase 4: Community and External Integration
-- [ ] Approval Pipeline for social networks and emails.
-- [ ] Extended support for other software besides VTube Studio (e.g., Warudo).
-- [ ] Packaging into a portable `.exe`.
+### 📌 Phase 7: Expression and Immersion
+- [ ] **Emotional RVC Mapping:** Dynamic pitch adjustment based on mood.
+- [ ] Extended VTS Bridge: Real-time parameter sync via WebSockets.
+- [ ] Episodic Memory: Daily summaries of user interactions.
 
 ---
 
@@ -304,10 +298,9 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 | Area | Recursos |
 | --- | --- |
 | Voz | STT por Whisper, TTS por ElevenLabs, Google, Azure, OpenAI e Edge, stop global por F8 |
-| Cerebro | Providers `google_cloud`, `groq`, `openrouter`, `openai` e `cerebras` |
-| GUI | Control Center em CustomTkinter, chat visual, anexos, markdown, cards de audio e preview de midia |
+| Agência | **Loops ReAct Autônomos** (Pensa-Age-Observa), lembretes proativos e agendamentos |
+| Multimodalidade | **Entendimento de Vídeo** (extração de frames), geração de imagem, visão de tela e OCR |
 | Memoria | SQLite cronologico, RAG vetorial e grafo de conhecimento |
-| Midia | Geracao/edicao de imagem, geracao de musica, analise de video/anexos e historico local |
 | Desktop | Tool XML para abrir URL, abrir app, ler arquivo, mover mouse, digitar, volume e processos |
 | VTuber | Integracao com VTube Studio, emocoes, parametros, lipsync e estado persistido |
 
@@ -378,8 +371,9 @@ A Lira pode falar uma coisa para o usuario e executar outra por baixo, sem vazar
 ```xml
 <salvar_memoria>O Amarinth prefere respostas curtas no terminal.</salvar_memoria>
 <gerar_imagem>anime portrait of Lira with golden hair and white flowers</gerar_imagem>
-<gerar_musica>soft dreamy lofi song for sleeping</gerar_musica>
 <acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
+<analisar_video>https://youtube.com/watch?v=ID</analisar_video>
+<agendar_aviso>{"tempo": "5m", "mensagem": "Tirar o bolo do forno"}</agendar_aviso>
 ```
 
 Regras importantes:
@@ -616,26 +610,20 @@ python -m pytest -q
 
 O desenvolvimento da Lira está organizado em fases para focar em fluidez, imersão e visão computacional:
 
-### 📌 Fase 1: Estabilidade e QoL (Quality of Life)
-- [ ] Implementar a Fila Visual de Mídia na GUI.
-- [ ] Adicionar o painel de histórico de imagem e música na GUI.
-- [ ] Limpar e refinar prompts e *persona* da Lira.
-- [ ] Corrigir qualquer *edge-case* de encoding (ex: SQLite ChromaDB).
+### 📌 Fase 5: Agência e Proatividade
+- [x] **Loops de Ferramentas Autônomos:** Uso sequencial de ferramentas em um único turno.
+- [x] **Lira Scheduler:** Lembretes e notificações proativas.
+- [ ] Manutenção de Auto-Memória: Limpeza automatizada de contextos antigos.
 
-### 📌 Fase 2: Imersão e Voz
-- [ ] Integrar **Silero VAD** para interrupção de voz natural.
-- [ ] **Áudio Streaming** (Chunking) para TTS, reduzindo o *delay* antes da fala.
-- [ ] Criar Modo **Mini Player** (Overlay flutuante na tela do Windows).
+### 📌 Fase 6: Multimodalidade 2.0
+- [x] **Entendimento de Vídeo:** Extração de frames e comentários visuais.
+- [x] **Voz-para-Voz (WhatsApp):** Processamento de áudio nativo para o bridge.
+- [ ] OCR Multimodal: Leitura profunda de documentos e telas complexas.
 
-### 📌 Fase 3: Agência e Visão
-- [ ] Editor de Memória Visual no Control Center.
-- [ ] **Consciência de Tela (Screen Awareness)** básica usando captura de tela em intervalos + API de Visão.
-- [ ] Ações autônomas supervisionadas (Lira sugere ações com base na tela).
-
-### 📌 Fase 4: Comunidade e Integração Externa
-- [ ] Pipeline de Aprovação para redes sociais e emails.
-- [ ] Suporte estendido para outros softwares além do VTube Studio (ex: Warudo).
-- [ ] Empacotamento em um `.exe` portátil.
+### 📌 Fase 7: Expressividade e Imersão
+- [ ] **Mapeamento Emocional RVC:** Ajuste dinâmico de tom de voz baseado no humor.
+- [ ] Bridge VTS Estendido: Sincronia de parâmetros via WebSockets.
+- [ ] Memória Episódica: Resumos diários das interações com o usuário.
 
 ---
 

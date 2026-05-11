@@ -111,6 +111,40 @@ async def get_chat_history(limit: int = 50):
 
 # === WHATSAPP REST ENDPOINT ===
 
+@app.post("/api/whatsapp/transcribe")
+async def whatsapp_transcribe(payload: dict):
+    """Recebe audio em base64 do WhatsApp e retorna o texto transcrito."""
+    audio_b64 = payload.get("audio_b64")
+    if not audio_b64:
+        return {"status": "error", "message": "Audio nao fornecido"}
+
+    import base64
+    import tempfile
+    
+    try:
+        # 1. Salvar o base64 em um arquivo temporario
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
+            tmp.write(base64.b64decode(audio_b64))
+            tmp_path = tmp.name
+
+        # 2. Transcrever
+        context = app.state.lira
+        if not hasattr(context, "stt_motor") or context.stt_motor is None:
+            from src.modules.voice.stt_whisper import MotorSTTWhisper
+            context.stt_motor = MotorSTTWhisper()
+        
+        text = context.stt_motor.transcrever_arquivo(tmp_path)
+        
+        # Limpeza
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
+        print(f"[WHATSAPP] Transcricao concluida: '{text}'", flush=True)
+        return {"status": "ok", "text": text}
+    except Exception as e:
+        logger.error(f"[API] Erro na transcricao WhatsApp: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/whatsapp/chat")
 async def whatsapp_chat(payload: dict):
     print('\n--- [WHATSAPP] NOVA MENSAGEM ---', flush=True)
@@ -1696,6 +1730,7 @@ def start_server(host="0.0.0.0", port=8042, context=None):
         app.state.lira.music_gen = context.get("music_gen")
         app.state.lira.emotion_engine = context.get("emotion_engine")
         app.state.lira.tts = context.get("tts")
+        app.state.lira.stt_motor = context.get("stt_motor")
         app.state.lira.signals = context.get("signals")
     else:
         from src.providers.provider_selector import ProviderSelector
@@ -1714,6 +1749,9 @@ def start_server(host="0.0.0.0", port=8042, context=None):
                 # Roda o carregamento síncrono em uma thread do sistema
                 app.state.lira.memory_manager = await asyncio.to_thread(LiraMemoryManager)
                 app.state.lira.emotion_engine = await asyncio.to_thread(EmotionEngine)
+                
+                from src.modules.voice.stt_whisper import MotorSTTWhisper
+                app.state.lira.stt_motor = await asyncio.to_thread(MotorSTTWhisper)
                 
                 logger.info("[API] ✅ Motores carregados e ativos!")
             except Exception as e:

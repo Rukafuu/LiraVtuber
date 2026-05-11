@@ -314,18 +314,21 @@ class MotorSTTWhisper:
 
     def transcrever(self) -> str:
         caminho_wav = self.gravar_audio()
-        if not caminho_wav:
+        return self.transcrever_arquivo(caminho_wav)
+
+    def transcrever_arquivo(self, caminho_audio: str) -> str:
+        if not caminho_audio or not os.path.exists(caminho_audio):
             return ""
 
-        ui.print_linha("PROCESSANDO", ui.C_STT, "GROQ/WHISPER", "⚙️", "🎙️")
+        ui.print_linha("PROCESSANDO", ui.C_STT, "WHISPER", "⚙️", "🎙️")
 
         texto_transcrito = ""
         try:
             groq_key = os.getenv("GROQ_API_KEY")
-            if groq_key:
+            if groq_key and "nao-configurado" not in groq_key:
                 from openai import OpenAI
                 client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-                with open(caminho_wav, "rb") as audio_file:
+                with open(caminho_audio, "rb") as audio_file:
                     transcription = client.audio.transcriptions.create(
                         model="whisper-large-v3-turbo", 
                         file=audio_file,
@@ -334,8 +337,9 @@ class MotorSTTWhisper:
                 texto_transcrito = transcription.text.strip()
             else:
                 model = _get_whisper_model()
+                # O Whisper aceita vários formatos, mas WAV/MP3 são garantidos.
                 segments, _ = model.transcribe(
-                    caminho_wav,
+                    caminho_audio,
                     language=self.idioma,
                     beam_size=5,
                     vad_filter=True,
@@ -354,9 +358,12 @@ class MotorSTTWhisper:
 
             texto_transcrito = self._corrigir_texto(texto_transcrito)
         except Exception as erro:
-            logger.error(f"[STT] Erro durante transcricao Whisper local: {erro}")
+            logger.error(f"[STT] Erro durante transcricao Whisper: {erro}")
         finally:
-            if os.path.exists(caminho_wav):
-                os.remove(caminho_wav)
+            # Só remove se for um arquivo temporário gerado pela gravação local
+            # Se for do WhatsApp, o server.py lida com a limpeza.
+            if "tmp" in caminho_audio or "temp" in caminho_audio:
+                if os.path.exists(caminho_audio):
+                    os.remove(caminho_audio)
 
         return texto_transcrito

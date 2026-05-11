@@ -90,6 +90,40 @@ FERRAMENTAS = [
                 "required": ["prompt"],
             },
         },
+    {
+        "type": "function",
+        "function": {
+            "name": "agendar_aviso",
+            "description": "Agenda um lembrete ou aviso para um momento futuro. A Lira interromperá o usuário para avisar.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tempo": {
+                        "type": "string", 
+                        "description": "Tempo para o aviso. Pode ser relativo (ex: '5m', '1h', '30s') ou absoluto (ex: '20:30')."
+                    },
+                    "mensagem": {
+                        "type": "string",
+                        "description": "O que deve ser lembrado."
+                    }
+                },
+                "required": ["tempo", "mensagem"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analisar_video",
+            "description": "Analisa visualmente um vídeo (YouTube ou link direto). Extrai frames e os envia para a visão da Lira.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL do vídeo."}
+                },
+                "required": ["url"],
+            },
+        },
     },
 ]
 
@@ -129,6 +163,12 @@ class ToolManager:
 
         if nome_tool == "gerar_imagem":
             return self._despachar_imagem(args)
+
+        if nome_tool == "agendar_aviso":
+            return self._despachar_agendamento(args)
+
+        if nome_tool == "analisar_video":
+            return self._despachar_analise_video(args)
 
         logger.warning(f"[TOOL MANAGER] Tool desconhecida: {nome_tool}")
         return ("Menu_Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
@@ -323,3 +363,95 @@ class ToolManager:
         except Exception as e:
             logger.error(f"[TOOL YOUTUBE] Erro ao baixar legenda: {e}")
             return (f"Erro Youtube API: {e}", "Não consegui ler as legendas desse vídeo. Talvez ele não tenha legendas automáticas ou seja privado.")
+    def _despachar_agendamento(self, args: dict) -> tuple:
+        import datetime
+        import time
+        
+        tempo_raw = str(args.get("tempo", "")).lower().strip()
+        msg = args.get("mensagem", "")
+        
+        if not (tempo_raw and msg):
+            return ("Dados de agendamento incompletos.", "Não entendi quando ou o que devo lembrar.")
+
+        try:
+            # Lógica simples de parse de tempo
+            now = datetime.datetime.now()
+            target_time = None
+            
+            if ":" in tempo_raw: # Formato HH:MM
+                h, m = map(int, tempo_raw.split(":"))
+                target_time = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                if target_time < now: # Se já passou hoje, assume amanhã
+                    target_time += datetime.timedelta(days=1)
+            else: # Formato relativo (5m, 1h, etc)
+                match = re.match(r"(\d+)\s*([smh])", tempo_raw)
+                if match:
+                    val = int(match.group(1))
+                    unit = match.group(2)
+                    if unit == "s": target_time = now + datetime.timedelta(seconds=val)
+                    elif unit == "m": target_time = now + datetime.timedelta(minutes=val)
+                    elif unit == "h": target_time = now + datetime.timedelta(hours=val)
+            
+            if not target_time:
+                return ("Formato de tempo invalido.", "Não entendi esse horário, pode repetir?")
+
+            # Salva no arquivo de agendamentos para o monitor ler
+            agenda_path = os.path.abspath("data/scheduler.jsonl")
+            os.makedirs("data", exist_ok=True)
+            
+            with open(agenda_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "target_timestamp": target_time.timestamp(),
+                    "message": msg,
+                    "created_at": now.timestamp(),
+                    "status": "pending"
+                }) + "\n")
+
+            diff = target_time - now
+            mins = int(diff.total_seconds() / 60)
+            tempo_desc = f"em {mins} minutos" if mins > 0 else f"em {int(diff.total_seconds())} segundos"
+            if ":" in tempo_raw: tempo_desc = f"às {tempo_raw}"
+
+            return (f"Agendado para {target_time.isoformat()}", f"Ok! Vou te lembrar de '{msg}' {tempo_desc}.")
+            
+        except Exception as e:
+            logger.error(f"[SCHEDULER] Erro ao agendar: {e}")
+            return (f"Erro no agendamento: {e}", "Tive um erro interno ao tentar agendar seu aviso.")
+    def _despachar_analise_video(self, args: dict) -> tuple:
+        from src.modules.media.downloader import baixar_midia
+        from src.modules.vision.video_analyzer import VideoAnalyzer
+        import base64
+
+        url = args.get("url", "")
+        if not url:
+            return ("URL ausente.", "Você esqueceu de me passar o link do vídeo.")
+
+        try:
+            # 1. Download do vídeo
+            video_path = baixar_midia(url, tipo="video")
+            if not video_path:
+                return ("Falha no download do video.", "Não consegui baixar esse vídeo para olhar.")
+
+            # 2. Extração de frames
+            analyzer = VideoAnalyzer()
+            frames = analyzer.extrair_frames(video_path, max_frames=4)
+            
+            if not frames:
+                return ("Falha ao extrair frames.", "O vídeo parece estar corrompido ou vazio.")
+
+            # 3. Preparar contexto visual
+            res_str = "--- ANÁLISE VISUAL DE VÍDEO ---\n"
+            res_str += f"Vídeo: {os.path.basename(video_path)}\n"
+            res_str += f"Frames extraídos: {len(frames)}\n"
+            res_str += "Analise os frames que foram enviados como imagens para descrever o vídeo.\n"
+            res_str += "--- FIM ---"
+
+            # Injetamos as imagens via tag especial para o loop tratar
+            for f in frames:
+                res_str += f"\n[IMAGE_DATA:{f}]"
+            
+            return (res_str, "Estou dando uma olhada nos frames desse vídeo agora mesmo...")
+
+        except Exception as e:
+            logger.error(f"[TOOL VIDEO] Erro: {e}")
+            return (f"Erro na análise de vídeo: {e}", "Tive um problema ao tentar ver esse vídeo.")

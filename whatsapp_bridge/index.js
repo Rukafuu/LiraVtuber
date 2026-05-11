@@ -240,7 +240,7 @@ async function connectToWhatsApp() {
                             msg.message.imageMessage?.caption ||
                             msg.message.videoMessage?.caption || "";
 
-        if (!textMessage) return;
+        if (!textMessage && !msg.message.audioMessage) return;
 
         const isGroup = remoteJid.endsWith('@g.us');
         const textLower = textMessage.toLowerCase();
@@ -263,9 +263,36 @@ async function connectToWhatsApp() {
         // Reação de "lendo" enquanto processa na API
         try { await sock.sendMessage(remoteJid, { react: { text: '💜', key: msg.key } }); } catch (_) {}
 
-        // Extração de imagem se houver
+        // Extração de imagem ou áudio se houver
         let imageB64 = null;
         const isImage = !!msg.message.imageMessage;
+        const isAudio = !!msg.message.audioMessage;
+
+        if (isAudio) {
+            console.log(`[AUDIO] Mensagem de voz recebida de ${pushName}. Transcrevendo...`);
+            try {
+                const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+                const stream = await downloadContentFromMessage(msg.message.audioMessage, 'audio');
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+                
+                // Enviar para transcrição
+                const transcribeRes = await axios.post('http://127.0.0.1:8042/api/whatsapp/transcribe', {
+                    audio_b64: buffer.toString('base64')
+                });
+                
+                if (transcribeRes.data && transcribeRes.data.status === 'ok') {
+                    textMessage = transcribeRes.data.text;
+                    console.log(`[AUDIO] Transcrição: "${textMessage}"`);
+                    if (!textMessage) return; 
+                }
+            } catch (audErr) {
+                console.error(`❌ Erro ao processar áudio do WhatsApp:`, audErr.message);
+            }
+        }
+
         
         if (isImage || !!msg.message.videoMessage) {
             const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
