@@ -32,7 +32,17 @@ export function TabLLM() {
   useEffect(() => {
     Promise.all([ApiController.getLlmConfig(), ApiController.getCatalog()])
       .then(([loadedConfig, catalog]) => {
-        setConfig(loadedConfig);
+        // Sanitiza valores numéricos para evitar NaN no UI
+        const sanitized = {
+          ...loadedConfig,
+          llmTemperature: Number(loadedConfig.llmTemperature ?? 0.85),
+          ttsSpeed: Number(loadedConfig.ttsSpeed ?? 1.0),
+          ttsPitch: Number(loadedConfig.ttsPitch ?? 0.0),
+          ttsStability: Number(loadedConfig.ttsStability ?? 0.5),
+          ttsSimilarity: Number(loadedConfig.ttsSimilarity ?? 0.75),
+          ttsStyle: Number(loadedConfig.ttsStyle ?? 0.0),
+        };
+        setConfig(sanitized);
         if (!catalog) return;
         setCatalogModels(catalog.models || MODEL_CATALOG);
         setCatalogVoices(catalog.voices || VOICE_CATALOG);
@@ -458,7 +468,13 @@ export function TabLLM() {
                 onMouseEnter={() => audio.playHover()}
                 onClick={async () => {
                   audio.playClick();
-                  await ApiController.updateLlmConfig(config);
+                  // Força uma sanitização antes de enviar
+                  const safeConfig = {
+                    ...config,
+                    ttsSpeed: Number(config.ttsSpeed || 1),
+                    ttsPitch: Number(config.ttsPitch || 0)
+                  };
+                  await ApiController.updateLlmConfig(safeConfig);
                   await ApiController.speakText("Oi, Amarinth. Teste de voz da Lira com lipsync ativo.");
                 }}
                 className="bg-gradient-to-r from-blue-600 to-blue-500 hover:to-blue-400 text-white transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] px-8 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transform hover:scale-[1.02]"

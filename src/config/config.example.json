@@ -136,5 +136,6 @@
     "LIRA_INBOX_MODEL": "gemini-2.5-flash",
     "Modo_discord": false,
     "precione_para_falar": false,
-    "TECLA_PTT": "F2"
+    "TECLA_PTT": "F2",
+    "WPP_NOTIFY_JIDS": []
 }

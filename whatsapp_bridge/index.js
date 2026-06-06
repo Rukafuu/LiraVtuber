@@ -9,6 +9,218 @@ const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+const WHATSAPP_API_BASE = (process.env.WHATSAPP_API_URL || 'http://127.0.0.1:8043').replace(/\/$/, '');
+
+// IDs do dono lidos do .env
+const OWNER_JID = process.env.WPP_OWNER_JID || '5511981826659@s.whatsapp.net';
+const OWNER_LID = process.env.WPP_OWNER_LID || '38620983517314@lid';
+const WPP_LINK_MODE = (process.env.WPP_LINK_MODE || 'qr').toLowerCase();
+const WPP_PHONE = (process.env.WPP_PHONE || OWNER_JID.split('@')[0]).replace(/\D/g, '');
+const WPP_PUSH_PORT = parseInt(process.env.WPP_PUSH_PORT || '8044', 10);
+const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
+const STATUS_FILE = path.join(__dirname, 'bridge_status.json');
+
+let activeSocket = null;
+let connectInFlight = false;
+let reconnectTimer = null;
+let pushServerStarted = false;
+
+function writeBridgeStatus(data) {
+    try {
+        fs.writeFileSync(
+            STATUS_FILE,
+            JSON.stringify({ ...data, updated_at: new Date().toISOString() }, null, 2),
+            'utf8'
+        );
+    } catch (e) {
+        console.error('[STATUS] Erro ao gravar bridge_status.json:', e.message);
+    }
+}
+
+function formatPairingCode(code) {
+    const c = String(code || '').replace(/\W/g, '').toUpperCase();
+    if (c.length === 8) return `${c.slice(0, 4)}-${c.slice(4)}`;
+    return String(code || '').toUpperCase();
+}
+
+function persistPairingCode(code) {
+    const formatted = formatPairingCode(code);
+    fs.writeFileSync(path.join(__dirname, 'pairing_code.txt'), formatted, 'utf8');
+    writeBridgeStatus({ state: 'pairing', pairing_code: formatted, link_mode: 'pairing' });
+    console.log('\n======================================================');
+    console.log(`[PAIRING] Código: ${formatted}`);
+    console.log('[PAIRING] No celular: WhatsApp → Aparelhos conectados → Conectar com número de telefone');
+    console.log(`[PAIRING] Número (somente dígitos): ${WPP_PHONE}`);
+    console.log('======================================================\n');
+    return formatted;
+}
+
+function persistQr(qr) {
+    const revision = Date.now();
+    fs.writeFileSync(path.join(__dirname, 'qr.txt'), qr, 'utf8');
+    fs.writeFileSync(
+        path.join(__dirname, 'qr_meta.json'),
+        JSON.stringify({ revision, updated_at: new Date().toISOString() }),
+        'utf8'
+    );
+    writeBridgeStatus({ state: 'qr', link_mode: 'qr', qr_revision: revision });
+    console.log('[QR] Novo código salvo (revision', revision + '). Escaneie em até ~60s.');
+}
+
+function clearSessionArtifacts() {
+    for (const f of ['qr.txt', 'qr_meta.json', 'pairing_code.txt']) {
+        const p = path.join(__dirname, f);
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) { /* ignore */ }
+    }
+}
+
+function resetAuthDir() {
+    if (fs.existsSync(AUTH_DIR)) {
+        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        console.log('[AUTH] Sessão apagada (auth_info_baileys).');
+    }
+    clearSessionArtifacts();
+    writeBridgeStatus({ state: 'reset', message: 'Sessão limpa. Inicie o bridge novamente.' });
+}
+
+if (process.env.WPP_RESET_SESSION === '1') {
+    resetAuthDir();
+}
+
+// ── Utilitários ────────────────────────────────────────────────────────────────
+function formatWhatsAppMessage(text) {
+    if (!text) return "";
+    return text
+        .replace(/\*\*\*(.*?)\*\*\*/g, '*_$1_*') // Bold + Italic
+        .replace(/\*\*(.*?)\*\*/g, '*$1*')     // Bold
+        .replace(/__(.*?)__/g, '*$1*')         // Bold alternative
+        .replace(/\*([^\s\*][^*]*?[^\s\*])\*/g, '_$1_') // Italic (não pega balas de lista)
+        .replace(/~~(.*?)~~/g, '~$1~');        // Strikethrough
+}
+
+async function sendLiraReply(sock, remoteJid, msg, data) {
+    const rawText = (data?.response || data?.message || '').trim();
+    const textBody = formatWhatsAppMessage(rawText) || rawText;
+
+    if (data?.image_path) {
+        const isUrl = data.image_path.startsWith('http');
+        let mediaBuffer;
+        const mediaPath = data.image_path;
+
+        if (isUrl) {
+            try {
+                const resMedia = await axios.get(data.image_path, {
+                    responseType: 'arraybuffer',
+                    timeout: 60000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                });
+                mediaBuffer = Buffer.from(resMedia.data);
+            } catch (e) {
+                console.error(`❌ Erro ao baixar mídia (${data.image_path}):`, e.message);
+            }
+        } else if (fs.existsSync(data.image_path)) {
+            mediaBuffer = fs.readFileSync(data.image_path);
+        }
+
+        if (mediaBuffer) {
+            const isVideo = /\.(mp4|mkv|gif)$/i.test(mediaPath);
+            try {
+                if (isVideo) {
+                    let jpegThumbnail;
+                    try {
+                        const { execSync } = require('child_process');
+                        const thumbPath = mediaPath + '_thumb.jpg';
+                        execSync(
+                            `ffmpeg -y -i "${mediaPath}" -ss 00:00:00.000 -vframes 1 -vf "scale=320:-1" -q:v 5 "${thumbPath}"`,
+                            { stdio: 'pipe', timeout: 15000 }
+                        );
+                        if (fs.existsSync(thumbPath)) {
+                            jpegThumbnail = fs.readFileSync(thumbPath);
+                            fs.unlinkSync(thumbPath);
+                        }
+                    } catch (_) { /* ignore */ }
+
+                    await sock.sendMessage(remoteJid, {
+                        video: mediaBuffer,
+                        caption: textBody || undefined,
+                        mimetype: 'video/mp4',
+                        gifPlayback: mediaPath.endsWith('.gif'),
+                        ...(jpegThumbnail ? { jpegThumbnail } : {}),
+                    }, { quoted: msg });
+                } else {
+                    await sock.sendMessage(remoteJid, {
+                        image: mediaBuffer,
+                        caption: textBody || undefined,
+                    }, { quoted: msg });
+                }
+                console.log('[MIDIA] Arquivo enviado.');
+                if (rawText && CONFIG_TTS_ENABLED()) {
+                    axios.post(`${WHATSAPP_API_BASE}/api/whatsapp/tts`, { text: rawText }, { timeout: 120000 })
+                        .then(async (ttsRes) => {
+                            const audioPath = ttsRes.data?.audio_path;
+                            if (ttsRes.data?.status === 'ok' && audioPath && fs.existsSync(audioPath)) {
+                                await sock.sendMessage(remoteJid, {
+                                    audio: fs.readFileSync(audioPath),
+                                    mimetype: 'audio/mpeg',
+                                    ptt: true,
+                                }, { quoted: msg });
+                            }
+                        })
+                        .catch((ttsErr) => console.error('❌ Erro TTS:', ttsErr.message));
+                }
+                return;
+            } catch (sendError) {
+                console.error('❌ Erro ao enviar mídia:', sendError.message);
+            }
+        }
+    }
+
+    if (textBody) {
+        await sock.sendMessage(remoteJid, { text: textBody }, { quoted: msg });
+        console.log('[TEXTO] Resposta enviada.');
+    } else {
+        await sock.sendMessage(
+            remoteJid,
+            { text: '💜 Tive um problema ao montar a resposta. Tenta de novo?' },
+            { quoted: msg }
+        );
+    }
+
+    if (data?.audio_path && fs.existsSync(data.audio_path)) {
+        try {
+            await sock.sendMessage(remoteJid, {
+                audio: fs.readFileSync(data.audio_path),
+                mimetype: 'audio/mpeg',
+                ptt: false,
+            }, { quoted: msg });
+        } catch (audioErr) {
+            console.error('❌ Erro ao enviar áudio:', audioErr.message);
+        }
+    }
+
+    if (rawText && CONFIG_TTS_ENABLED()) {
+        axios.post(`${WHATSAPP_API_BASE}/api/whatsapp/tts`, { text: rawText }, { timeout: 120000 })
+            .then(async (ttsRes) => {
+                const audioPath = ttsRes.data?.audio_path;
+                if (ttsRes.data?.status === 'ok' && audioPath && fs.existsSync(audioPath)) {
+                    await sock.sendMessage(remoteJid, {
+                        audio: fs.readFileSync(audioPath),
+                        mimetype: 'audio/mpeg',
+                        ptt: true,
+                    }, { quoted: msg });
+                }
+            })
+            .catch((ttsErr) => console.error('❌ Erro TTS:', ttsErr.message));
+    }
+}
+
+function CONFIG_TTS_ENABLED() {
+    return process.env.TTS_ATIVO !== '0' && process.env.TTS_ATIVO !== 'false';
+}
 
 // ── Textos de Ajuda (formatação WhatsApp) ─────────────────────────────────────
 
@@ -165,11 +377,52 @@ async function handleLocalCommand(sock, remoteJid, msg, text, pushName) {
             .replace('{target}', `*${target}*`);
 
         if (gifUrl) {
-            await sock.sendMessage(remoteJid, { 
-                video: { url: gifUrl }, 
-                caption: caption,
-                gifPlayback: true 
-            }, { quoted: msg });
+            console.log(`[GIF REACTION] Baixando GIF de reação: ${gifUrl}`);
+            try {
+                const axios = require('axios');
+                const fs = require('fs');
+                const path = require('path');
+                const { exec } = require('child_process');
+
+                const resMedia = await axios.get(gifUrl, { responseType: 'arraybuffer' });
+                const gifBuffer = Buffer.from(resMedia.data);
+
+                const tempGifInput = path.join(__dirname, `temp_gif_in_${Date.now()}.gif`);
+                const tempMp4Output = path.join(__dirname, `temp_gif_out_${Date.now()}.mp4`);
+
+                fs.writeFileSync(tempGifInput, gifBuffer);
+
+                // Executa o FFmpeg para converter GIF em MP4 animado
+                // -vf scale garante dimensões divisíveis por 2 (requisito do h264 no WhatsApp)
+                const ffmpegCmd = `ffmpeg -i "${tempGifInput}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempMp4Output}"`;
+
+                exec(ffmpegCmd, async (error) => {
+                    try {
+                        if (!error && fs.existsSync(tempMp4Output)) {
+                            console.log(`[GIF REACTION] GIF convertido para MP4 com sucesso. Enviando...`);
+                            await sock.sendMessage(remoteJid, { 
+                                video: fs.readFileSync(tempMp4Output), 
+                                caption: caption,
+                                gifPlayback: true 
+                            }, { quoted: msg });
+                        } else {
+                            console.error(`[GIF REACTION] Erro ao converter GIF para MP4 via FFmpeg:`, error);
+                            // Fallback: Envia apenas o texto de ação se o FFmpeg falhar
+                            await sock.sendMessage(remoteJid, { text: caption }, { quoted: msg });
+                        }
+                    } catch (sendErr) {
+                        console.error(`[GIF REACTION] Erro ao enviar mensagem de vídeo/texto:`, sendErr.message);
+                    } finally {
+                        // Limpeza de arquivos temporários
+                        if (fs.existsSync(tempGifInput)) try { fs.unlinkSync(tempGifInput); } catch(_) {}
+                        if (fs.existsSync(tempMp4Output)) try { fs.unlinkSync(tempMp4Output); } catch(_) {}
+                    }
+                });
+            } catch (gifErr) {
+                console.error(`[GIF REACTION] Erro geral no processamento do GIF:`, gifErr.message);
+                // Fallback imediato se o download falhar
+                await sock.sendMessage(remoteJid, { text: caption }, { quoted: msg });
+            }
         } else {
             await sock.sendMessage(remoteJid, { text: caption }, { quoted: msg });
         }
@@ -185,46 +438,151 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function connectToWhatsApp() {
-    console.log("💜 Iniciando Lira Amarinth WhatsApp Bridge...");
-    
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth_info_baileys'));
-    const { version } = await fetchLatestBaileysVersion();
+    if (connectInFlight) {
+        console.log('[BRIDGE] Conexão já em andamento, ignorando duplicata.');
+        return;
+    }
+    connectInFlight = true;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
 
-    const sock = makeWASocket({
-        version,
-        printQRInTerminal: true,
-        auth: state,
-        logger: require('pino')({ level: 'silent' }),
-        markOnlineOnConnect: false,
-        browser: ['Lira Amarinth', 'MacOS', '3.0.0']
-    });
+    console.log(`💜 Iniciando Lira WhatsApp Bridge (modo: ${WPP_LINK_MODE})...`);
+    writeBridgeStatus({ state: 'connecting', link_mode: WPP_LINK_MODE });
 
-    sock.ev.on('creds.update', saveCreds);
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+        const { version } = await fetchLatestBaileysVersion();
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            console.log('📱 Escaneie o QR Code abaixo para conectar:');
-            qrcode.generate(qr, { small: true });
-        }
-        
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom) 
-                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut 
-                : true;
-            console.log('❌ Conexão encerrada. Reconectando:', shouldReconnect);
-            if (shouldReconnect) setTimeout(connectToWhatsApp, 3000);
-        } else if (connection === 'open') {
-            console.log('✅ Lira Amarinth está ONLINE no WhatsApp! 💜');
-        }
-    });
+        const sock = makeWASocket({
+            version,
+            printQRInTerminal: WPP_LINK_MODE === 'qr',
+            auth: state,
+            logger: require('pino')({ level: 'silent' }),
+            markOnlineOnConnect: true,
+            syncFullHistory: false,
+            shouldSyncHistoryMessage: () => false,
+            browser: ['Lira Control Center', 'Chrome', '120.0.0'],
+            connectTimeoutMs: 120000,
+            qrTimeout: 120000,
+        });
 
-    const processedMessages = new Set();
+        activeSocket = sock;
 
-    sock.ev.on('messages.upsert', async (m) => {
+        sock.ev.on('creds.update', saveCreds);
+
+        let pairingRequested = false;
+
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (qr && WPP_LINK_MODE === 'qr') {
+                console.log('📱 Escaneie o QR (WhatsApp → Aparelhos conectados → Conectar):');
+                qrcode.generate(qr, { small: true });
+                try {
+                    persistQr(qr);
+                } catch (e) {
+                    console.error('Erro ao salvar QR:', e.message);
+                }
+            }
+
+            if (
+                qr &&
+                WPP_LINK_MODE === 'pairing' &&
+                !pairingRequested &&
+                !sock.authState?.creds?.registered
+            ) {
+                pairingRequested = true;
+                try {
+                    console.log(`[PAIRING] Gerando código para ${WPP_PHONE}...`);
+                    const code = await sock.requestPairingCode(WPP_PHONE);
+                    persistPairingCode(code);
+                } catch (err) {
+                    console.error('[PAIRING] Erro:', err.message);
+                    writeBridgeStatus({ state: 'pairing_failed', error: err.message, link_mode: 'pairing' });
+                }
+            }
+
+            if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const loggedOut = statusCode === DisconnectReason.loggedOut;
+                const badSession = statusCode === DisconnectReason.badSession;
+                const restartRequired = statusCode === DisconnectReason.restartRequired;
+                const connectionReplaced = statusCode === DisconnectReason.connectionReplaced;
+                const sessionInvalid = loggedOut || badSession;
+                const shouldReconnect =
+                    lastDisconnect?.error instanceof Boom
+                        ? !sessionInvalid
+                        : true;
+
+                const errMsg = lastDisconnect?.error?.message || 'desconhecido';
+                const delayMs = restartRequired ? 2000 : connectionReplaced ? 15000 : 8000;
+                console.log(
+                    `❌ Conexão encerrada (code=${statusCode}). Reconectar: ${shouldReconnect}${restartRequired ? ' (pós-login)' : ''}`
+                );
+
+                writeBridgeStatus({
+                    state: restartRequired ? 'restarting' : 'disconnected',
+                    disconnect_code: statusCode,
+                    error: errMsg,
+                    link_mode: WPP_LINK_MODE,
+                    hint: sessionInvalid
+                        ? 'Sessão inválida: use Limpar sessão no painel e escaneie um QR novo.'
+                        : restartRequired
+                          ? 'Login aceito — reconectando automaticamente…'
+                          : connectionReplaced
+                            ? 'Outro WhatsApp Web/sessão aberta. Feche outras sessões e aguarde.'
+                            : 'Aguardando reconexão ou novo QR.',
+                });
+
+                activeSocket = null;
+
+                if (sessionInvalid) {
+                    console.log('[AUTH] Sessão inválida (loggedOut). Limpe a sessão e inicie de novo.');
+                    return;
+                }
+
+                if (shouldReconnect) {
+                    reconnectTimer = setTimeout(() => {
+                        connectInFlight = false;
+                        connectToWhatsApp();
+                    }, delayMs);
+                }
+            } else if (connection === 'open') {
+                console.log('✅ Lira Amarinth está ONLINE no WhatsApp! 💜');
+                clearSessionArtifacts();
+                writeBridgeStatus({ state: 'connected', link_mode: WPP_LINK_MODE });
+                startPushServer(sock);
+            } else if (connection === 'connecting') {
+                writeBridgeStatus({ state: 'connecting', link_mode: WPP_LINK_MODE });
+            }
+        });
+
+        const processedMessages = new Set();
+
+        sock.ev.on('messages.upsert', async (m) => {
+        console.log('[DEBUG UPSERT] Event type:', m.type, 'messages count:', m.messages?.length);
+        // Ignora sincronização de histórico e foca apenas em mensagens novas em tempo real
+        if (m.type !== 'notify') return;
+
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg.message) return;
+        console.log('[DEBUG msg] fromMe:', msg.key.fromMe, 'timestamp:', msg.messageTimestamp, 'id:', msg.key.id);
+        if (msg.key.fromMe) return;
+
+        // Ignora mensagens enviadas há mais de 2 minutos (evita responder mensagens antigas offline)
+        let msgTime = msg.messageTimestamp;
+        if (msgTime && typeof msgTime === 'object' && typeof msgTime.toNumber === 'function') {
+            msgTime = msgTime.toNumber();
+        } else if (msgTime) {
+            msgTime = Number(msgTime);
+        }
+
+        if (msgTime && (Math.floor(Date.now() / 1000) - msgTime > 120)) {
+            console.log('[DEBUG msg] Ignorando mensagem antiga:', msgTime);
+            return;
+        }
 
         const msgId = msg.key.id;
         if (processedMessages.has(msgId)) return;
@@ -232,6 +590,7 @@ async function connectToWhatsApp() {
         if (processedMessages.size > 100) processedMessages.delete(processedMessages.values().next().value);
 
         const remoteJid = msg.key.remoteJid;
+        const participantJid = msg.key.participant || msg.key.remoteJid;
         const pushName = msg.pushName || "Usuário";
         
         // Extrai texto de vários tipos de mensagem
@@ -243,11 +602,19 @@ async function connectToWhatsApp() {
         if (!textMessage && !msg.message.audioMessage) return;
 
         const isGroup = remoteJid.endsWith('@g.us');
-        const textLower = textMessage.toLowerCase();
-        const mentionsLira = textLower.includes('lira') || textLower.includes('amarinth') || textLower.includes('hana');
+        const mentionsLira = /\b(lira|liras|amarinth|hana)\b/i.test(textMessage);
         const isCommand = textMessage.startsWith('/');
-        const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-        const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myId);
+        
+        // Suporte robusto para menções (incluindo JID padrão, LID e JID bruto com porta)
+        const myJidClean = sock.user.id.split(':')[0];
+        const myNumber = myJidClean.split('@')[0];
+        const myIdNet = myNumber + '@s.whatsapp.net';
+        const myIdLid = myNumber + '@lid';
+        
+        const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myIdNet) || 
+                            msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myIdLid) ||
+                            msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(sock.user.id) ||
+                            msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.includes(myJidClean);
 
         console.log(`[LOG] [${isGroup ? 'GRUPO' : 'PRIVADO'}] ${pushName} (${remoteJid}): ${textMessage.substring(0, 80)}`);
 
@@ -295,6 +662,7 @@ async function connectToWhatsApp() {
 
         
         if (isImage || !!msg.message.videoMessage) {
+            const textLower = textMessage.toLowerCase();
             const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
             try {
                 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
@@ -308,32 +676,51 @@ async function connectToWhatsApp() {
                 if (isStickerCmd) {
                     console.log(`[STICKER] Criando figurinha via FFmpeg...`);
                     const { spawn } = require('child_process');
-                    const tempInput = path.join(__dirname, `temp_sticker_${Date.now()}.png`);
-                    const tempOutput = path.join(__dirname, `temp_sticker_${Date.now()}.webp`);
+                    const tempInput = path.join(__dirname, `temp_sticker_in_${Date.now()}${isImage ? '.png' : '.mp4'}`);
+                    const tempOutput = path.join(__dirname, `temp_sticker_out_${Date.now()}.webp`);
                     
                     fs.writeFileSync(tempInput, buffer);
                     
-                    // Comando FFmpeg para converter para WebP (512x512, mantendo proporção e com transparência se houver)
-                    const ffmpeg = spawn('ffmpeg', [
+                    // Configuração FFmpeg:
+                    // - scale: 512x512 mantendo proporção
+                    // - pad: adiciona transparência para completar o quadrado 512x512
+                    // - quality: 75 para equilibrar tamanho e qualidade
+                    // - loop: 0 para vídeos (animados)
+                    const ffmpegArgs = [
                         '-i', tempInput,
                         '-vcodec', 'libwebp',
                         '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
-                        '-lossless', '1',
+                        '-qscale', '75',
+                        '-preset', 'default',
+                        '-loop', '0',
+                        '-an', // sem áudio
+                        '-vsync', '0',
                         '-y',
                         tempOutput
-                    ]);
+                    ];
+
+                    // Se for vídeo, limita a 5 segundos (requisito do WhatsApp para stickers animados)
+                    if (!isImage) {
+                        ffmpegArgs.splice(2, 0, '-t', '5');
+                    }
+
+                    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
                     ffmpeg.on('close', async (code) => {
                         if (code === 0 && fs.existsSync(tempOutput)) {
-                            await sock.sendMessage(remoteJid, { sticker: fs.readFileSync(tempOutput) }, { quoted: msg });
-                            console.log(`[STICKER] Figurinha enviada!`);
+                            const stickerBuffer = fs.readFileSync(tempOutput);
+                            await sock.sendMessage(remoteJid, { 
+                                sticker: stickerBuffer,
+                                mimetype: 'image/webp'
+                            }, { quoted: msg });
+                            console.log(`[STICKER] Figurinha enviada! Tamanho: ${stickerBuffer.length} bytes`);
                         } else {
                             console.error(`[STICKER] Erro no FFmpeg (code ${code})`);
                             await sock.sendMessage(remoteJid, { text: "❌ Erro ao processar a figurinha." }, { quoted: msg });
                         }
                         // Limpeza
-                        if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
-                        if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+                        if (fs.existsSync(tempInput)) try { fs.unlinkSync(tempInput); } catch(e) {}
+                        if (fs.existsSync(tempOutput)) try { fs.unlinkSync(tempOutput); } catch(e) {}
                     });
                     return;
                 }
@@ -350,8 +737,8 @@ async function connectToWhatsApp() {
         if (isGroup) {
             try {
                 const groupMetadata = await sock.groupMetadata(remoteJid);
-                const ownerJid = '5511981826659@s.whatsapp.net';
-                const ownerLid = '38620983517314@lid';
+                const ownerJid = OWNER_JID;
+                const ownerLid = OWNER_LID;
                 isOwnerPresent = groupMetadata.participants.some(p => p.id.includes(ownerJid.split('@')[0]) || p.id === ownerLid);
                 if (isOwnerPresent) console.log(`[VIP-RADAR] 👑 Dono detectado no grupo! Liberando Premium.`);
             } catch (e) {
@@ -360,95 +747,101 @@ async function connectToWhatsApp() {
         }
 
         try {
-            const response = await axios.post('http://127.0.0.1:8042/api/whatsapp/chat', {
-                message: textMessage,
-                sender: pushName,
-                jid: remoteJid,
-                image_b64: imageB64,
-                is_owner_present: isOwnerPresent
-            });
+            const response = await axios.post(
+                `${WHATSAPP_API_BASE}/api/whatsapp/chat`,
+                {
+                    message: textMessage,
+                    sender: pushName,
+                    jid: remoteJid,
+                    participant: participantJid,
+                    image_b64: imageB64,
+                    is_owner_present: isOwnerPresent,
+                },
+                { timeout: parseInt(process.env.WPP_CHAT_TIMEOUT_MS || '150000', 10) }
+            );
 
-            console.log(`[API] Resposta recebida da Lira.`);
-            
-            if (response.data && response.data.status === 'ok') {
-                const data = response.data;
-                console.log(`[DEBUG] Data:`, JSON.stringify(data, null, 2));
-                
-                if (data.image_path) {
-                    const isUrl = data.image_path.startsWith('http');
-                    let mediaBuffer;
-                    let mediaPath = data.image_path;
+            console.log('[API] Resposta recebida da Lira.');
+            const data = response.data;
 
-                    if (isUrl) {
-                        console.log(`[MIDIA] Baixando mídia externa: ${data.image_path}`);
-                        try {
-                            const resMedia = await axios.get(data.image_path, { 
-                                responseType: 'arraybuffer',
-                                headers: {
-                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                                }
-                            });
-                            mediaBuffer = Buffer.from(resMedia.data);
-                            console.log(`[MIDIA] Download concluído. Tamanho: ${mediaBuffer.length} bytes.`);
-                        } catch (e) {
-                            console.error(`❌ Erro ao baixar mídia externa (${data.image_path}):`, e.message);
-                        }
-                    } else if (fs.existsSync(data.image_path)) {
-                        mediaBuffer = fs.readFileSync(data.image_path);
-                    }
-
-                    if (mediaBuffer) {
-                        const isVideo = mediaPath.endsWith('.mp4') || mediaPath.endsWith('.mkv') || mediaPath.endsWith('.gif');
-                        try {
-                            if (isVideo) {
-                                await sock.sendMessage(remoteJid, { 
-                                    video: mediaBuffer, 
-                                    caption: data.response,
-                                    gifPlayback: mediaPath.endsWith('.gif')
-                                }, { quoted: msg });
-                            } else {
-                                await sock.sendMessage(remoteJid, { 
-                                    image: mediaBuffer, 
-                                    caption: data.response 
-                                }, { quoted: msg });
-                            }
-                            console.log(`[MIDIA] Arquivo enviado com sucesso!`);
-                        } catch (sendError) {
-                            console.error(`❌ Erro ao enviar mídia:`, sendError.message);
-                            await sock.sendMessage(remoteJid, { text: data.response + "\n\n⚠️ (Erro ao enviar a mídia)" }, { quoted: msg });
-                        }
-                    } else {
-                        console.error(`[MIDIA] Mídia não encontrada ou falha no download: ${data.image_path}`);
-                        await sock.sendMessage(remoteJid, { text: data.response + "\n\n❌ Mídia não encontrada." }, { quoted: msg });
-                    }
-                } else {
-                    console.log(`[TEXTO] Enviando resposta de texto...`);
-                    try {
-                        await sock.sendMessage(remoteJid, { text: data.response }, { quoted: msg });
-                        console.log(`[TEXTO] Resposta de texto enviada!`);
-                    } catch (txtErr) {
-                        console.error(`❌ Erro ao enviar texto:`, txtErr.message);
-                    }
-                }
-
-                // Envio de Áudio (Voz da Lira)
-                if (data.audio_path && fs.existsSync(data.audio_path)) {
-                    console.log(`[AUDIO] Enviando voz da Lira: ${data.audio_path}`);
-                    try {
-                        await sock.sendMessage(remoteJid, { 
-                            audio: fs.readFileSync(data.audio_path),
-                            mimetype: 'audio/mpeg',
-                            ptt: true 
-                        }, { quoted: msg });
-                        console.log(`[AUDIO] Voz enviada com sucesso!`);
-                    } catch (audioError) {
-                        console.error(`❌ Erro ao enviar áudio:`, audioError.message);
-                    }
-                }
+            if (data?.status === 'ok') {
+                await sendLiraReply(sock, remoteJid, msg, data);
+            } else {
+                const errText = data?.message || data?.response || 'Erro desconhecido na API.';
+                await sock.sendMessage(
+                    remoteJid,
+                    { text: `💜 Ops, falhei ao processar: ${errText}` },
+                    { quoted: msg }
+                );
             }
         } catch (error) {
-            console.error('❌ Erro na comunicação com a Lira API:', error.message);
+            const detail = error.response?.data?.message || error.message;
+            console.error('❌ Erro na comunicação com a Lira API:', detail);
+            try {
+                await sock.sendMessage(
+                    remoteJid,
+                    { text: `💜 Não consegui falar com a API agora (${detail}). A WhatsApp API está rodando na porta 8043?` },
+                    { quoted: msg }
+                );
+            } catch (_) { /* ignore */ }
         }
+    });
+
+    } catch (err) {
+        console.error('❌ Erro ao iniciar bridge:', err.message);
+        writeBridgeStatus({ state: 'error', error: err.message });
+        activeSocket = null;
+    } finally {
+        connectInFlight = false;
+    }
+}
+// ── Servidor HTTP interno para push da API Python ─────────────────────────────
+// POST http://127.0.0.1:8044/send (não usar 8043 — reservado para WhatsApp API)
+// para mandar mensagens de sistema (startup, shutdown, etc.)
+
+const http = require('http');
+
+let _sockGlobal = null; // referência ao socket ativo
+
+function startPushServer(sock) {
+    if (pushServerStarted) {
+        _sockGlobal = sock;
+        return;
+    }
+    _sockGlobal = sock;
+
+    const server = http.createServer(async (req, res) => {
+        if (req.method !== 'POST' || req.url !== '/send') {
+            res.writeHead(404); res.end('Not found'); return;
+        }
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { jid, text } = JSON.parse(body);
+                if (!jid || !text || !_sockGlobal) {
+                    res.writeHead(400); res.end(JSON.stringify({ ok: false })); return;
+                }
+                await _sockGlobal.sendMessage(jid, { text });
+                console.log(`[PUSH] Mensagem enviada para ${jid}: ${text.substring(0, 60)}`);
+                res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+            } catch (e) {
+                console.error('[PUSH] Erro:', e.message);
+                res.writeHead(500); res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+    });
+
+    server.on('error', (e) => {
+        if (e.code === 'EADDRINUSE') {
+            console.warn(`[PUSH] Porta ${WPP_PUSH_PORT} em uso — push interno desativado (API WhatsApp segue na 8043).`);
+        } else {
+            console.error('[PUSH] Erro no servidor:', e.message);
+        }
+    });
+
+    server.listen(WPP_PUSH_PORT, '127.0.0.1', () => {
+        pushServerStarted = true;
+        console.log(`🔌 [PUSH] Servidor interno em 127.0.0.1:${WPP_PUSH_PORT}`);
     });
 }
 

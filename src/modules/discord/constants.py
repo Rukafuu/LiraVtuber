@@ -1,6 +1,7 @@
 import discord
 import logging
 import os
+import re
 
 # ── DICIONÁRIO DE EMOJIS CUSTOMIZADOS ──────────────────────────
 EMOJI = {
@@ -40,6 +41,57 @@ EMOJI = {
 }
 
 THINKING_MSG = f"Estou processando... {EMOJI['processando']}"
+
+
+def _build_emoji_lookup() -> dict[str, str]:
+    """Mapeia :nome: e :764053nome: para o formato <:nome:id> do Discord."""
+    lookup: dict[str, str] = {}
+    for key, val in EMOJI.items():
+        lookup[key.lower()] = val
+        match = re.match(r"<a?:([^:>]+):\d+>", val)
+        if match:
+            discord_name = match.group(1).lower()
+            lookup[discord_name] = val
+            bare = re.sub(r"^\d+", "", discord_name)
+            if bare:
+                lookup[bare] = val
+    return lookup
+
+
+EMOJI_LOOKUP = _build_emoji_lookup()
+
+
+def substitute_discord_emojis(text: str) -> str:
+    """Converte :mahitolaugh:, :764053mahitolaugh: ou :7111pancakeflipfail: em emojis custom do servidor."""
+    if not text:
+        return text
+
+    def _replace(match: re.Match) -> str:
+        token = match.group(1).lower()
+
+        # 1. Tenta direto (chave curta como 'mahitolaugh')
+        if token in EMOJI_LOOKUP:
+            return EMOJI_LOOKUP[token]
+
+        # 2. Remove prefixo numérico do início (ex: '764053mahitolaugh' → 'mahitolaugh')
+        bare = re.sub(r"^\d+", "", token)
+        if bare and bare in EMOJI_LOOKUP:
+            return EMOJI_LOOKUP[bare]
+
+        # 3. Tenta o nome completo com números no meio (ex: '7111pancakeflipfail')
+        #    procura em todos os valores do EMOJI pelo nome interno do Discord
+        for key, val in EMOJI.items():
+            inner_match = re.match(r"<a?:([^:>]+):\d+>", val)
+            if inner_match and inner_match.group(1).lower() == token:
+                return val
+
+        # 4. Não encontrou — mantém como está (não quebra texto normal)
+        return match.group(0)
+
+    # Aceita :mahitolaugh:, :764053mahitolaugh:, :7111pancakeflipfail:
+    # Não confunde com <:nome:id> já convertido
+    return re.sub(r"(?<!<):([0-9]*[a-zA-Z][a-zA-Z0-9_]*):(?!\d+>)", _replace, text)
+
 
 # Logger compartilhado
 logger = logging.getLogger("LiraDiscordBot")

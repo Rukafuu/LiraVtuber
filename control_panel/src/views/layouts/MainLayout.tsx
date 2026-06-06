@@ -9,7 +9,7 @@ import { MenuOption } from "../../models/types";
 import { 
   MonitorDot, BrainCircuit, Database, HeartPulse,
   MonitorPlay, MessageSquareText, UserCircle,
-  FileCode2, Cable, Paintbrush, ScrollText
+  FileCode2, Cable, Paintbrush, ScrollText, Radio, Boxes
 } from "lucide-react";
 
 // Importando as Páginas (Views)
@@ -18,6 +18,8 @@ import { TabLLM } from "../pages/TabLLM";
 import { TabPersonalizacao } from "../pages/TabPersonalizacao";
 import { TabChat } from "../pages/TabChat";
 import { TabConexoes } from "../pages/TabConexoes";
+import { TabServicos } from "../pages/TabServicos";
+import { TabMCP } from "../pages/TabMCP";
 import { TabEmocoes } from "../pages/TabEmocoes";
 import { TabVTube } from "../pages/TabVTube";
 import { TabMemoria } from "../pages/TabMemoria";
@@ -34,6 +36,8 @@ const menus: MenuOption[] = [
   { icon: <UserCircle size={20} />, label: "sidebar.persona", id: "persona" },
   { icon: <FileCode2 size={20} />, label: "sidebar.prompts", id: "prompts" },
   { icon: <Cable size={20} />, label: "sidebar.conexoes", id: "conexoes" },
+  { icon: <Radio size={20} />, label: "sidebar.servicos", id: "servicos" },
+  { icon: <Boxes size={20} />, label: "sidebar.mcp", id: "mcp" },
   { icon: <Paintbrush size={20} />, label: "sidebar.personalizacao", id: "personalizacao" },
   { icon: <ScrollText size={20} />, label: "sidebar.logs", id: "logs" },
 ];
@@ -42,7 +46,7 @@ export function MainLayout() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("geral");
 
-  const isImplemented = ["geral", "llm", "personalizacao", "chat", "conexoes", "emocoes", "vtube", "memoria", "logs"].includes(activeTab);
+  const isImplemented = ["geral", "llm", "personalizacao", "chat", "conexoes", "servicos", "mcp", "emocoes", "vtube", "memoria", "logs"].includes(activeTab);
 
   return (
     <div className="flex h-screen w-full text-[var(--text-primary)] bg-transparent">
@@ -75,6 +79,14 @@ export function MainLayout() {
 
           <div className={activeTab === "conexoes" ? "block w-full h-full" : "hidden"}>
             <TabConexoes />
+          </div>
+
+          <div className={activeTab === "servicos" ? "block w-full h-full" : "hidden"}>
+            <TabServicos />
+          </div>
+
+          <div className={activeTab === "mcp" ? "block w-full h-full" : "hidden"}>
+            <TabMCP />
           </div>
 
           <div className={activeTab === "emocoes" ? "block w-full h-full" : "hidden"}>

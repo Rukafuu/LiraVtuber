@@ -5,6 +5,14 @@ import sqlite3
 import os
 from datetime import timedelta
 from ..constants import logger
+from ..slash_meta import (
+    GUILD_ONLY_CONTEXT,
+    GUILD_ONLY_INSTALL,
+    GuildOnlyCog,
+    global_sync_allowed,
+    purge_duplicate_guild_commands,
+    purge_orphan_global_commands,
+)
 
 # Banco de dados de avisos (separado do gamification)
 ADMIN_DB = "data/admin.db"
@@ -85,14 +93,77 @@ def remove_warning(warning_id: int, guild_id: str) -> bool:
 
 # ── Cog Admin ─────────────────────────────────────────────────────────────────
 
-class AdminCog(commands.Cog):
+class AdminCog(GuildOnlyCog):
     def __init__(self, bot):
+        super().__init__()
         self.bot = bot
         _init_admin_db()
+        self._last_global_sync_at = 0.0
+
+    @commands.command(name="sync")
+    @commands.is_owner()
+    async def force_sync(self, ctx, escopo: str = "local"):
+        """Use !sync para sincronizar nos servidores, ou !sync global para os User Apps."""
+        async with ctx.typing():
+            if escopo.lower() == "global":
+                ok, wait_sec = global_sync_allowed(self)
+                if not ok:
+                    mins = wait_sec // 60
+                    wait_txt = f"{mins} min" if mins >= 1 else f"{wait_sec}s"
+                    await ctx.send(
+                        f"⏳ Sync global em cooldown (~1h). Aguarde **{wait_txt}** antes de tentar de novo."
+                    )
+                    return
+                try:
+                    synced = await self.bot.tree.sync()
+                    purged_g = await purge_orphan_global_commands(self.bot)
+                    purged_dup = 0
+                    for guild in self.bot.guilds:
+                        purged_dup += await purge_duplicate_guild_commands(self.bot, guild)
+                    extra = []
+                    if purged_g:
+                        extra.append(f"{purged_g} órfão(s) global")
+                    if purged_dup:
+                        extra.append(f"{purged_dup} duplicata(s) de servidor")
+                    limpeza = f" Limpeza: {', '.join(extra)}." if extra else ""
+                    await ctx.send(
+                        f"✅ {len(synced)} comandos sincronizados GLOBAMENTE (User Apps/DM).{limpeza} "
+                        "Pode demorar alguns minutos (às vezes até ~1h) para propagar no cliente."
+                    )
+                except discord.HTTPException as e:
+                    if e.status == 429:
+                        retry = getattr(e, "retry_after", None)
+                        mins = f"{int(retry // 60)} min" if retry and retry >= 60 else None
+                        wait = mins or (f"{int(retry)}s" if retry else "alguns minutos")
+                        await ctx.send(
+                            f"❌ Rate limit do Discord (429). O sync global já foi usado recentemente "
+                            f"(ex.: reinícios do bot com `SYNC_GLOBAL_ON_START`). Aguarde **{wait}** e tente de novo. "
+                            "Para testar agora, use `!sync` no servidor (sync por guild)."
+                        )
+                    else:
+                        await ctx.send(f"❌ Erro no sync global: {e}")
+                except Exception as e:
+                    await ctx.send(f"❌ Erro no sync global: {e}")
+            else:
+                count = 0
+                purged_dup = 0
+                for guild in self.bot.guilds:
+                    try:
+                        synced = await self.bot.tree.sync(guild=guild)
+                        count += len(synced)
+                        purged_dup += await purge_duplicate_guild_commands(self.bot, guild)
+                    except Exception as e:
+                        await ctx.send(f"❌ Erro em {guild.name}: {e}")
+                limpeza = f" Removidas **{purged_dup}** duplicata(s) (ex.: /act em dobro)." if purged_dup else ""
+                await ctx.send(
+                    f"✅ {count} comandos de servidor sincronizados em {len(self.bot.guilds)} guild(s).{limpeza}"
+                )
 
     # ── Moderação ──────────────────────────────────────────────────────────────
 
     @app_commands.command(name="banir", description="[ADM] Bane um usuário do servidor 🔨")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário a banir", motivo="Motivo do banimento", deletar_dias="Dias de mensagens para deletar (0-7)")
     @app_commands.default_permissions(ban_members=True)
     async def banir(self, interaction: discord.Interaction, usuario: discord.Member,
@@ -111,6 +182,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="expulsar", description="[ADM] Expulsa um usuário do servidor 👟")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário a expulsar", motivo="Motivo da expulsão")
     @app_commands.default_permissions(kick_members=True)
     async def expulsar(self, interaction: discord.Interaction, usuario: discord.Member,
@@ -128,6 +201,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="silenciar", description="[ADM] Silencia um usuário por um tempo ⏱️")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(
         usuario="Usuário a silenciar",
         minutos="Duração em minutos (máx: 40320 = 28 dias)",
@@ -156,6 +231,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="dessilenciar", description="[ADM] Remove o silêncio de um usuário 🔊")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário para dessilenciar")
     @app_commands.default_permissions(moderate_members=True)
     async def dessilenciar(self, interaction: discord.Interaction, usuario: discord.Member):
@@ -168,6 +245,8 @@ class AdminCog(commands.Cog):
     # ── Sistema de Avisos ──────────────────────────────────────────────────────
 
     @app_commands.command(name="advertir", description="[ADM] Emite um aviso para um usuário ⚠️")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário a advertir", motivo="Motivo do aviso")
     @app_commands.default_permissions(moderate_members=True)
     async def advertir(self, interaction: discord.Interaction, usuario: discord.Member,
@@ -206,6 +285,8 @@ class AdminCog(commands.Cog):
             pass  # DMs fechadas
 
     @app_commands.command(name="avisos", description="[ADM] Veja os avisos de um usuário 📋")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário para verificar")
     @app_commands.default_permissions(moderate_members=True)
     async def avisos(self, interaction: discord.Interaction, usuario: discord.Member):
@@ -233,6 +314,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="remover_aviso", description="[ADM] Remove um aviso específico por ID 🗑️")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(id_aviso="ID do aviso (veja com /avisos)")
     @app_commands.default_permissions(moderate_members=True)
     async def remover_aviso(self, interaction: discord.Interaction, id_aviso: int):
@@ -243,6 +326,8 @@ class AdminCog(commands.Cog):
             await interaction.response.send_message(f"❌ Aviso `#{id_aviso}` não encontrado neste servidor.", ephemeral=True)
 
     @app_commands.command(name="limpar_avisos", description="[ADM] Remove TODOS os avisos de um usuário 🗑️")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário para limpar avisos")
     @app_commands.default_permissions(administrator=True)
     async def limpar_avisos(self, interaction: discord.Interaction, usuario: discord.Member):
@@ -255,6 +340,8 @@ class AdminCog(commands.Cog):
     # ── Limpeza de Mensagens ───────────────────────────────────────────────────
 
     @app_commands.command(name="limpar", description="[ADM] Limpa mensagens do canal 🧹")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(
         quantidade="Quantidade de mensagens (1–200)",
         usuario="Filtrar por usuário específico (opcional)"
@@ -279,6 +366,8 @@ class AdminCog(commands.Cog):
     # ── Canal ──────────────────────────────────────────────────────────────────
 
     @app_commands.command(name="trancar", description="[ADM] Trava o canal para membros 🔒")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(motivo="Motivo do travamento")
     @app_commands.default_permissions(manage_channels=True)
     async def trancar(self, interaction: discord.Interaction, motivo: str = "Manutenção"):
@@ -294,6 +383,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="destrancar", description="[ADM] Destrava o canal 🔓")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.default_permissions(manage_channels=True)
     async def destrancar(self, interaction: discord.Interaction):
         overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
@@ -308,6 +399,8 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="lento", description="[ADM] Define o modo lento do canal 🐢")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(segundos="Segundos entre mensagens (0 = desativar)")
     @app_commands.default_permissions(manage_channels=True)
     async def lento(self, interaction: discord.Interaction, segundos: int = 0):
@@ -321,6 +414,8 @@ class AdminCog(commands.Cog):
     # ── Comunicados ────────────────────────────────────────────────────────────
 
     @app_commands.command(name="anunciar", description="[ADM] Envia um anúncio em embed 📢")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(
         titulo="Título do anúncio",
         mensagem="Conteúdo do anúncio",
@@ -347,6 +442,8 @@ class AdminCog(commands.Cog):
         )
 
     @app_commands.command(name="info_usuario", description="[ADM] Informações detalhadas de um usuário 🔍")
+    @GUILD_ONLY_INSTALL
+    @GUILD_ONLY_CONTEXT
     @app_commands.describe(usuario="Usuário para inspecionar")
     @app_commands.default_permissions(moderate_members=True)
     async def info_usuario(self, interaction: discord.Interaction, usuario: discord.Member):

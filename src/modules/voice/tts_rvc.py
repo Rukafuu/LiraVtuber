@@ -163,7 +163,8 @@ class MotorTTSRVC:
                 
                 # 3. Tocar local se solicitado (para debug/teste)
                 if tocar_local:
-                    if not pygame.mixer.get_init(): pygame.mixer.init()
+                    from src.modules.voice import audio_control
+                    audio_control.init_audio_mixer()
                     pygame.mixer.music.load(final_audio)
                     pygame.mixer.music.play()
                     while pygame.mixer.music.get_busy():

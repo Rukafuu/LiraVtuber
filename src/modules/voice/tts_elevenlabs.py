@@ -41,7 +41,8 @@ class MotorTTSElevenLabs:
 
         try:
             if not pygame.mixer.get_init():
-                pygame.mixer.init()
+                from src.modules.voice import audio_control
+                audio_control.init_audio_mixer()
             self.audio_disponivel = True
         except Exception as exc:
             logger.warning("[TTS ELEVENLABS] Mixer indisponivel: %s", exc)

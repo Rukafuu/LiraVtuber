@@ -1,0 +1,12 @@
+{
+  "tavily_cost": 1,
+  "daily_reward": 2,
+  "weekly_reward": 10,
+  "pix_key": "+5511981826659",
+  "shop_note": "Após o PIX, envie o comprovante para @Rukafuu com seu número de WhatsApp ou @ do Discord.",
+  "packs": [
+    {"gems": 15, "price_brl": 9.90, "label": "Bolsa de gemas"},
+    {"gems": 50, "price_brl": 29.90, "label": "Saco de gemas"},
+    {"gems": 120, "price_brl": 59.90, "label": "Baú de gemas"}
+  ]
+}

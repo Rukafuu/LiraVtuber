@@ -1,0 +1,74 @@
+{
+  "entries": [
+    {
+      "id": "2026-06-mcp-panel-tests",
+      "title": "Testes MCP no painel",
+      "body": "Aba **MCP** ganhou botões de teste para **cada servidor** (Tavily, GitHub, Filesystem, Memory, Puppeteer) com tempo de resposta e preview do resultado.",
+      "highlights": [
+        "Um clique por conector",
+        "Desabilita se o servidor estiver OFF",
+        "Erro vermelho / sucesso verde"
+      ]
+    },
+    {
+      "id": "2026-06-mcp-memory-puppeteer",
+      "title": "MCP completo: Memory + Puppeteer",
+      "body": "Todos os **5** servidores MCP do projeto estão ON: Tavily, GitHub, Filesystem, **Memory** (grafo) e **Puppeteer** (browser). Allowlist atualizada.",
+      "highlights": [
+        "Memory: entidades/relacoes via tag <mcp>",
+        "Puppeteer: navegar e capturar paginas (precisa Chrome)",
+        "Painel MCP → reinicie o gateway após atualizar"
+      ]
+    },
+    {
+      "id": "2026-06-mcp-github-fs",
+      "title": "MCP: GitHub + Filesystem",
+      "body": "Servidores **GitHub** e **Filesystem (LiraVT)** ligados no gateway :8045. Allowlist `github/*` e `filesystem/*`. Filesystem so le/escreve dentro da pasta do projeto.",
+      "highlights": [
+        "GitHub: repos, issues, PRs via tag <mcp> (precisa GITHUB_TOKEN no .env)",
+        "Filesystem: ler/listar arquivos do projeto LiraVT",
+        "Painel → MCP: discovery e allowlist atualizados"
+      ]
+    },
+    {
+      "id": "2026-06-mcp-live",
+      "title": "MCP Gateway ativo",
+      "body": "Ferramentas externas via **MCP** na porta **8045**. Painel → aba **MCP** para ligar servidores, allowlist e teste Tavily. A Lira usa `<mcp>tavily/search` e `<ferramenta_web>` (roteia pro MCP se o gateway estiver ON).",
+      "highlights": [
+        "Gateway separado :8045 (Plataformas → MCP Gateway)",
+        "Chat do painel e WhatsApp executam tags após a resposta",
+        "Tavily MCP com busca mais rica que o SDK antigo"
+      ]
+    },
+    {
+      "id": "2026-06-welcome-random",
+      "title": "Boas-vindas estilo Loritta",
+      "body": "Mensagens e GIFs de anime **aleatórios** ao entrar ou sair. Configure com `/boas-vindas configurar`, adicione frases com `/boas-vindas mensagem-adicionar` e teste com `/boas-vindas testar`.",
+      "highlights": [
+        "Frases aleatórias (pool padrão + suas customizadas)",
+        "GIF anime aleatório na entrada (liga/desliga)",
+        "Despedida com pool e GIF opcional",
+        "Tags: `{user}` `{server}` `{count}` `{name}`"
+      ]
+    },
+    {
+      "id": "2026-06-act-unified",
+      "title": "/act unificado",
+      "body": "Todas as interações com GIF ficaram em um só comando **`/act`**. Os grupos antigos `/interacao` e `/expressao` foram removidos para não duplicar no menu.",
+      "highlights": [
+        "25 ações em um comando",
+        "`usuario` ou `usuario_nome` como alvo",
+        "Sem alvo = expressão só sua"
+      ]
+    },
+    {
+      "id": "2026-06-auto-updates",
+      "title": "Novidades automáticas neste canal",
+      "body": "A partir de agora, quando eu ganhar funções novas, aviso **automaticamente** aqui. O histórico fica em `data/lira_changelog.json`.",
+      "highlights": [
+        "Sem precisar anunciar manualmente",
+        "Uma mensagem por atualização (sem spam em reinício)"
+      ]
+    }
+  ]
+}

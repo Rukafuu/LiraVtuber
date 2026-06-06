@@ -35,7 +35,57 @@ export interface SystemStatus {
     visao: boolean;
     vtube_studio: boolean;
     discord: boolean;
+    whatsapp?: boolean;
   };
+  services?: ServiceStatus[];
+}
+
+export type ServiceRunState =
+  | "stopped"
+  | "starting"
+  | "running"
+  | "degraded"
+  | "error";
+
+export interface ServiceLogLine {
+  ts: string;
+  stream: string;
+  line: string;
+}
+
+export interface ServiceStatus {
+  id: string;
+  label: string;
+  state: ServiceRunState;
+  managed: boolean;
+  external: boolean;
+  pid: number | null;
+  uptime_sec: number | null;
+  health_http: boolean | null;
+  connection: string | null;
+  last_error: string | null;
+  log_tail: ServiceLogLine[];
+  command: string[];
+  cwd: string;
+}
+
+export interface WhatsAppQrInfo {
+  available: boolean;
+  revision: number;
+  fingerprint?: string;
+  payload: string | null;
+  updated_at: string | null;
+}
+
+export interface WhatsAppSession {
+  connected: boolean;
+  bridge_state: string;
+  connection: string | null;
+  qr: WhatsAppQrInfo;
+  pairing_code: string | null;
+  link_mode?: string | null;
+  status_message?: string | null;
+  disconnect_code?: number | null;
 }
 
 export interface LlmConfig {

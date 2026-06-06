@@ -201,8 +201,11 @@ class ConsoleUI:
         return self._ANSI_RE.sub("", value)
 
     def _write_line(self, line: str):
-        sys.stdout.write(f"\r\033[K{repair_mojibake_text(line)}{self.C_RST}\n")
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(f"\r\033[K{repair_mojibake_text(line)}{self.C_RST}\n")
+            sys.stdout.flush()
+        except Exception:
+            pass
 
     def _wrap_text(self, text: str, width: int, subsequent_indent: str = "") -> list[str]:
         wrapped = []

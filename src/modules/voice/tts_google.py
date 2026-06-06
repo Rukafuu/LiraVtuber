@@ -39,7 +39,8 @@ class MotorTTSGoogle:
         self.pitch = float(settings.get("pitch", CONFIG.get("GOOGLE_TTS_PITCH", 1.4)))
 
         try:
-            pygame.mixer.init()
+            from src.modules.voice import audio_control
+            audio_control.init_audio_mixer()
             self.audio_disponivel = True
         except Exception as e:
             logger.warning(

@@ -17,7 +17,8 @@ export default defineConfig(async () => ({
   server: {
     port: 1425,
     strictPort: true,
-    host: host || false,
+    // Tauri usa http://localhost:1425 (127.0.0.1) — nao apenas [::1]
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",

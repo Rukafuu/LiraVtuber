@@ -234,6 +234,22 @@ export function TabChat() {
           }
         });
       },
+      // onReplaceContent — resposta final após tools (substitui o rascunho com tags)
+      (content) => {
+        currentResponseRef.current = content;
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "lira" && last.id === "streaming-res") {
+            return [...prev.slice(0, -1), { ...last, content }];
+          }
+          return [...prev, {
+            id: "streaming-res",
+            role: "lira",
+            content,
+            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          }];
+        });
+      },
       // onMeta
       (meta) => {
         setMessages(prev => {
