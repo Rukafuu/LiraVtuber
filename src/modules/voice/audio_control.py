@@ -9,6 +9,25 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+def init_audio_mixer():
+    """Inicializa o mixer do pygame com o dispositivo configurado."""
+    import pygame
+    from src.config.config_loader import CONFIG
+    
+    if pygame.mixer.get_init():
+        return
+
+    device = CONFIG.get("AUDIO_DEVICE")
+    try:
+        if device:
+            logger.info(f"[AUDIO] Inicializando mixer no dispositivo: {device}")
+            pygame.mixer.init(devicename=device)
+        else:
+            pygame.mixer.init()
+    except Exception as e:
+        logger.warning(f"[AUDIO] Falha ao inicializar mixer no dispositivo '{device}': {e}. Usando padrao.")
+        pygame.mixer.init()
+
 STOP_SIGNAL_PATH = Path(tempfile.gettempdir()) / "lira_global_audio_stop.signal"
 
 _callbacks: dict[str, Callable] = {}

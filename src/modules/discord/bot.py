@@ -5,6 +5,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from .constants import logger, EMOJI
+from .app_errors import handle_tree_error
 
 import sys
 try:
@@ -26,6 +27,7 @@ class LiraBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
+        self.tree.on_error = handle_tree_error
         initial_extensions = [
             'src.modules.discord.cogs.chat',
             'src.modules.discord.cogs.economy',
@@ -33,59 +35,77 @@ class LiraBot(commands.Bot):
             'src.modules.discord.cogs.events',
             'src.modules.discord.cogs.help',
             'src.modules.discord.cogs.admin',
+            # ── Sprint 1: Quick wins ──────────────────────────────
+            'src.modules.discord.cogs.afk',           # /afk /voltei
+            'src.modules.discord.cogs.sticky',         # /sticky-set /sticky-remove
+            'src.modules.discord.cogs.suggestions',    # /sugerir /sugestao aceitar|negar|revisar
+            'src.modules.discord.cogs.serverstats',    # /stats-add /stats-remove
+            # ── Sprint 2: Engajamento ─────────────────────────────
+            'src.modules.discord.cogs.birthdays',      # /aniversario /aniversario-canal
+            'src.modules.discord.cogs.giveaway',       # /giveaway /giveaway-reroll
+            'src.modules.discord.cogs.reaction_roles', # /rr-add /rr-remove /rr-list
+            'src.modules.discord.cogs.notepad',        # /nota /notas /nota-ver /nota-editar
+            'src.modules.discord.cogs.welcome',        # /boas-vindas (GIF/frases aleatórias)
+            'src.modules.discord.cogs.updates',        # novidades automáticas no canal
+            'src.modules.discord.cogs.setup',          # /setup-servidor
+            # ── Sprint 3: Moderação e Suporte ─────────────────────
+            'src.modules.discord.cogs.automod',        # /automod blacklist-add/remove/ia-toggle
+            'src.modules.discord.cogs.customcmds',     # /custom adicionar/remover/listar
+            'src.modules.discord.cogs.tickets',        # /ticket-setup
         ]
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-                logger.info(f"[DISCORD] ✅ Cog: {ext.split('.')[-1]}")
+                logger.info(f"[DISCORD] ✅ Cog carregada: {ext.split('.')[-1]}")
             except Exception as e:
-                logger.error(f"[DISCORD] ❌ Falha ao carregar {ext}: {e}")
+                logger.error(f"[DISCORD] ❌ Erro ao carregar {ext}: {e}")
+                import traceback
+                traceback.print_exc()
 
     async def _sync_guild(self, guild: discord.Guild):
-        """Sincroniza os slash commands em um servidor específico."""
+        """Sincroniza slash só de guild (sem copiar globais — evita /act duplicado)."""
+        from .slash_meta import purge_duplicate_guild_commands
+
         try:
-            self.tree.copy_global_to(guild=guild)
             synced = await self.tree.sync(guild=guild)
-            logger.info(f"[DISCORD] 🌸 {len(synced)} comandos sincronizados em: {guild.name}")
+            purged = await purge_duplicate_guild_commands(self, guild)
+            logger.info(
+                f"[DISCORD] 🌸 {len(synced)} cmds em {guild.name}"
+                + (f", {purged} duplicata(s) removida(s)" if purged else "")
+            )
         except Exception as e:
             logger.warning(f"[DISCORD] Falha ao sincronizar em {guild.name}: {e}")
 
     async def on_ready(self):
         logger.info(f'[DISCORD] ✦ Online como {self.user} em {len(self.guilds)} servidor(es) ✦')
-        # Sincroniza em todos os servidores que o bot já está
-        for guild in self.guilds:
-            await self._sync_guild(guild)
-        
-        # Sincronização global extra
-        try:
-            await self.tree.sync()
-            logger.info("[DISCORD] 🌸 Sincronização global concluída!")
-        except Exception as e:
-            logger.warning(f"[DISCORD] Falha no sync global: {e}")
-
         await self.change_presence(
             activity=discord.Activity(type=discord.ActivityType.watching, name="você com carinho 🌸")
         )
+        # Sync global consome ~5 PUTs/hora na API do Discord — não rodar a cada reinício.
+        if os.getenv("SYNC_GLOBAL_ON_START", "").lower() in ("1", "true", "yes"):
+            try:
+                synced = await self.tree.sync()
+                logger.info(f'[DISCORD] ✅ {len(synced)} comandos sincronizados globalmente.')
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    retry = getattr(e, "retry_after", None)
+                    logger.error(
+                        f'[DISCORD] ❌ Sync global no startup: 429 (rate limit).'
+                        f' Aguarde {retry or "?"}s ou use !sync no servidor de teste.'
+                    )
+                else:
+                    logger.error(f'[DISCORD] ❌ Falha ao sincronizar comandos: {e}')
+            except Exception as e:
+                logger.error(f'[DISCORD] ❌ Falha ao sincronizar comandos: {e}')
+        else:
+            logger.info(
+                '[DISCORD] Sync global no startup desligado (use !sync global quando precisar).'
+            )
 
     async def on_guild_join(self, guild: discord.Guild):
         """Sincroniza automaticamente quando o bot entra em um novo servidor."""
         logger.info(f"[DISCORD] Entrou no servidor: {guild.name} — sincronizando comandos...")
         await self._sync_guild(guild)
-
-    @commands.command(name="sync")
-    @commands.is_owner()
-    async def force_sync(self, ctx):
-        """Re-sincroniza os comandos em todos os servidores manualmente."""
-        async with ctx.typing():
-            count = 0
-            for guild in self.guilds:
-                try:
-                    self.tree.copy_global_to(guild=guild)
-                    synced = await self.tree.sync(guild=guild)
-                    count += len(synced)
-                except Exception as e:
-                    await ctx.send(f"❌ Erro em {guild.name}: {e}")
-            await ctx.send(f"✅ {count} comandos sincronizados em {len(self.guilds)} servidor(es)!")
 
 def run_bot():
     bot = LiraBot()

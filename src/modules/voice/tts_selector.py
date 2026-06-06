@@ -139,7 +139,7 @@ class TTSWrapper:
                     sucesso = instancia.falar(texto, tocar_local)
                     if sucesso:
                         self.provedor = prov
-                        return True
+                        return sucesso
                     logger.warning("[TTS WRAPPER] %s falhou. Tentando proximo...", prov.upper())
                 except Exception as exc:
                     logger.error("[TTS WRAPPER] Erro ao usar %s: %s", prov.upper(), exc)
@@ -198,6 +198,14 @@ def _criar_tts(prov: str):
         from src.modules.voice.tts_rvc import MotorTTSRVC
 
         return MotorTTSRVC()
+    if provider == "f5_colab":
+        from src.modules.voice.tts_f5_colab import MotorTTSF5Colab
+
+        return MotorTTSF5Colab()
+    if provider == "xtts_colab":
+        from src.modules.voice.tts_xtts_colab import MotorTTSXTTSColab
+
+        return MotorTTSXTTSColab()
     return _DummyTTS()
 
 

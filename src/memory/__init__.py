@@ -1,1 +1,1 @@
-from src.memory.memory import memory
+from lira_core.memory.memory import memory

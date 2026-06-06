@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lira-core"
+version = "0.1.0"
+description = "Shared core library for Lira VTuber ecosystem"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0",
+    "chromadb>=0.4.0",
+    "networkx>=3.0",
+    "sentence-transformers>=2.2.0",
+]
+
+[project.optional-dependencies]
+llm = [
+    "groq>=1.0",
+    "openai>=1.0",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lira_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["../../tests"]

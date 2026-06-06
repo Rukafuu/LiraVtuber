@@ -1,0 +1,1 @@
+"""MCP Gateway — subprocessos Node MCP + HTTP para a Lira e o painel."""

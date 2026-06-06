@@ -1,0 +1,10 @@
+{
+  "allowed": [
+    "tavily/*",
+    "github/*",
+    "filesystem/*",
+    "memory/*",
+    "puppeteer/*"
+  ],
+  "notes": "Formato: server/tool ou server/* (ex.: tavily/tavily_search, github/search_repositories, filesystem/read_file)."
+}

@@ -66,5 +66,14 @@ whatsapp_bridge/*.png
 whatsapp_bridge/*.webp
 whatsapp_bridge/node_modules/
 
-# Test scripts (local only)
+# Test scripts (local only — use tests/ para pytest)
 test_*.py
+/scratch/
+temp_whatsapp.txt
+debug_startup.txt
+**/Untitled-*.txt
+whatsapp_bridge/qr.txt
+whatsapp_bridge/qr_meta.json
+whatsapp_bridge/pairing_code.txt
+data/logs/services/
+data/logs/services/*.pid

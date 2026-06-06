@@ -89,12 +89,88 @@ The project is more than just a chatbot: it combines a voice runtime, a GUI pane
 
 | Area | Capabilities |
 | --- | --- |
-| Voice | STT via Whisper, TTS via ElevenLabs, Google, Azure, OpenAI and Edge, global stop via F8 |
+| Voice | STT via Whisper, TTS via F5-TTS / XTTS v2 (Colab), ElevenLabs, Google, Azure, OpenAI and Edge, global stop via F8 |
 | Agency | **Autonomous ReAct Loops** (Think-Action-Observe), proactive reminders and task scheduling |
+| Brain | Providers `google_cloud`, `groq`, `openrouter`, `openai` and `cerebras` |
+| GUI | Control Center in CustomTkinter, visual chat, attachments, markdown, audio cards and media preview |
 | Multimodality | **Video Understanding** (frame extraction), image generation/editing, screen awareness and OCR |
 | Memory | Chronological SQLite, Vector RAG and Knowledge Graph |
 | Desktop | XML tools to open URLs, open apps, read files, move mouse, type, control volume and processes |
 | VTuber | VTube Studio integration, emotions, parameters, lipsync and persisted state |
+| Discord & WhatsApp | Full-featured Discord Bot (AFK, Auto-mod, Birthdays, Custom commands, Giveaways, Notepad, Reaction Roles, Server Stats, Setup, Sticky messages, Suggestions, support Tickets, Welcome messages) & WhatsApp bridge with TTS & media downloads |
+| MCP Gateway | Local HTTP gateway (`:8045`) for Tavily, GitHub, Filesystem, Memory and Puppeteer — owner-gated + gem economy for public web search |
+| Lira Reflex | Owner-only architecture self-inspection: reads `docs/ARCHITECTURE.md`, roasts the codebase, proposes refactors via MCP filesystem |
+
+### Discord Bot & WhatsApp Integration
+
+Lira now integrates directly with Discord and WhatsApp to act as a community manager and interactive assistant:
+* **Discord Bot Modules (Cogs):**
+  * **AFK:** Manage member away statuses with automatic mentions.
+  * **Auto-moderation:** Filter and manage server content automatically.
+  * **Birthdays:** Set up and announce member birthdays.
+  * **Custom Commands:** Create and run custom text commands dynamically.
+  * **Giveaways:** Conduct server giveaways with interactive buttons.
+  * **Notepad:** Allow users to save and view notes directly through Lira.
+  * **Reaction Roles:** Assign server roles via message reactions.
+  * **Server Stats:** Display real-time server statistics (member count, channels).
+  * **Setup:** Automated guild setup for channels and permissions.
+  * **Sticky Messages:** Keep important messages stuck at the bottom of channels.
+  * **Suggestions:** Interactive channel for submitting and voting on server suggestions.
+  * **Tickets:** Support system using Discord buttons and private channels.
+  * **Welcome:** Custom welcome messages with profile cards for new members.
+* **WhatsApp Bridge:** Connects Lira to WhatsApp using Baileys with TTS response support and media downloads (Instagram, TikTok, YouTube, etc.).
+* **Gem economy (Discord / WhatsApp):** `/daily`, `/weekly`, `/gemas`, `/loja_gemas` (Discord) — Tavily web search costs 1 gem for public users; owner and Control Panel are free.
+
+---
+
+## Service Ports
+
+| Service | Port | Role |
+| --- | --- | --- |
+| Control API | `8042` | GUI chat WebSocket, platform management |
+| WhatsApp API | `8043` | FastAPI chat endpoint for the Baileys bridge |
+| Bridge push | `8044` | Outbound message push from bridge |
+| MCP Gateway | `8045` | Local MCP tool proxy (Tavily, GitHub, filesystem, memory, puppeteer) |
+
+Start the MCP Gateway from **Platforms → MCP Gateway** in the Control Center, or:
+
+```bash
+python apps/mcp_gateway/main.py
+```
+
+---
+
+## MCP Gateway & Lira Reflex
+
+Lira can call external tools silently via XML tags. The gateway runs locally and enforces **owner-only** access for sensitive servers.
+
+| MCP server | Who can use |
+| --- | --- |
+| `filesystem` | **Owner only** (Lira Reflex — read project source) |
+| `github` | **Owner only** |
+| `memory` | **Owner only** |
+| `puppeteer` | **Owner only** |
+| `tavily` | Public with **gems** (1 gem/search); owner & panel = free |
+
+**Lira Reflex v1** (owner-only): Lira inspects her own architecture, reads `docs/ARCHITECTURE.md`, critiques documented tech debt, and can persist architectural notes with `<salvar_memoria>`. Public users never receive Reflex instructions in the prompt, and the runtime blocks `<salvar_memoria>` and auto file reads for non-owners.
+
+```xml
+<mcp>filesystem/read_text_file
+{"path": "docs/ARCHITECTURE.md"}</mcp>
+<mcp>tavily/tavily_search
+latest news about VTuber AI</mcp>
+```
+
+Owner identity is resolved via `.env`:
+
+```env
+DISCORD_OWNER_ID=your_discord_snowflake
+WPP_OWNER_JID=5511999999999@s.whatsapp.net
+WPP_OWNER_LID=your_lid@lid
+MCP_GATEWAY_URL=http://127.0.0.1:8045
+```
+
+Full architecture manual: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 
@@ -108,11 +184,11 @@ The terminal is Lira's actual voice mode. It listens to the microphone, builds c
 
 **Terminal rule:** responses are short by default to avoid long speech and unnecessary TTS costs.
 
-### Lira Control Center
+### Lira Control Center (Lira OS)
 
 Main file: [`src/gui/lira_gui.py`](src/gui/lira_gui.py)
 
-The GUI is the complete control panel. It accepts large texts, attachments, drag and drop, `Ctrl+V`, code files, images, audio, video, PDF, and documents.
+The GUI is the complete control panel. In addition to accepting large texts, attachments, drag-and-drop, and media, it features a **Platforms** (Plataformas) tab to manage, toggle, and view real-time logs for the Discord Bot, WhatsApp API, and Baileys Bridge with a single click, without touching the terminal.
 
 **GUI rule:** it can provide larger responses when it makes sense, as it acts as a visual chat.
 
@@ -143,6 +219,7 @@ flowchart LR
 
     LLM --> Divider["SentenceDivider"]
     Divider --> TTS["TTS Selector"]
+    TTS --> F5Colab["F5-TTS / XTTS (Colab)"]
     TTS --> Eleven["ElevenLabs"]
     TTS --> GoogleTTS["Google TTS"]
     TTS --> Azure["Azure"]
@@ -166,13 +243,16 @@ Lira can say one thing to the user and execute another in the background, withou
 <acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
 <analisar_video>https://youtube.com/watch?v=ID</analisar_video>
 <agendar_aviso>{"time": "10m", "message": "Take the cake out of the oven"}</agendar_aviso>
+<mcp>tavily/tavily_search
+open source VTuber assistants</mcp>
 ```
 
 Important rules:
 - XML tags only apply to the current request;
 - Past actions should not be repeated after a long pause;
 - `run_command` and dangerous operations go through guardrails;
-- Text inside the tags must not be spoken by the TTS.
+- Text inside the tags must not be spoken by the TTS;
+- `<salvar_memoria>`, Lira Reflex and MCP filesystem/github/memory/puppeteer are **owner-only** — blocked at gateway and runtime for everyone else.
 
 ---
 
@@ -180,7 +260,7 @@ Important rules:
 
 Current fallback chain:
 ```text
-edge -> elevenlabs -> google -> azure -> openai
+f5_colab -> edge -> elevenlabs -> google -> azure -> openai
 ```
 
 The `F8` hotkey triggers a global stop to attempt to halt:
@@ -297,12 +377,88 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 
 | Area | Recursos |
 | --- | --- |
-| Voz | STT por Whisper, TTS por ElevenLabs, Google, Azure, OpenAI e Edge, stop global por F8 |
+| Voz | STT por Whisper, TTS via F5-TTS / XTTS v2 (Colab), ElevenLabs, Google, Azure, OpenAI e Edge, stop global por F8 |
 | Agência | **Loops ReAct Autônomos** (Pensa-Age-Observa), lembretes proativos e agendamentos |
+| Cerebro | Providers `google_cloud`, `groq`, `openrouter`, `openai` e `cerebras` |
+| GUI | Control Center em CustomTkinter, chat visual, anexos, markdown, cards de audio e preview de midia |
 | Multimodalidade | **Entendimento de Vídeo** (extração de frames), geração de imagem, visão de tela e OCR |
 | Memoria | SQLite cronologico, RAG vetorial e grafo de conhecimento |
 | Desktop | Tool XML para abrir URL, abrir app, ler arquivo, mover mouse, digitar, volume e processos |
 | VTuber | Integracao com VTube Studio, emocoes, parametros, lipsync e estado persistido |
+| Discord & WhatsApp | Bot de Discord completo (AFK, Auto-moderação, Aniversários, Comandos customizados, Sorteios, Bloco de notas, Cargos por reação, Status do servidor, Setup automatizado, Mensagens fixas, Sugestões, Tickets de suporte, Boas-vindas) & Ponte para WhatsApp com suporte a TTS e downloads de mídia |
+| MCP Gateway | Gateway HTTP local (`:8045`) para Tavily, GitHub, Filesystem, Memory e Puppeteer — restrito ao criador + economia de gemas na busca web |
+| Lira Reflex | Autoconsulta de arquitetura exclusiva do criador: lê `docs/ARCHITECTURE.md`, critica o código e propõe refactors via MCP filesystem |
+
+### Integração com Discord & WhatsApp
+
+A Lira agora se conecta diretamente ao Discord e ao WhatsApp para atuar como moderadora, gerente de comunidade e assistente interativa:
+* **Módulos do Bot do Discord (Cogs):**
+  * **AFK:** Gerenciamento de status ausente de membros com menções automáticas.
+  * **Auto-moderação:** Filtro automático de conteúdo e moderação de chat.
+  * **Aniversários:** Registro e anúncio automático de aniversários de membros.
+  * **Comandos Customizados:** Criação e execução de comandos de texto personalizados de forma dinâmica.
+  * **Sorteios (Giveaways):** Realização de sorteios interativos com botões.
+  * **Bloco de Notas (Notepad):** Permite que usuários salvem anotações rápidas pela Lira.
+  * **Cargos por Reação (Reaction Roles):** Atribuição de cargos no servidor através de reações a mensagens.
+  * **Status do Servidor:** Exibição de estatísticas do servidor em tempo real.
+  * **Setup:** Configuração guiada e automatizada de canais e permissões.
+  * **Mensagens Fixas (Sticky Messages):** Mantém mensagens importantes sempre no fim do chat.
+  * **Sugestões:** Canal interativo para envio e votação de sugestões dos membros.
+  * **Tickets:** Sistema de suporte/atendimento privado via botões do Discord.
+  * **Boas-vidas:** Mensagens personalizadas de entrada com geração de cartões de perfil para novos membros.
+* **Ponte do WhatsApp:** Conecta a Lira ao WhatsApp usando a biblioteca Baileys, com respostas em áudio (TTS) e downloads de mídia (Instagram, TikTok, YouTube, etc.).
+* **Economia de gemas (Discord / WhatsApp):** `/daily`, `/weekly`, `/gemas`, `/loja_gemas` (Discord) — busca Tavily custa 1 gema para usuários públicos; criador e painel são grátis.
+
+---
+
+## Portas dos Serviços
+
+| Serviço | Porta | Função |
+| --- | --- | --- |
+| Control API | `8042` | Chat WebSocket da GUI, gerenciamento de plataformas |
+| WhatsApp API | `8043` | Endpoint FastAPI de chat para a ponte Baileys |
+| Bridge push | `8044` | Push de mensagens outbound da ponte |
+| MCP Gateway | `8045` | Proxy local de ferramentas MCP (Tavily, GitHub, filesystem, memory, puppeteer) |
+
+Ligue o MCP Gateway em **Plataformas → MCP Gateway** no Control Center, ou:
+
+```bash
+python apps/mcp_gateway/main.py
+```
+
+---
+
+## MCP Gateway & Lira Reflex
+
+A Lira chama ferramentas externas em silêncio via tags XML. O gateway roda localmente e aplica **controle de acesso por criador** nos servidores sensíveis.
+
+| Servidor MCP | Quem pode usar |
+| --- | --- |
+| `filesystem` | **Só o criador** (Lira Reflex — leitura do código-fonte) |
+| `github` | **Só o criador** |
+| `memory` | **Só o criador** |
+| `puppeteer` | **Só o criador** |
+| `tavily` | Público com **gemas** (1 gema/busca); criador e painel = grátis |
+
+**Lira Reflex v1** (só criador): a Lira inspeciona a própria arquitetura, lê `docs/ARCHITECTURE.md`, debocha das gambiarras documentadas e pode persistir reflexões com `<salvar_memoria>`. Usuários públicos não recebem instruções de Reflex no prompt, e o runtime bloqueia `<salvar_memoria>` e leitura automática de arquivos para quem não é dono.
+
+```xml
+<mcp>filesystem/read_text_file
+{"path": "docs/ARCHITECTURE.md"}</mcp>
+<mcp>tavily/tavily_search
+notícias sobre VTuber IA</mcp>
+```
+
+Identidade do criador via `.env`:
+
+```env
+DISCORD_OWNER_ID=seu_id_discord
+WPP_OWNER_JID=5511999999999@s.whatsapp.net
+WPP_OWNER_LID=seu_lid@lid
+MCP_GATEWAY_URL=http://127.0.0.1:8045
+```
+
+Manual completo: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 
@@ -316,11 +472,11 @@ O terminal e o modo de voz real da Lira. Ele escuta o microfone, monta contexto,
 
 **Regra do terminal:** respostas curtas por padrao para evitar fala longa e gasto desnecessario de TTS.
 
-### Lira Control Center
+### Lira Control Center (Lira OS)
 
 Arquivo principal: [`src/gui/lira_gui.py`](src/gui/lira_gui.py)
 
-A GUI e o painel de controle completo. Ela aceita textos grandes, anexos, drag and drop, `Ctrl+V`, arquivos de codigo, imagens, audio, video, PDF e documentos.
+A GUI é o painel de controle completo. Além de aceitar textos grandes, anexos, drag-and-drop, `Ctrl+V`, arquivos de código, imagens, áudio e vídeo, ela conta com a aba **Plataformas** para gerenciar, ligar, desligar e acompanhar os logs em tempo real do Bot do Discord, da API do WhatsApp e da Ponte Baileys com um clique, sem precisar do terminal.
 
 **Regra da GUI:** pode responder grande quando fizer sentido, porque funciona como chat visual.
 
@@ -351,6 +507,7 @@ flowchart LR
 
     LLM --> Divider["SentenceDivider"]
     Divider --> TTS["TTS Selector"]
+    TTS --> F5Colab["F5-TTS / XTTS (Colab)"]
     TTS --> Eleven["ElevenLabs"]
     TTS --> GoogleTTS["Google TTS"]
     TTS --> Azure["Azure"]
@@ -374,6 +531,8 @@ A Lira pode falar uma coisa para o usuario e executar outra por baixo, sem vazar
 <acao_pc>{"action":"open_url","url":"https://github.com"}</acao_pc>
 <analisar_video>https://youtube.com/watch?v=ID</analisar_video>
 <agendar_aviso>{"tempo": "5m", "mensagem": "Tirar o bolo do forno"}</agendar_aviso>
+<mcp>tavily/tavily_search
+assistentes VTuber open source</mcp>
 ```
 
 Regras importantes:
@@ -381,7 +540,8 @@ Regras importantes:
 - tags XML so valem para o pedido atual;
 - acoes antigas nao devem ser repetidas depois de pausa longa;
 - `run_command` e operacoes perigosas passam por guardrails;
-- o texto dentro das tags nao deve ser falado pelo TTS.
+- o texto dentro das tags nao deve ser falado pelo TTS;
+- `<salvar_memoria>`, Lira Reflex e MCP filesystem/github/memory/puppeteer sao **exclusivos do criador** — bloqueados no gateway e no runtime para todos os outros.
 
 ---
 
@@ -390,7 +550,7 @@ Regras importantes:
 Fallback atual:
 
 ```text
-edge -> elevenlabs -> google -> azure -> openai
+f5_colab -> edge -> elevenlabs -> google -> azure -> openai
 ```
 
 ElevenLabs suporta configuracao manual pela GUI:
@@ -476,6 +636,11 @@ OPENAI_API_KEY=sua_chave
 CEREBRAS_API_KEY=sua_chave
 ELEVENLABS_API_KEY=sua_chave
 TAVILY_API_KEY=sua_chave
+GITHUB_TOKEN=seu_pat_github
+MCP_GATEWAY_URL=http://127.0.0.1:8045
+DISCORD_OWNER_ID=seu_id_discord
+WPP_OWNER_JID=5511999999999@s.whatsapp.net
+WPP_OWNER_LID=seu_lid@lid
 GOOGLE_CLOUD_PROJECT=seu_projeto
 GOOGLE_CLOUD_LOCATION=global
 ```
@@ -491,8 +656,10 @@ Para o setup minimo, apenas `GROQ_API_KEY` e obrigatoria. O TTS publico default 
 ### Terminal runtime
 
 ```bash
-python main.py
+python apps/vtuber/main.py
 ```
+
+(Compat: `python main.py` — shim para o mesmo runtime.)
 
 ### Control Center
 
@@ -504,6 +671,25 @@ python -m src.gui.lira_gui
 
 ```bash
 cscript //nologo run_lira_gui_hidden.vbs
+```
+
+### Bot do Discord
+
+```bash
+python -m src.modules.discord.bot
+```
+
+### Ponte do WhatsApp
+
+1. Inicie a API dedicada ao WhatsApp:
+```bash
+python apps/whatsapp_api/main.py
+```
+
+2. Inicie a ponte Node.js:
+```bash
+cd whatsapp_bridge
+node index.js
 ```
 
 ---
@@ -598,9 +784,12 @@ A GUI tambem aceita arrastar arquivos direto no chat, entao a inbox e util, mas 
 ## Comandos Uteis
 
 ```bash
-python main.py
-python -m src.gui.lira_gui
-python -m compileall main.py src
+python apps/vtuber/main.py
+python apps/control_api/main.py
+python apps/mcp_gateway/main.py
+python apps/whatsapp_api/main.py
+python -m src.modules.discord.bot
+python -m compileall apps main.py src
 python -m pytest -q
 ```
 

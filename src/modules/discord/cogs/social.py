@@ -48,7 +48,46 @@ SEARCH_TERMS = {
     "thumbsup":  "anime thumbs up",
     "wink":      "anime wink",
     "yawn":      "anime yawn",
+    "kill":      "anime defeat",
+    "love":      "anime love",
+    "happy":     "anime happy",
+    "lurk":      "anime peek",
+    "handshake": "anime handshake",
 }
+
+
+# Catálogo único (/act) — máx. 25 opções (limite Discord)
+ACT_CATALOG: dict[str, dict] = {
+    "abracar": {"label": "🤗 abraçar", "category": "hug", "emoji": "🤗", "texto_com": "deu um abraço apertado em", "texto_sem": "está carente e quer um abraço!"},
+    "beijar": {"label": "😘 beijar", "category": "kiss", "emoji": "😘", "texto_com": "deu um beijo em", "texto_sem": "mandou um beijo carinhoso no ar!"},
+    "fazer_carinho": {"label": "👋 carinho", "category": "pat", "emoji": "👋", "texto_com": "fez um carinho fofo na cabeça de", "texto_sem": "está fazendo carinho em si mesmo... fofo!"},
+    "socar": {"label": "👊 socar", "category": "punch", "emoji": "👊", "texto_com": "deu um soco certeiro em", "texto_sem": "está dando socos no ar para treinar!"},
+    "dar_tapa": {"label": "👏 tapa", "category": "slap", "emoji": "👏", "texto_com": "deu um tapa estalado em", "texto_sem": "deu um tapa na própria testa! Que vacilo..."},
+    "aconchegar": {"label": "💜 aconchegar", "category": "cuddle", "emoji": "💜", "texto_com": "se aconchegou quentinho em", "texto_sem": "se encolheu debaixo das cobertas!"},
+    "morder": {"label": "🦷 morder", "category": "bite", "emoji": "🦷", "texto_com": "deu uma mordidinha em", "texto_sem": "está se mordendo de raiva e ciúmes!"},
+    "cutucar": {"label": "👉 cutucar", "category": "poke", "emoji": "👉", "texto_com": "cutucou chativamente", "texto_sem": "está cutucando o próprio dedo por tédio..."},
+    "alimentar": {"label": "🍱 alimentar", "category": "feed", "emoji": "🍱", "texto_com": "alimentou", "texto_sem": "está com fome..."},
+    "highfive": {"label": "✋ high-five", "category": "highfive", "emoji": "✋", "texto_com": "deu um high-five em", "texto_sem": "levantou a mão pro alto!"},
+    "chutar": {"label": "🦵 chutar", "category": "kick", "emoji": "🦵", "texto_com": "chutou", "texto_sem": "está chutando o ar!"},
+    "cocegas": {"label": "🤣 cócegas", "category": "tickle", "emoji": "🤣", "texto_com": "fez cócegas em", "texto_sem": "está se coçando..."},
+    "acenar": {"label": "👋 acenar", "category": "wave", "emoji": "👋", "texto_com": "acenou para", "texto_sem": "acenou para ninguém em particular."},
+    "arremessar": {"label": "🌀 arremessar", "category": "yeet", "emoji": "🌀", "texto_com": "arremessou", "texto_sem": "se jogou no sofá."},
+    "xingar": {"label": "😤 baka", "category": "baka", "emoji": "😤", "texto_com": "chamou de baka", "texto_sem": "está xingando o vento."},
+    "olhar": {"label": "👀 encarar", "category": "stare", "emoji": "👀", "texto_com": "ficou encarando", "texto_sem": "está encarando a parede."},
+    "dancar": {"label": "💃 dançar", "category": "dance", "emoji": "💃", "texto_com": "está dançando com", "texto_sem": "está dançando e comemorando a vida!"},
+    "chorar": {"label": "😭 chorar", "category": "cry", "emoji": "😭", "texto_com": "está chorando no ombro de", "texto_sem": "desabou a chorar dramaticamente... 😭"},
+    "rir": {"label": "😂 rir", "category": "laugh", "emoji": "😂", "texto_com": "está rindo da cara de", "texto_sem": "começou a gargalhar do nada!"},
+    "ficar_com_raiva": {"label": "😠 raiva", "category": "pout", "emoji": "😠", "texto_com": "está bufando de raiva de", "texto_sem": "está com raiva e fazendo bico! 😤"},
+    "amar": {"label": "💕 amar", "category": "love", "emoji": "💕", "texto_com": "declarou todo o seu amor por", "texto_sem": "está com o coração transbordando de amor!"},
+    "corar": {"label": "😳 corar", "category": "blush", "emoji": "😳", "texto_com": "fez corar", "texto_sem": "está corando de vergonha!"},
+    "facepalm": {"label": "🤦 facepalm", "category": "facepalm", "emoji": "🤦", "texto_com": "deu facepalm por causa de", "texto_sem": "não acredita no que aconteceu..."},
+    "pensar": {"label": "🤔 pensar", "category": "think", "emoji": "🤔", "texto_com": "está pensando em", "texto_sem": "está pensando profundamente..."},
+    "dormir": {"label": "😴 dormir", "category": "sleep", "emoji": "😴", "texto_com": "mandou dormir", "texto_sem": "foi dormir... boa noite!"},
+}
+
+
+def _act_choice_list() -> list[app_commands.Choice[str]]:
+    return [app_commands.Choice(name=m["label"], value=k) for k, m in ACT_CATALOG.items()]
 
 
 # ── Funções de Fetch com Fallback ─────────────────────────────────────────────
@@ -154,43 +193,31 @@ class MarriageView(discord.ui.View):
         )
 
 
+from ..slash_meta import USER_APP_CONTEXT, USER_APP_INSTALL
+
+_SOCIAL_INSTALL = USER_APP_INSTALL
+_SOCIAL_CONTEXT = USER_APP_CONTEXT
+
+
+def _display_name(user: discord.abc.User | None, fallback: str | None = None) -> str | None:
+    if user:
+        return getattr(user, "display_name", None) or getattr(user, "name", None) or str(user)
+    if fallback and fallback.strip():
+        return fallback.strip()
+    return None
+
+
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
 class SocialCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def _react(self, interaction, usuario, category, emoji, texto, color=0xff69b4):
-        """Helper: busca GIF e manda embed de reação com alvo."""
-        await interaction.response.defer()
-        gif_url = await fetch_gif(category)
-        embed = discord.Embed(
-            description=f"{emoji} **{interaction.user.display_name}** {texto} **{usuario.display_name}**!",
-            color=color
-        )
-        if gif_url:
-            embed.set_image(url=gif_url)
-        else:
-            embed.set_footer(text="(GIF indisponível no momento)")
-        await interaction.followup.send(embed=embed)
-
-    async def _react_self(self, interaction, category, emoji, texto, color=0x9b59b6):
-        """Helper: reação sem alvo (própria expressão)."""
-        await interaction.response.defer()
-        gif_url = await fetch_gif(category)
-        embed = discord.Embed(
-            description=f"{emoji} **{interaction.user.display_name}** {texto}",
-            color=color
-        )
-        if gif_url:
-            embed.set_image(url=gif_url)
-        else:
-            embed.set_footer(text="(GIF indisponível no momento)")
-        await interaction.followup.send(embed=embed)
-
     # ── Casamento ──────────────────────────────────────────────────────────────
 
     @app_commands.command(name="casar", description="Peça alguém em casamento! 💍")
+    @_SOCIAL_CONTEXT
+    @_SOCIAL_INSTALL
     @app_commands.describe(usuario="Quem é o amor da sua vida?")
     async def casar(self, interaction: discord.Interaction, usuario: discord.Member):
         if usuario == interaction.user:
@@ -208,6 +235,8 @@ class SocialCog(commands.Cog):
         )
 
     @app_commands.command(name="divorciar", description="Termine seu casamento atual 💔")
+    @_SOCIAL_CONTEXT
+    @_SOCIAL_INSTALL
     async def divorciar(self, interaction: discord.Interaction):
         success = lira_gamification.divorce(str(interaction.user.id), "discord")
         if success:
@@ -215,198 +244,186 @@ class SocialCog(commands.Cog):
         else:
             await interaction.response.send_message("Você não está casado com ninguém!", ephemeral=True)
 
-    # ── Interações com Alvo ────────────────────────────────────────────────────
 
-    @app_commands.command(name="abracar", description="Dê um abraço apertado 🫂")
-    @app_commands.describe(usuario="Quem você quer abraçar?")
-    async def abracar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "hug", "🫂", "deu um abraço carinhoso em")
+    @app_commands.command(name="act", description="Realize uma ação dramática ou expresse um sentimento! 🎭")
+    @app_commands.describe(
+        acao="Escolha o tipo de ação",
+        usuario="Membro do servidor (escolha na lista @menção)",
+        usuario_nome="Ou digite o apelido, se não achar na lista",
+        mensagem="Mensagem personalizada para acompanhar a ação (opcional)",
+    )
+    @app_commands.choices(acao=_act_choice_list())
+    @_SOCIAL_CONTEXT
+    @_SOCIAL_INSTALL
+    async def act(
+        self,
+        interaction: discord.Interaction,
+        acao: str,
+        usuario: discord.User = None,
+        usuario_nome: str = None,
+        mensagem: str = None,
+    ):
+        info = ACT_CATALOG.get(acao)
+        if not info:
+            return await interaction.response.send_message("Ação inválida!", ephemeral=True)
 
-    @app_commands.command(name="beijar", description="Dê um beijo 💋")
-    @app_commands.describe(usuario="Quem você quer beijar?")
-    async def beijar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "kiss", "💋", "beijou")
+        alvo = _display_name(usuario, usuario_nome)
+        if usuario_nome and not usuario and not alvo:
+            return await interaction.response.send_message(
+                "❌ Não entendi o nome. Tenta de novo ou escolhe o usuário na lista @menção.",
+                ephemeral=True,
+            )
 
-    @app_commands.command(name="cafune", description="Faça um cafuné 🌸")
-    @app_commands.describe(usuario="Em quem você quer fazer cafuné?")
-    async def cafune(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "pat", "🌸", "fez cafuné em")
+        category = info["category"]
+        emoji = info["emoji"]
 
-    @app_commands.command(name="tapa", description="Dê um tapa 🖐️")
-    @app_commands.describe(usuario="Quem merece um tapa?")
-    async def tapa(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "slap", "🖐️", "deu um tapa em", color=0xff4444)
+        await interaction.response.defer()
+        gif_url = await fetch_gif(category)
 
-    @app_commands.command(name="morder", description="Dê uma mordidinha 🦷")
-    @app_commands.describe(usuario="Quem você quer morder?")
-    async def morder(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "bite", "🦷", "mordeu")
+        if alvo:
+            texto_final = f"{emoji} **{interaction.user.display_name}** {info['texto_com']} **{alvo}**!"
+        else:
+            # Reação própria
+            texto_final = f"{emoji} **{interaction.user.display_name}** {info['texto_sem']}"
+            
+        if mensagem:
+            # Sanitiza a mensagem para evitar menções e formatações quebradas
+            msg_clean = discord.utils.escape_markdown(mensagem)
+            texto_final += f"\n\n*\" {msg_clean} \"*"
+            
+        embed = discord.Embed(description=texto_final, color=0xff69b4)
+        if gif_url:
+            embed.set_image(url=gif_url)
+        else:
+            embed.set_footer(text="(GIF indisponível no momento)")
+            
+        await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="aconchegar", description="Aconchegue alguém 🥰")
-    @app_commands.describe(usuario="Com quem você quer se aconchegar?")
-    async def aconchegar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "cuddle", "🥰", "se aconchegou com")
+    @app_commands.command(name="ship", description="Calcula o ship semanal entre usuários, IDs ou nomes ❤️")
+    @app_commands.describe(
+        user1="Primeiro usuário do ship (opcional)",
+        user1_id="ID Discord manual do primeiro lado (opcional)",
+        nome1="Nome manual do primeiro lado (opcional)",
+        user2="Segundo usuário do ship (opcional)",
+        user2_id="ID Discord manual do segundo lado (opcional)",
+        nome2="Nome manual do segundo lado (opcional)",
+        modo="Estilo textual do resultado (opcional)"
+    )
+    @app_commands.choices(modo=[
+        app_commands.Choice(name="Normal 😐", value="normal"),
+        app_commands.Choice(name="Debochado 😏", value="debochado"),
+        app_commands.Choice(name="Amoroso 💕", value="amoroso"),
+    ])
+    @_SOCIAL_CONTEXT
+    @_SOCIAL_INSTALL
+    async def ship(
+        self,
+        interaction: discord.Interaction,
+        user1: discord.Member = None,
+        user1_id: str = None,
+        nome1: str = None,
+        user2: discord.Member = None,
+        user2_id: str = None,
+        nome2: str = None,
+        modo: str = "debochado"
+    ):
+        # Resolver Lado 1
+        if user1:
+            name1 = user1.display_name
+            id1 = str(user1.id)
+        elif user1_id:
+            name1 = f"<@{user1_id}>"
+            id1 = user1_id
+        elif nome1:
+            name1 = nome1
+            id1 = nome1.lower()
+        else:
+            name1 = interaction.user.display_name
+            id1 = str(interaction.user.id)
 
-    @app_commands.command(name="alimentar", description="Alimente alguém 🍱")
-    @app_commands.describe(usuario="Quem você quer alimentar?")
-    async def alimentar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "feed", "🍱", "alimentou")
+        # Resolver Lado 2
+        if user2:
+            name2 = user2.display_name
+            id2 = str(user2.id)
+        elif user2_id:
+            name2 = f"<@{user2_id}>"
+            id2 = user2_id
+        elif nome2:
+            name2 = nome2
+            id2 = nome2.lower()
+        else:
+            return await interaction.response.send_message("❌ Você precisa preencher o segundo lado do ship! Especifique um usuário, ID ou nome.", ephemeral=True)
 
-    @app_commands.command(name="mao", description="Segure a mão de alguém 🤝")
-    @app_commands.describe(usuario="De quem você quer segurar a mão?")
-    async def mao(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "handhold", "🤝", "segurou a mão de")
+        if id1 == id2:
+            return await interaction.response.send_message("❌ Shippar a si mesmo ou a mesma entidade? Um pouco de amor próprio é bom, mas vamos manter o senso!", ephemeral=True)
 
-    @app_commands.command(name="highfive", description="Dê um high-five! ✋")
-    @app_commands.describe(usuario="Com quem você quer dar um high-five?")
-    async def highfive(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "highfive", "✋", "deu um high-five em")
+        await interaction.response.defer()
 
-    @app_commands.command(name="chutar", description="Dê um chute 🦵")
-    @app_commands.describe(usuario="Quem você quer chutar?")
-    async def chutar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "kick", "🦵", "chutou", color=0xff4444)
+        # Cálculo determinístico semanal
+        import datetime
+        import hashlib
+        year, week_num, _ = datetime.date.today().isocalendar()
+        week_id = f"{year}-{week_num}"
+        sorted_ids = sorted([id1, id2])
+        combined = f"{sorted_ids[0]}:{sorted_ids[1]}:{week_id}"
+        hash_val = hashlib.sha256(combined.encode('utf-8')).hexdigest()
+        percentage = int(hash_val, 16) % 101
 
-    @app_commands.command(name="beijo_rapido", description="Dê um beijinho rápido 😘")
-    @app_commands.describe(usuario="Quem você quer dar um beijinho?")
-    async def beijo_rapido(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "peck", "😘", "deu um beijinho em")
+        # Barra de progresso customizada
+        filled = round(percentage / 10)
+        bar = "❤️" * filled + "🖤" * (10 - filled)
 
-    @app_commands.command(name="cutucar", description="Cutuque alguém 👉")
-    @app_commands.describe(usuario="Quem você quer cutucar?")
-    async def cutucar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "poke", "👉", "cutucou")
+        # Comentários por categoria
+        COMENTARIOS = {
+            "debochado": [
+                (20, "Horrível. Recomendo distância imediata de pelo menos 5 quilômetros antes que vire caso de polícia. 🤮"),
+                (40, "Amizade (e olhe lá). Um querendo a alma do outro, mas sem coragem ou inteligência para admitir. 😒"),
+                (60, "Morno. Talvez depois de 5 copos de suco de uva e um empurrãozinho de um cupido bêbado dê alguma coisa. 🥴"),
+                (80, "Fofinho. Lira quase sente um vestígio de simpatia humana por vocês. Quase. 🌸"),
+                (100, "Casal Perfeito! Prontos para assinar o divórcio amigável daqui a 3 meses. Mentira, muito amor! 💍💕")
+            ],
+            "amoroso": [
+                (20, "Um começo difícil, mas com paciência e carinho, todo amor pode florescer! 🌱"),
+                (40, "A amizade de vocês é linda! Quem sabe um dia não se transforma em algo ainda maior? ✨"),
+                (60, "Vocês têm uma conexão super gostosa! O destino está de olho em vocês dois... 👀💖"),
+                (80, "Muito amor envolvido! Vocês se complementam de uma forma linda e aconchegante! 🌸"),
+                (100, "Almas Gêmeas! O universo inteiro conspira a favor da felicidade desse casal lindo! 💍💕")
+            ],
+            "normal": [
+                (20, "Compatibilidade baixa. O santo de vocês simplesmente não bateu. ❌"),
+                (40, "Uma relação neutra. Funcionam muito bem como amigos ou colegas de trabalho. 👍"),
+                (60, "Compatibilidade razoável. Existe potencial se ambos estiverem dispostos a investir. ⚖️"),
+                (80, "Compatibilidade alta! Uma ótima dupla com excelente entrosamento no dia a dia. 🎉"),
+                (100, "Compatibilidade excelente! Uma conexão rara e extremamente harmônica. 🏆")
+            ]
+        }
 
-    @app_commands.command(name="socar", description="Dê um soco 🥊")
-    @app_commands.describe(usuario="Quem merece um soco?")
-    async def socar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "punch", "🥊", "socou", color=0xff4444)
+        # Obter comentário correto
+        comentario_lista = COMENTARIOS.get(modo, COMENTARIOS["debochado"])
+        comentario_final = ""
+        for limite, texto in comentario_lista:
+            if percentage <= limite:
+                comentario_final = texto
+                break
 
-    @app_commands.command(name="cócegas", description="Faça cócegas em alguém 🤣")
-    @app_commands.describe(usuario="Quem você quer fazer cócegas?")
-    async def cocegas(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "tickle", "🤣", "fez cócegas em")
+        embed = discord.Embed(
+            title="❤️ CÁLCULO DE SHIP SEMANAL ❤️",
+            description=f"Calculando a afinidade cósmica para esta semana...\n\n**{name1}** & **{name2}**\n\n`{bar}` **{percentage}%**\n\n**Opinião da Lira:**\n*{comentario_final}*",
+            color=0xff69b4 if percentage >= 50 else 0x95a5a6
+        )
+        embed.set_footer(text=f"Afinidade calculada para a semana {week_num} de {year} 🌸")
+        
+        # Opcional: Adicionar um GIF romântico se der match alto, ou triste se der match baixo!
+        if percentage >= 70:
+            gif_url = await fetch_gif("cuddle")
+            if gif_url:
+                embed.set_image(url=gif_url)
+        elif percentage <= 20:
+            gif_url = await fetch_gif("cry")
+            if gif_url:
+                embed.set_image(url=gif_url)
 
-    @app_commands.command(name="acenar", description="Acene para alguém 👋")
-    @app_commands.describe(usuario="Para quem você quer acenar?")
-    async def acenar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "wave", "👋", "aceneu para")
-
-    @app_commands.command(name="arremessar", description="Arremesse alguém para longe 🌀")
-    @app_commands.describe(usuario="Quem você quer arremessar?")
-    async def arremessar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "yeet", "🌀", "arremessou", color=0x3498db)
-
-    @app_commands.command(name="comer", description="Coma alguém 😋")
-    @app_commands.describe(usuario="Quem você quer comer?")
-    async def comer(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "nom", "😋", "comeu")
-
-    @app_commands.command(name="xingar", description="Chame alguém de baka 😤")
-    @app_commands.describe(usuario="Quem é o baka?")
-    async def xingar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "baka", "😤", "chamou de baka", color=0xe67e22)
-
-    @app_commands.command(name="olhar", description="Fique encarando alguém 👀")
-    @app_commands.describe(usuario="Quem você está encarando?")
-    async def olhar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "stare", "👀", "ficou encarando")
-
-    @app_commands.command(name="matar", description="Mate alguém dramaticamente ⚔️")
-    @app_commands.describe(usuario="Quem você quer matar?")
-    async def matar(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "kill", "⚔️", "matou", color=0x2c2c2c)
-
-    @app_commands.command(name="apertar_mao", description="Aperte a mão de alguém 🤝")
-    @app_commands.describe(usuario="Com quem você quer apertar a mão?")
-    async def apertar_mao(self, interaction: discord.Interaction, usuario: discord.Member):
-        await self._react(interaction, usuario, "handshake", "🤝", "apertou a mão de")
-
-    # ── Reações Próprias (sem alvo) ────────────────────────────────────────────
-
-    @app_commands.command(name="corar", description="Cora de vergonha 😳")
-    async def corar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "blush", "😳", "está corando!")
-
-    @app_commands.command(name="entediado", description="Mostre que está entediado 😒")
-    async def entediado(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "bored", "😒", "está entediado(a)...")
-
-    @app_commands.command(name="chorar", description="Chore 😭")
-    async def chorar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "cry", "😭", "está chorando...")
-
-    @app_commands.command(name="dançar", description="Dance! 💃")
-    async def dancar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "dance", "💃", "está dançando!")
-
-    @app_commands.command(name="facepalm", description="Facepalm 🤦")
-    async def facepalm(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "facepalm", "🤦", "não acredita no que aconteceu...")
-
-    @app_commands.command(name="rir", description="Gargalhe 😂")
-    async def rir(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "laugh", "😂", "está rindo muito!")
-
-    @app_commands.command(name="concordar", description="Concorde com a cabeça 😌")
-    async def concordar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "nod", "😌", "está concordando")
-
-    @app_commands.command(name="recusar", description="Recuse com a cabeça 🙅")
-    async def recusar_cabeca(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "nope", "🙅", "está recusando")
-
-    @app_commands.command(name="fazer_bico", description="Faça bico 😤")
-    async def fazer_bico(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "pout", "😤", "está fazendo bico")
-
-    @app_commands.command(name="correr", description="Corra! 🏃")
-    async def correr(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "run", "🏃", "está correndo!")
-
-    @app_commands.command(name="triste", description="Mostre que está triste 😢")
-    async def triste(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "sad", "😢", "está triste...")
-
-    @app_commands.command(name="dar_de_ombros", description="Dê de ombros 🤷")
-    async def dar_de_ombros(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "shrug", "🤷", "não sabe o que dizer")
-
-    @app_commands.command(name="dormir", description="Durma! 😴")
-    async def dormir(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "sleep", "😴", "foi dormir... boa noite!")
-
-    @app_commands.command(name="sorrir", description="Sorria 😊")
-    async def sorrir(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "smile", "😊", "está sorrindo!")
-
-    @app_commands.command(name="satisfeito", description="Fique satisfeito(a) 😏")
-    async def satisfeito(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "smug", "😏", "está satisfeito(a)")
-
-    @app_commands.command(name="pensar", description="Pense profundamente 🤔")
-    async def pensar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "think", "🤔", "está pensando...")
-
-    @app_commands.command(name="joinha", description="Dê um joinha 👍")
-    async def joinha(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "thumbsup", "👍", "aprova!")
-
-    @app_commands.command(name="piscar", description="Pisce o olho 😉")
-    async def piscar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "wink", "😉", "está piscando!")
-
-    @app_commands.command(name="bocejar", description="Boceje 🥱")
-    async def bocejar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "yawn", "🥱", "está com sono...")
-
-    @app_commands.command(name="feliz", description="Mostre que está feliz! 😄")
-    async def feliz(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "happy", "😄", "está feliz!")
-
-    @app_commands.command(name="espreitar", description="Espreitando por aí 👁️")
-    async def espreitar(self, interaction: discord.Interaction):
-        await self._react_self(interaction, "lurk", "👁️", "está espiando...")
+        await interaction.followup.send(embed=embed)
 
 
 async def setup(bot):

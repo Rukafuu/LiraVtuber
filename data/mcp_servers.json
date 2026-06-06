@@ -1,0 +1,53 @@
+{
+  "servers": {
+    "tavily": {
+      "label": "Tavily Search",
+      "enabled": true,
+      "planned": false,
+      "command": ["npx", "-y", "tavily-mcp"],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      },
+      "cwd": null
+    },
+    "github": {
+      "label": "GitHub",
+      "enabled": true,
+      "planned": false,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "cwd": null
+    },
+    "filesystem": {
+      "label": "Filesystem (LiraVT)",
+      "enabled": true,
+      "planned": false,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\conta\\Documents\\LiraVT"
+      ],
+      "env": {},
+      "cwd": null
+    },
+    "memory": {
+      "label": "Memory (grafo MCP)",
+      "enabled": true,
+      "planned": false,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
+      "env": {},
+      "cwd": null
+    },
+    "puppeteer": {
+      "label": "Puppeteer (browser)",
+      "enabled": true,
+      "planned": false,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
+      "env": {},
+      "cwd": null
+    }
+  }
+}

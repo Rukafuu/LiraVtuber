@@ -128,14 +128,22 @@ class MotorSTTWhisper:
         self.vad = get_vad()
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        self.caminho_dicionario = os.path.join(base_dir, "config", "dicionário.json")
+        config_dir = os.path.join(base_dir, "config")
+        ascii_path = os.path.join(config_dir, "dicionario.json")
+        legacy_path = os.path.join(config_dir, "dicionário.json")
+        if os.path.exists(ascii_path):
+            self.caminho_dicionario = ascii_path
+        elif os.path.exists(legacy_path):
+            self.caminho_dicionario = legacy_path
+        else:
+            self.caminho_dicionario = ascii_path
         self._criar_dicionario_padrao()
 
     def _criar_dicionario_padrao(self):
         if not os.path.exists(self.caminho_dicionario):
             os.makedirs(os.path.dirname(self.caminho_dicionario), exist_ok=True)
             with open(self.caminho_dicionario, "w", encoding="utf-8") as f:
-                json.dump({"hannah": "Lira", "lira": "Lira"}, f, indent=4, ensure_ascii=False)
+                json.dump({"hannah": "Lira", "lira": "Lira", "nira": "Lira"}, f, indent=4, ensure_ascii=False)
 
     def _corrigir_texto(self, texto: str) -> str:
         try:

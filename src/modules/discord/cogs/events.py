@@ -1,3 +1,6 @@
+import asyncio
+import os
+
 import discord
 from discord.ext import commands
 import base64
@@ -37,30 +40,46 @@ class EventsCog(commands.Cog):
                 thinking_msg = await message.channel.send(THINKING_MSG)
                 
                 async with message.channel.typing():
-                    response = await chat_cog._responder(
-                        message.content, 
+                    payload = await chat_cog._responder(
+                        message.content,
                         message.author.display_name,
-                        image_b64=image_b64
+                        image_b64=image_b64,
+                        discord_user_id=message.author.id,
                     )
-                    
-                    # --- GERAÇÃO DE VOZ (TTS) ---
-                    audio_file = None
-                    from src.modules.voice.tts_selector import get_tts
-                    try:
-                        tts = get_tts()
-                        # Gera o áudio (salva em data/last_response.mp3)
-                        success = tts.falar(response, tocar_local=False)
-                        if success:
-                            audio_file = discord.File("data/last_response.mp3", filename="lira_voice.mp3")
-                    except Exception as v_err:
-                        logger.error(f"[DISCORD] Erro ao gerar voz: {v_err}")
 
-                    # Deleta a mensagem de pensando e envia a real
                     await thinking_msg.delete()
-                    if audio_file:
-                        await message.reply(content=response[:2000], file=audio_file)
-                    else:
-                        await message.reply(response[:2000])
+                    reply_msg = await chat_cog._deliver_payload(
+                        payload,
+                        lambda text: message.reply(text[:2000]),
+                    )
+
+                    if os.getenv("TTS_ATIVO", "1").lower() not in ("0", "false", "no"):
+
+                        async def _tts_attach():
+                            from src.modules.voice.tts_selector import get_tts
+
+                            try:
+                                tts = get_tts()
+                                success = await asyncio.wait_for(
+                                    asyncio.to_thread(
+                                        tts.falar,
+                                        payload.text,
+                                        tocar_local=False,
+                                    ),
+                                    timeout=float(os.getenv("TTS_CALL_TIMEOUT", "25")),
+                                )
+                                if success:
+                                    audio_file = discord.File(
+                                        "data/last_response.mp3",
+                                        filename="lira_voice.mp3",
+                                    )
+                                    await reply_msg.reply(file=audio_file)
+                            except asyncio.TimeoutError:
+                                logger.warning("[DISCORD] TTS timeout — resposta só em texto")
+                            except Exception as v_err:
+                                logger.error("[DISCORD] Erro ao gerar voz: %s", v_err)
+
+                        asyncio.create_task(_tts_attach())
 
         # XP por mensagem
         lira_gamification.lira_gamification.add_xp(str(message.author.id), "discord", 10)

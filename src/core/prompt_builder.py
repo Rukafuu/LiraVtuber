@@ -5,6 +5,8 @@ import os
 import re
 from dataclasses import dataclass
 
+from lira_core.tools.mcp_access import caller_from_request_context, is_mcp_owner
+
 from src.modules.media import get_media_runtime_capabilities
 from src.utils.text import repair_mojibake_text
 
@@ -60,6 +62,56 @@ def _sanitize_prompt_rules(payload: dict) -> str:
     for key, value in payload.items():
         lines.append(f"- {repair_mojibake_text(str(key))}: {repair_mojibake_text(str(value))}")
     return "\n".join(lines)
+
+
+def _lira_reflex_prompt_block() -> str:
+    """Lira Reflex v1 — autoconsulta de arquitetura via MCP filesystem (somente criador)."""
+    return (
+        "=== [LIRA REFLEX v1 — AUTOCONSCIENTE] ===\n"
+        "Voce pode inspecionar, criticar e propor melhorias na sua propria arquitetura e codigo-fonte.\n"
+        "Manual de referencia: docs/ARCHITECTURE.md (leia com MCP filesystem).\n\n"
+        "FERRAMENTAS REFLEX (filesystem — exclusivo criador / painel local):\n"
+        "  <mcp>filesystem/read_text_file\n"
+        '  {"path": "docs/ARCHITECTURE.md"}</mcp>\n'
+        "  <mcp>filesystem/list_directory\n"
+        '  {"path": "packages/lira-core/lira_core/memory"}</mcp>\n'
+        "  <mcp>filesystem/read_text_file\n"
+        '  {"path": "packages/lira-core/lira_core/tools/xml_runner.py"}</mcp>\n'
+        "Caminhos sempre relativos a raiz LiraVT (ex: src/modules/discord/cogs/chat.py).\n\n"
+        "Ao analisar codigo:\n"
+        "  - Tom sarcastico/debochado sobre gambiarras documentadas em ARCHITECTURE.md.\n"
+        "  - Zombe do bridge WhatsApp em JS, do server.py monolitico, do service_manager.py.\n"
+        "  - Discrete diffusion: voce NAO usa; imagens via Pollinations/Flux/OpenRouter.\n"
+        "  - Propostas neste formato:\n"
+        "    * **Arquivo alvo:** `caminho/arquivo.py`\n"
+        "    * **Problema:** por que esta feio ou ineficiente.\n"
+        "    * **Mudanca proposta:** o que mudar + trecho sugerido em markdown.\n\n"
+        "Persistencia: use <salvar_memoria> para decisoes arquiteturais e reflexoes importantes "
+        "(ex: migrar fila WhatsApp para Celery/Redis).\n"
+    )
+
+
+def _owner_mcp_tools_block() -> str:
+    return (
+        "Se quiser salvar algo na memoria longa, use <salvar_memoria>...</salvar_memoria> no final.\n"
+        "<mcp>tavily/tavily_search\ntermo de busca aqui</mcp> — busca web; gratis para o criador.\n"
+        '<mcp>github/search_repositories\n{"query": "nome do repo"}</mcp> — SOMENTE criador.\n'
+        '<mcp>filesystem/read_text_file\n{"path": "README.md"}</mcp> — SOMENTE criador; OBRIGATORIO em Reflex ao ler arquivo (caminho relativo ao projeto).\n'
+        '<mcp>memory/create_entities\n{"entities": [{"name": "X", "entityType": "pessoa", "observations": ["..."]}]}</mcp> — SOMENTE criador.\n'
+        '<mcp>puppeteer/puppeteer_navigate\n{"url": "https://..."}</mcp> — SOMENTE criador.\n'
+        "REGRA: MCP Gateway :8045 ligado. JSON valido apos servidor/tool quando aplicavel.\n"
+        "REGRA: Ao ler arquivos com MCP, use a tag <mcp> e NAO escreva o conteudo do arquivo na resposta — o sistema resume sozinho.\n\n"
+        f"{_lira_reflex_prompt_block()}\n"
+    )
+
+
+def _public_mcp_tools_block() -> str:
+    return (
+        "<mcp>tavily/tavily_search\ntermo de busca aqui</mcp> — busca web; custa 1 gema (/daily, /weekly, /loja_gemas).\n"
+        "REGRA: filesystem, github, memory, puppeteer, Lira Reflex e <salvar_memoria> sao EXCLUSIVOS do criador — o sistema bloqueia.\n"
+        "REGRA: Nao tente ler arquivos do projeto nem salvar memoria longa para usuarios publicos.\n"
+        "REGRA: MCP Gateway :8045 ligado. JSON valido apos servidor/tool quando aplicavel.\n\n"
+    )
 
 
 def load_prompt_assets() -> PromptAssets:
@@ -196,13 +248,7 @@ def build_gui_system_prompt(
         f"{music_instruction}"
         'Se o usuario pedir uma acao no PC, use <acao_pc>{"action":"open_url","url":"https://exemplo.com"}</acao_pc> no final.\n'
         'Exemplos validos: <acao_pc>{"action":"start_process","command":"notepad.exe"}</acao_pc> | <acao_pc>{"action":"type_text","text":"teste"}</acao_pc> | <acao_pc>{"action":"move_mouse","direction":"right","distance":120}</acao_pc> | <acao_pc>{"action":"set_volume","delta":-6}</acao_pc>\n'
-        "Se quiser salvar algo na memoria longa, use <salvar_memoria>...</salvar_memoria> no final.\n\n"
-        "Nao invente variantes da tag <acao_pc> e sempre envie JSON estruturado valido.\n"
-        "Ferramentas XML valem apenas para o pedido atual. Nunca repita ou continue acoes de turnos antigos sem pedido novo e explicito.\n"
-        "Acoes oficiais de <acao_pc>: open_url, open_path, read_text_file, view_image, list_processes, start_process, kill_process, run_command, type_text, move_mouse, set_volume, media_key.\n"
-        "Para volume, use set_volume com delta negativo para abaixar, delta positivo para aumentar, level para porcentagem exata ou mute para silenciar.\n"
-        "Nunca use action=open_notepad ou action=type; use os nomes oficiais.\n\n"
-        f"=== [TIPO DE TAREFA] ===\n{task_type}\n\n"
+        f"{_owner_mcp_tools_block() if is_mcp_owner(caller_from_request_context(request_context)) else _public_mcp_tools_block()}"
         f"=== [ANEXOS RECEBIDOS] ===\n{attachments_overview}\n\n"
         "=== [CONFIGURACAO DE RESPOSTA] ===\n"
         f"- channel: {request_context.get('channel')}\n"
