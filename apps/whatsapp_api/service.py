@@ -413,7 +413,12 @@ async def handle_chat(payload: dict, state) -> dict:
         print("[PASSO 3] Chamando LLM API Multimodal...", flush=True)
 
         def _call_llm():
-            return llm._chamar_api(model_id, messages, image_b64=image_b64)
+            return llm._chamar_api(
+                model_id,
+                messages,
+                image_b64=image_b64,
+                arquivos_multimidia=arquivos_multimidia,
+            )
 
         try:
             resposta = await asyncio.wait_for(

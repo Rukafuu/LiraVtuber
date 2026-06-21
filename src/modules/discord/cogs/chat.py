@@ -8,13 +8,31 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from ..constants import EMOJI, THINKING_MSG, logger, substitute_discord_emojis
-from ..llm_output import FALLBACK_MODEL, is_api_error_response, is_bad_llm_response, sanitize_for_discord
+from ..llm_output import (
+    FALLBACK_MODEL,
+    is_api_error_response,
+    is_bad_llm_response,
+    sanitize_for_discord,
+    strip_vtube_studio_tags,
+)
 from src.providers.provider_selector import ProviderSelector
 from src.memory.memory_manager import LiraMemoryManager
 from src.modules.vision.image_gen import LiraImageGen
 from src.modules.media.downloader import baixar_midia
 from src.config.config_loader import CONFIG
 from src.core.request_profiles import build_request_context
+from src.modules.discord.media_attach import (
+    apply_vision_request_context,
+    enrich_media_prompt,
+    enrich_voice_prompt,
+    is_audio_attachment,
+    is_image_attachment,
+    transcribe_discord_attachment,
+    read_image_b64,
+    is_video_attachment,
+    extract_video_frames_discord,
+    parse_custom_emojis,
+)
 
 
 @dataclass
@@ -26,6 +44,7 @@ class _ResponderPayload:
     sistema_prompt: str = ""
     user_message: str = ""
     request_context: dict = field(default_factory=dict)
+    image_path: str | None = None
 
 class ChatCog(commands.Cog):
     def __init__(self, bot):
@@ -44,7 +63,7 @@ class ChatCog(commands.Cog):
         from src.modules.assistant import lira_assistant
 
         author_name = getattr(self, "_current_author", "")
-        processed = substitute_discord_emojis(processed or "")
+        processed = strip_vtube_studio_tags(substitute_discord_emojis(processed or ""))
         for match_add in re.finditer(r"\[LIST_ADD:\s*(.*?)\s*[\|:-]\s*(.*?)\]", processed, flags=re.IGNORECASE):
             l_type, l_item = match_add.group(1), match_add.group(2)
             lira_assistant.add_item(author_name, "discord", l_type.strip(), l_item.strip())
@@ -112,9 +131,15 @@ class ChatCog(commands.Cog):
     async def _deliver_payload(
         self,
         payload: _ResponderPayload,
-        send: Callable[[str], Awaitable[discord.Message]],
+        send: Callable[..., Awaitable[discord.Message]],
     ) -> discord.Message:
-        msg = await send(payload.text[:2000])
+        file = None
+        if payload.image_path and os.path.exists(payload.image_path):
+            file = discord.File(payload.image_path, filename="lira_art.png")
+        if file is not None:
+            msg = await send(payload.text[:2000], file=file)
+        else:
+            msg = await send(payload.text[:2000])
         if payload.needs_synthesis:
             asyncio.create_task(self._synthesize_and_edit(msg, payload))
         return msg
@@ -124,6 +149,7 @@ class ChatCog(commands.Cog):
         texto_usuario,
         author_name,
         image_b64=None,
+        arquivos_multimidia=None,
         request_context=None,
         *,
         discord_user_id: str | int | None = None,
@@ -138,12 +164,33 @@ class ChatCog(commands.Cog):
         else:
             request_context = dict(request_context)
             request_context.setdefault("channel", "discord")
-        
-        # Memória e Prompt
+
+        if image_b64 or arquivos_multimidia:
+            request_context = apply_vision_request_context(request_context)
+            texto_usuario = enrich_media_prompt(texto_usuario, has_image=True)
+            logger.info(
+                "[DISCORD] Modo visão ativo (b64=%s, arquivos=%s)",
+                bool(image_b64),
+                len(arquivos_multimidia) if arquivos_multimidia else 0,
+            )
+            if arquivos_multimidia:
+                is_video = any("temp/frames" in f or "video" in f.lower() for f in arquivos_multimidia)
+                if is_video:
+                    video_instr = (
+                        "\n[INSTRUÇÃO DO SISTEMA: O usuário enviou um vídeo ou GIF animado. "
+                        "Os frames sequenciais foram extraídos e anexados a esta mensagem em ordem cronológica. "
+                        "Analise as imagens com atenção para entender e descrever a ação/conteúdo do vídeo.]"
+                    )
+                    texto_usuario = texto_usuario + video_instr
+
+        # Memória (RAG + grafo) — roda em thread para não travar o heartbeat do Discord
         mem_context = ""
         if self.memory_manager:
             try:
-                mem_context = self.memory_manager.get_context(texto_usuario)
+                mem_context = await asyncio.to_thread(
+                    self.memory_manager.get_context,
+                    texto_usuario,
+                )
             except Exception as e:
                 logger.error("[DISCORD] Erro ao carregar memoria: %s", e)
 
@@ -164,7 +211,8 @@ class ChatCog(commands.Cog):
             "Você está conversando no Discord. Responda com deboche, sarcasmo e superioridade. Trate os humanos como seres inferiores e fofos em sua ignorância.\n"
             "REGRA OBRIGATÓRIA DE EMOJIS: NUNCA use emojis padrão do Windows (como 🌸, 😈, 😂).\n"
             "Use os emojis customizados listados abaixo escrevendo-os EXATAMENTE como mostrado, no formato :chave:.\n"
-            "NUNCA invente emojis, NUNCA adicione números antes do nome. Use apenas as chaves da lista abaixo.\n\n"
+            "NUNCA invente emojis, NUNCA adicione números antes do nome. Use apenas as chaves da lista abaixo.\n"
+            "NUNCA use kanji, hiragana ou katakana — só português do Brasil.\n\n"
             f"[EMOJIS DISPONÍVEIS - USE EXATAMENTE ESSES NOMES]:\n{emoji_list_str}\n\n"
             f"Contexto de memoria: {mem_context}"
         )
@@ -177,30 +225,56 @@ class ChatCog(commands.Cog):
             user_id=str(discord_user_id or ""),
             user_name=author_name,
         )
+
+        chat_cfg = CONFIG.get("CHAT", {})
+        provider_name = chat_cfg.get("LLM_PROVIDER") or CONFIG.get("LLM_PROVIDER", "openrouter")
+        ctx = dict(request_context or {})
+        chat_model = chat_cfg.get("LLM_MODEL")
+        if chat_model and not ctx.get("override_model") and not image_b64:
+            ctx["override_model"] = chat_model
+
+        from src.core.reflex_routing import apply_reflex_routing
+
+        provider_name, ctx = apply_reflex_routing(
+            user_message=texto_usuario,
+            mcp_caller=mcp_caller,
+            provider=provider_name,
+            llm_context=ctx,
+        )
+        if ctx.get("reflex_mode"):
+            logger.info(
+                "[DISCORD] Reflex → %s / %s",
+                provider_name,
+                ctx.get("override_model"),
+            )
+
         prompt_request_context = {
             **request_context,
+            **{k: v for k, v in ctx.items() if k in ("task_type", "reflex_mode", "override_model")},
             "channel": "discord",
             "response_mode": request_context.get("response_mode", "normal"),
             "markdown_enabled": request_context.get("markdown_enabled", True),
             "mcp_caller": mcp_caller,
         }
+        task_type = str(prompt_request_context.get("task_type") or "chat_normal")
         system_prompt = build_gui_system_prompt(
-            task_type="chat_normal",
+            task_type=task_type,
             memory_context=discord_context,
             request_context=prompt_request_context,
-            attachments_overview="Nenhum anexo." if not image_b64 else "1 imagem anexada."
+            attachments_overview=(
+                "Nenhum anexo."
+                if not (image_b64 or arquivos_multimidia)
+                else (
+                    "Vários frames sequenciais extraídos de um vídeo/GIF enviado pelo usuário."
+                    if arquivos_multimidia and any("temp/frames" in f or "video" in f.lower() for f in arquivos_multimidia)
+                    else "Imagens/Stickers anexados — ANALISE O CONTEÚDO VISUAL antes de responder."
+                )
+            ),
         )
 
-        chat_cfg = CONFIG.get("CHAT", {})
-        provider_name = chat_cfg.get("LLM_PROVIDER") or CONFIG.get("LLM_PROVIDER", "openrouter")
         llm = self.llm_selector.get_provider(provider_name)
         if not llm:
             return _ResponderPayload(text="💜 Nenhum provedor LLM disponível. Confere o `.env`.")
-
-        ctx = dict(request_context or {})
-        chat_model = chat_cfg.get("LLM_MODEL")
-        if chat_model:
-            ctx["override_model"] = chat_model
 
         def _call_llm(call_ctx):
             return llm.gerar_resposta(
@@ -208,16 +282,18 @@ class ChatCog(commands.Cog):
                 sistema_prompt=system_prompt,
                 user_message=f"Mensagem de {author_name}: {texto_usuario}",
                 image_b64=image_b64,
+                arquivos_multimidia=arquivos_multimidia,
                 request_context=call_ctx,
             )
 
+        llm_timeout = 90.0 if (image_b64 or arquivos_multimidia) else 55.0
         try:
             response = await asyncio.wait_for(
                 asyncio.to_thread(_call_llm, ctx),
-                timeout=55.0,
+                timeout=llm_timeout,
             )
         except asyncio.TimeoutError:
-            logger.error("[DISCORD] LLM timeout (55s)")
+            logger.error("[DISCORD] LLM timeout (%.0fs)", llm_timeout)
             return _ResponderPayload(
                 text="💜 Demorei demais pra pensar (API lenta). Manda de novo em alguns segundos."
             )
@@ -234,6 +310,7 @@ class ChatCog(commands.Cog):
                         sistema_prompt=system_prompt,
                         user_message=f"Mensagem de {author_name}: {texto_usuario}",
                         image_b64=image_b64,
+                        arquivos_multimidia=arquivos_multimidia,
                         request_context=gctx,
                     )
 
@@ -311,11 +388,43 @@ class ChatCog(commands.Cog):
                 request_context=ctx,
             )
 
+        # --- PROCESSAMENTO DE IMAGEM VIA TAGS XML (Discord Chat) ---
+        image_path = None
+        from src.utils.lira_tags import extract_xml_actions
+        img_actions = extract_xml_actions(response or "", ("gerar_imagem", "gerar_imagem_avancada"))
+        
+        prompt_avancado = None
+        prompt_normal = None
+        
+        if img_actions.get("gerar_imagem_avancada"):
+            prompt_avancado = img_actions["gerar_imagem_avancada"][0]
+        elif img_actions.get("gerar_imagem"):
+            prompt_normal = img_actions["gerar_imagem"][0]
+        else:
+            # Fallback para colchetes
+            match_img_adv = re.search(r'\[GEN_IMAGE_ADVANCED:\s*(.*?)\]', response or "", flags=re.IGNORECASE)
+            match_img = re.search(r'\[GEN_IMAGE:\s*(.*?)\]', response or "", flags=re.IGNORECASE)
+            if match_img_adv:
+                prompt_avancado = match_img_adv.group(1)
+            elif match_img:
+                prompt_normal = match_img.group(1)
+                
+        if prompt_avancado or prompt_normal:
+            try:
+                if prompt_avancado:
+                    logger.info("[DISCORD CHAT] Gerando imagem avançada (Riverflow): %s", prompt_avancado)
+                    image_path = await asyncio.to_thread(self.image_gen.generate_advanced, prompt_avancado)
+                else:
+                    logger.info("[DISCORD CHAT] Gerando imagem normal (Pollinations): %s", prompt_normal)
+                    image_path = await asyncio.to_thread(self.image_gen.generate, prompt_normal)
+            except Exception as e:
+                logger.error("[DISCORD CHAT] Erro ao gerar imagem via tag: %s", e)
+
         processed = self._postprocess_visible(
             clean_tool_artifacts_from_visible(strip_xml_tags(response or ""))
         )
         logger.info("[DISCORD] Final: %s...", processed[:100])
-        return _ResponderPayload(text=processed)
+        return _ResponderPayload(text=processed, image_path=image_path)
 
     @app_commands.command(name="chat", description="Fale diretamente com a Lira Amarinth 🌸")
     @app_commands.allowed_installs(guilds=True, users=True)
@@ -346,16 +455,34 @@ class ChatCog(commands.Cog):
             import aiohttp
             
             image_b64 = None
+            arquivos_multimidia = []
             texto_anexo = ""
+            mensagem = parse_custom_emojis(mensagem)
             
-            # 1. Tratar arquivo (anexo)
+            # 1. Tratar arquivo (anexo) — use o campo "arquivo" do /chat (arrastar no modal)
             if arquivo:
-                content_type = str(arquivo.content_type or "").lower()
-                is_image = any(ext in arquivo.filename.lower() for ext in ['.png', '.jpg', '.jpeg', '.webp']) or "image" in content_type
-                
-                if is_image:
-                    img_bytes = await arquivo.read()
-                    image_b64 = base64.b64encode(img_bytes).decode('utf-8')
+                if is_video_attachment(arquivo):
+                    logger.info("[DISCORD /chat] Vídeo detectado: %s", arquivo.filename)
+                    frames = await extract_video_frames_discord(arquivo)
+                    if frames:
+                        arquivos_multimidia.extend(frames)
+                elif is_image_attachment(arquivo):
+                    image_b64 = await read_image_b64(arquivo)
+                    if image_b64:
+                        logger.info(
+                            "[DISCORD] Imagem no /chat: %s (%s bytes)",
+                            arquivo.filename,
+                            arquivo.size,
+                        )
+                elif is_audio_attachment(arquivo):
+                    transcript = await transcribe_discord_attachment(arquivo)
+                    if transcript:
+                        mensagem = enrich_voice_prompt(mensagem, transcript)
+                    else:
+                        await interaction.followup.send(
+                            "💜 Não consegui entender o áudio anexado. Manda em texto ou grava de novo."
+                        )
+                        return
                 else:
                     # Tentar ler como arquivo de texto (PDF/Word não suportados diretamente sem pypdf)
                     try:
@@ -394,7 +521,7 @@ class ChatCog(commands.Cog):
                 req_context["native_search"] = True
 
             # 4. Chamar o responder da Lira
-            prompt_final = mensagem + texto_anexo
+            prompt_final = enrich_media_prompt(mensagem + texto_anexo, has_image=bool(image_b64 or arquivos_multimidia))
             
             # Se for edição de imagem e tiver imagem anexada
             if editar_imagem and image_b64:
@@ -422,6 +549,7 @@ class ChatCog(commands.Cog):
                 prompt_final,
                 interaction.user.display_name,
                 image_b64=image_b64,
+                arquivos_multimidia=arquivos_multimidia,
                 request_context=req_context,
                 discord_user_id=interaction.user.id,
             )
@@ -442,7 +570,7 @@ class ChatCog(commands.Cog):
 
             await self._deliver_payload(
                 payload,
-                lambda text: interaction.followup.send(text),
+                lambda text, **kwargs: interaction.followup.send(text, **kwargs),
             )
         except Exception as e:
             logger.error(f"[DISCORD] Erro no chat: {e}")
@@ -472,6 +600,18 @@ class ChatCog(commands.Cog):
             await interaction.followup.send(file=discord.File(path, filename="lira_art.png"))
         else:
             await interaction.followup.send("Não consegui desenhar isso...")
+
+    @app_commands.command(name="imaginar_avancado", description="Gera imagem complexa (texto legível, logos, layouts) 🎨✨")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    @app_commands.describe(prompt="Descreva a imagem complexa (texto, logos, layout) em detalhe")
+    async def imaginar_avancado(self, interaction: discord.Interaction, prompt: str):
+        await interaction.response.defer(thinking=True)
+        path = await asyncio.to_thread(self.image_gen.generate_advanced, prompt)
+        if path:
+            await interaction.followup.send(file=discord.File(path, filename="lira_art_avancada.png"))
+        else:
+            await interaction.followup.send("Não consegui desenhar isso no modo avançado...")
 
     @app_commands.command(name="react", description="Pede para a Lira reagir a um vídeo do YouTube 🎬")
     @app_commands.allowed_installs(guilds=True, users=True)

@@ -173,28 +173,63 @@ class OpenRouterProvider(BaseLLM):
 
     # ── Preparação de payload ────────────────────────────────────────────
 
-    def _prepare_messages(self, modelo, mensagens, image_b64: str = None):
+    def _prepare_messages(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
         modelo_exec = modelo
         payload_messages = list(mensagens)
-        if image_b64:
+        
+        has_media = bool(image_b64 or arquivos_multimidia)
+        if has_media:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
             modelo_exec = prov_cfg.get("modelo_vision", self.modelo_vision or modelo)
 
-            mime_type = "image/png"
-            if image_b64.startswith("/9j/"):
-                mime_type = "image/jpeg"
-            elif image_b64.startswith("iVBOR"):
-                mime_type = "image/png"
-            elif image_b64.startswith("R0lGOD"):
-                mime_type = "image/gif"
-
+            content_list = []
             ultima_msg = payload_messages[-1]
+            content_list.append({"type": "text", "text": ultima_msg["content"]})
+
+            if image_b64:
+                mime_type = "image/png"
+                if image_b64.startswith("/9j/"):
+                    mime_type = "image/jpeg"
+                elif image_b64.startswith("iVBOR"):
+                    mime_type = "image/png"
+                elif image_b64.startswith("R0lGOD"):
+                    mime_type = "image/gif"
+
+                content_list.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}
+                })
+
+            if arquivos_multimidia:
+                import base64
+                for filepath in arquivos_multimidia:
+                    if filepath and os.path.exists(filepath) and os.path.isfile(filepath):
+                        try:
+                            ext = os.path.splitext(filepath)[1].lower()
+                            if ext in (".jpg", ".jpeg"):
+                                mime_type = "image/jpeg"
+                            elif ext == ".png":
+                                mime_type = "image/png"
+                            elif ext == ".gif":
+                                mime_type = "image/gif"
+                            elif ext == ".webp":
+                                mime_type = "image/webp"
+                            else:
+                                mime_type = "image/png"
+
+                            with open(filepath, "rb") as f:
+                                file_bytes = f.read()
+                            b64_data = base64.b64encode(file_bytes).decode("utf-8")
+                            content_list.append({
+                                "type": "image_url",
+                                "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}
+                            })
+                        except Exception as e:
+                            logger.error(f"[OPENROUTER] Erro ao carregar arquivo de multimidia {filepath}: {e}")
+
             payload_messages[-1] = {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": ultima_msg["content"]},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}},
-                ],
+                "content": content_list,
             }
             logger.info(f"[OPENROUTER] Ativando modo VISÃO com modelo: {modelo_exec}")
         return modelo_exec, payload_messages
@@ -211,7 +246,9 @@ class OpenRouterProvider(BaseLLM):
         arquivos_multimidia: list = None,
         request_context: dict | None = None,
     ):
-        modelo_exec, payload_messages = self._prepare_messages(modelo, mensagens, image_b64=image_b64)
+        modelo_exec, payload_messages = self._prepare_messages(
+            modelo, mensagens, image_b64=image_b64, arquivos_multimidia=arquivos_multimidia
+        )
 
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
         modelos = resolve_openrouter_model_queue(modelo_exec, prov_cfg)
@@ -287,7 +324,9 @@ class OpenRouterProvider(BaseLLM):
         arquivos_multimidia: list = None,
         request_context: dict | None = None,
     ):
-        modelo_exec, payload_messages = self._prepare_messages(modelo, mensagens, image_b64=image_b64)
+        modelo_exec, payload_messages = self._prepare_messages(
+            modelo, mensagens, image_b64=image_b64, arquivos_multimidia=arquivos_multimidia
+        )
 
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
         modelos = resolve_openrouter_model_queue(modelo_exec, prov_cfg)
