@@ -593,13 +593,22 @@ async function connectToWhatsApp() {
         const participantJid = msg.key.participant || msg.key.remoteJid;
         const pushName = msg.pushName || "Usuário";
         
+        const isImage = !!msg.message.imageMessage;
+        const isAudio = !!msg.message.audioMessage;
+        const isVideo = !!msg.message.videoMessage;
+        const isSticker = !!msg.message.stickerMessage;
+
         // Extrai texto de vários tipos de mensagem
-        const textMessage = msg.message.conversation || 
+        let textMessage = msg.message.conversation || 
                             msg.message.extendedTextMessage?.text || 
                             msg.message.imageMessage?.caption ||
                             msg.message.videoMessage?.caption || "";
 
-        if (!textMessage && !msg.message.audioMessage) return;
+        if (!textMessage && (isImage || isVideo || isSticker)) {
+            textMessage = isVideo ? "Analise o vídeo" : isSticker ? "Analise a figurinha" : "Analise a imagem";
+        }
+
+        if (!textMessage && !isAudio) return;
 
         const isGroup = remoteJid.endsWith('@g.us');
         const mentionsLira = /\b(lira|liras|amarinth|hana)\b/i.test(textMessage);
@@ -630,10 +639,10 @@ async function connectToWhatsApp() {
         // Reação de "lendo" enquanto processa na API
         try { await sock.sendMessage(remoteJid, { react: { text: '💜', key: msg.key } }); } catch (_) {}
 
-        // Extração de imagem ou áudio se houver
+        // Extração de imagem, áudio ou outro anexo se houver
         let imageB64 = null;
-        const isImage = !!msg.message.imageMessage;
-        const isAudio = !!msg.message.audioMessage;
+        let mediaPath = null;
+        const tempMediaDir = path.join(__dirname, '..', 'temp', 'incoming_media');
 
         if (isAudio) {
             console.log(`[AUDIO] Mensagem de voz recebida de ${pushName}. Transcrevendo...`);
@@ -644,89 +653,184 @@ async function connectToWhatsApp() {
                 for await (const chunk of stream) {
                     buffer = Buffer.concat([buffer, chunk]);
                 }
-                
-                // Enviar para transcrição
-                const transcribeRes = await axios.post('http://127.0.0.1:8042/api/whatsapp/transcribe', {
-                    audio_b64: buffer.toString('base64')
-                });
-                
-                if (transcribeRes.data && transcribeRes.data.status === 'ok') {
+
+                const transcribeRes = await axios.post(
+                    `${WHATSAPP_API_BASE}/api/whatsapp/transcribe`,
+                    { audio_b64: buffer.toString('base64'), suffix: '.ogg' },
+                    { timeout: parseInt(process.env.WPP_STT_TIMEOUT_MS || '90000', 10) }
+                );
+
+                if (transcribeRes.data?.status === 'ok' && transcribeRes.data.text) {
                     textMessage = transcribeRes.data.text;
-                    console.log(`[AUDIO] Transcrição: "${textMessage}"`);
-                    if (!textMessage) return; 
+                    console.log(`[AUDIO] Transcrição: "${textMessage.substring(0, 120)}"`);
+                } else {
+                    const sttErr = transcribeRes.data?.message || 'Não consegui entender o áudio.';
+                    await sock.sendMessage(
+                        remoteJid,
+                        { text: `💜 ${sttErr}` },
+                        { quoted: msg }
+                    );
+                    return;
                 }
             } catch (audErr) {
-                console.error(`❌ Erro ao processar áudio do WhatsApp:`, audErr.message);
+                const detail = audErr.response?.data?.message || audErr.message;
+                console.error(`❌ Erro ao processar áudio do WhatsApp:`, detail);
+                try {
+                    await sock.sendMessage(
+                        remoteJid,
+                        { text: `💜 Não consegui transcrever o áudio (${detail}).` },
+                        { quoted: msg }
+                    );
+                } catch (_) { /* ignore */ }
+                return;
             }
         }
 
-        
-        if (isImage || !!msg.message.videoMessage) {
-            const textLower = textMessage.toLowerCase();
-            const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
+        if (isImage || isVideo || isSticker) {
             try {
-                const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-                const mType = isImage ? 'image' : 'video';
-                const stream = await downloadContentFromMessage(isImage ? msg.message.imageMessage : msg.message.videoMessage, mType);
-                let buffer = Buffer.from([]);
-                for await (const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
+                if (!fs.existsSync(tempMediaDir)) {
+                    fs.mkdirSync(tempMediaDir, { recursive: true });
                 }
-                
-                if (isStickerCmd) {
-                    console.log(`[STICKER] Criando figurinha via FFmpeg...`);
-                    const { spawn } = require('child_process');
-                    const tempInput = path.join(__dirname, `temp_sticker_in_${Date.now()}${isImage ? '.png' : '.mp4'}`);
-                    const tempOutput = path.join(__dirname, `temp_sticker_out_${Date.now()}.webp`);
-                    
-                    fs.writeFileSync(tempInput, buffer);
-                    
-                    // Configuração FFmpeg:
-                    // - scale: 512x512 mantendo proporção
-                    // - pad: adiciona transparência para completar o quadrado 512x512
-                    // - quality: 75 para equilibrar tamanho e qualidade
-                    // - loop: 0 para vídeos (animados)
-                    const ffmpegArgs = [
-                        '-i', tempInput,
-                        '-vcodec', 'libwebp',
-                        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
-                        '-qscale', '75',
-                        '-preset', 'default',
-                        '-loop', '0',
-                        '-an', // sem áudio
-                        '-vsync', '0',
-                        '-y',
-                        tempOutput
-                    ];
 
-                    // Se for vídeo, limita a 5 segundos (requisito do WhatsApp para stickers animados)
-                    if (!isImage) {
-                        ffmpegArgs.splice(2, 0, '-t', '5');
+                const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+                
+                if (isImage) {
+                    const textLower = textMessage.toLowerCase();
+                    const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
+                    
+                    const stream = await downloadContentFromMessage(msg.message.imageMessage, 'image');
+                    let buffer = Buffer.from([]);
+                    for await (const chunk of stream) {
+                        buffer = Buffer.concat([buffer, chunk]);
                     }
 
-                    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+                    if (isStickerCmd) {
+                        console.log(`[STICKER] Criando figurinha via FFmpeg...`);
+                        const { spawn } = require('child_process');
+                        const tempInput = path.join(__dirname, `temp_sticker_in_${Date.now()}.png`);
+                        const tempOutput = path.join(__dirname, `temp_sticker_out_${Date.now()}.webp`);
+                        
+                        fs.writeFileSync(tempInput, buffer);
+                        
+                        const ffmpegArgs = [
+                            '-i', tempInput,
+                            '-vcodec', 'libwebp',
+                            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+                            '-qscale', '75',
+                            '-preset', 'default',
+                            '-loop', '0',
+                            '-an',
+                            '-vsync', '0',
+                            '-y',
+                            tempOutput
+                        ];
 
-                    ffmpeg.on('close', async (code) => {
-                        if (code === 0 && fs.existsSync(tempOutput)) {
-                            const stickerBuffer = fs.readFileSync(tempOutput);
-                            await sock.sendMessage(remoteJid, { 
-                                sticker: stickerBuffer,
-                                mimetype: 'image/webp'
-                            }, { quoted: msg });
-                            console.log(`[STICKER] Figurinha enviada! Tamanho: ${stickerBuffer.length} bytes`);
-                        } else {
-                            console.error(`[STICKER] Erro no FFmpeg (code ${code})`);
-                            await sock.sendMessage(remoteJid, { text: "❌ Erro ao processar a figurinha." }, { quoted: msg });
-                        }
-                        // Limpeza
-                        if (fs.existsSync(tempInput)) try { fs.unlinkSync(tempInput); } catch(e) {}
-                        if (fs.existsSync(tempOutput)) try { fs.unlinkSync(tempOutput); } catch(e) {}
-                    });
-                    return;
+                        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+                        ffmpeg.on('close', async (code) => {
+                            if (code === 0 && fs.existsSync(tempOutput)) {
+                                const stickerBuffer = fs.readFileSync(tempOutput);
+                                await sock.sendMessage(remoteJid, { 
+                                    sticker: stickerBuffer,
+                                    mimetype: 'image/webp'
+                                }, { quoted: msg });
+                                console.log(`[STICKER] Figurinha enviada! Tamanho: ${stickerBuffer.length} bytes`);
+                            } else {
+                                console.error(`[STICKER] Erro no FFmpeg (code ${code})`);
+                                await sock.sendMessage(remoteJid, { text: "❌ Erro ao processar a figurinha." }, { quoted: msg });
+                            }
+                            if (fs.existsSync(tempInput)) try { fs.unlinkSync(tempInput); } catch(e) {}
+                            if (fs.existsSync(tempOutput)) try { fs.unlinkSync(tempOutput); } catch(e) {}
+                        });
+                        return;
+                    }
+
+                    imageB64 = buffer.toString('base64');
+                    console.log(`[LOG] Mídia capturada e convertida para Base64.`);
                 }
-                
-                imageB64 = buffer.toString('base64');
-                console.log(`[LOG] Mídia capturada e convertida para Base64.`);
+                else if (isVideo) {
+                    const textLower = textMessage.toLowerCase();
+                    const isStickerCmd = textLower === '/f' || textLower === '/sticker' || textLower === '/figurinha';
+                    
+                    const stream = await downloadContentFromMessage(msg.message.videoMessage, 'video');
+                    let buffer = Buffer.from([]);
+                    for await (const chunk of stream) {
+                        buffer = Buffer.concat([buffer, chunk]);
+                    }
+
+                    if (isStickerCmd) {
+                        console.log(`[STICKER] Criando figurinha via FFmpeg...`);
+                        const { spawn } = require('child_process');
+                        const tempInput = path.join(__dirname, `temp_sticker_in_${Date.now()}.mp4`);
+                        const tempOutput = path.join(__dirname, `temp_sticker_out_${Date.now()}.webp`);
+                        
+                        fs.writeFileSync(tempInput, buffer);
+                        
+                        const ffmpegArgs = [
+                            '-t', '5',
+                            '-i', tempInput,
+                            '-vcodec', 'libwebp',
+                            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+                            '-qscale', '75',
+                            '-preset', 'default',
+                            '-loop', '0',
+                            '-an',
+                            '-vsync', '0',
+                            '-y',
+                            tempOutput
+                        ];
+
+                        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+                        ffmpeg.on('close', async (code) => {
+                            if (code === 0 && fs.existsSync(tempOutput)) {
+                                const stickerBuffer = fs.readFileSync(tempOutput);
+                                await sock.sendMessage(remoteJid, { 
+                                    sticker: stickerBuffer,
+                                    mimetype: 'image/webp'
+                                }, { quoted: msg });
+                                console.log(`[STICKER] Figurinha enviada! Tamanho: ${stickerBuffer.length} bytes`);
+                            } else {
+                                console.error(`[STICKER] Erro no FFmpeg (code ${code})`);
+                                await sock.sendMessage(remoteJid, { text: "❌ Erro ao processar a figurinha." }, { quoted: msg });
+                            }
+                            if (fs.existsSync(tempInput)) try { fs.unlinkSync(tempInput); } catch(e) {}
+                            if (fs.existsSync(tempOutput)) try { fs.unlinkSync(tempOutput); } catch(e) {}
+                        });
+                        return;
+                    }
+
+                    const videoFilePath = path.join(tempMediaDir, `video_${msgId}.mp4`);
+                    fs.writeFileSync(videoFilePath, buffer);
+                    mediaPath = videoFilePath;
+                    console.log(`[LOG] Vídeo salvo em: ${mediaPath}`);
+                }
+                else if (isSticker) {
+                    console.log(`[LOG] Figurinha recebida. Baixando e convertendo...`);
+                    const stream = await downloadContentFromMessage(msg.message.stickerMessage, 'sticker');
+                    let buffer = Buffer.from([]);
+                    for await (const chunk of stream) {
+                        buffer = Buffer.concat([buffer, chunk]);
+                    }
+
+                    const tempInput = path.join(tempMediaDir, `sticker_in_${msgId}.webp`);
+                    const tempOutput = path.join(tempMediaDir, `sticker_out_${msgId}.png`);
+                    
+                    fs.writeFileSync(tempInput, buffer);
+
+                    const { execSync } = require('child_process');
+                    try {
+                        execSync(`ffmpeg -y -i "${tempInput}" "${tempOutput}"`, { stdio: 'pipe', timeout: 15000 });
+                        mediaPath = tempOutput;
+                        console.log(`[LOG] Sticker convertido para PNG e salvo em: ${mediaPath}`);
+                    } catch (ffmpegErr) {
+                        console.error(`❌ Erro no FFmpeg ao converter sticker:`, ffmpegErr.message);
+                    } finally {
+                        if (fs.existsSync(tempInput)) {
+                            try { fs.unlinkSync(tempInput); } catch (_) {}
+                        }
+                    }
+                }
             } catch (imgErr) {
                 console.error(`❌ Erro ao baixar mídia do WhatsApp:`, imgErr.message);
             }
@@ -755,6 +859,7 @@ async function connectToWhatsApp() {
                     jid: remoteJid,
                     participant: participantJid,
                     image_b64: imageB64,
+                    media_path: mediaPath,
                     is_owner_present: isOwnerPresent,
                 },
                 { timeout: parseInt(process.env.WPP_CHAT_TIMEOUT_MS || '150000', 10) }
