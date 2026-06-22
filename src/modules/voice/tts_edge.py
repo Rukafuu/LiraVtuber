@@ -38,21 +38,21 @@ class MotorTTSEdge:
             import time
             timestamp = int(time.time() * 1000)
             output_file = f"data/response_{timestamp}.mp3"
-            print(f"[DEBUG TTS EDGE] Texto para voz: {texto_limpo[:30]}...", flush=True)
+            logger.debug("[TTS EDGE] Texto para voz: %s...", texto_limpo[:30])
             
             def run_tts_thread(text, path):
                 try:
                     asyncio.run(self._generate_audio(text, path))
-                    print(f"[DEBUG TTS EDGE] Arquivo gerado com sucesso: {path}", flush=True)
+                    logger.debug("[TTS EDGE] Arquivo gerado: %s", path)
                 except Exception as e:
-                    print(f"[DEBUG TTS EDGE] FALHA NA THREAD TTS: {e}", flush=True)
+                    logger.warning("[TTS EDGE] Falha na thread TTS: %s", e)
 
             t = threading.Thread(target=run_tts_thread, args=(texto_limpo, output_file))
             t.start()
             t.join(timeout=15) 
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                print(f"[DEBUG TTS EDGE] Falha no Edge. Tentando FALLBACK para Google TTS...", flush=True)
+                logger.debug("[TTS EDGE] Falha no Edge; tentando fallback Google TTS")
                 try:
                     from src.modules.voice.tts_google import MotorTTSGoogle
                     google_tts = MotorTTSGoogle()

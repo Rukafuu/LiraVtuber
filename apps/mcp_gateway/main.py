@@ -5,9 +5,11 @@ MCP Gateway HTTP na porta 8045 (subprocessos Node MCP).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +34,25 @@ logger = logging.getLogger("mcp_gateway")
 from apps.mcp_gateway.config import load_allowlist, load_servers, save_allowlist, save_servers
 from apps.mcp_gateway.pool import pool
 
-app = FastAPI(title="Lira MCP Gateway", version="1.0")
+
+def _win_asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    """Windows: cliente HTTP que fecha antes da resposta (HUD/proxy) gera 10054 ruidoso."""
+    exc = context.get("exception")
+    if isinstance(exc, ConnectionResetError):
+        logger.debug("[MCP Gateway] cliente desconectou: %s", context.get("message", ""))
+        return
+    loop.default_exception_handler(context)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if sys.platform == "win32":
+        asyncio.get_running_loop().set_exception_handler(_win_asyncio_exception_handler)
+    yield
+    await asyncio.to_thread(pool.stop_all)
+
+
+app = FastAPI(title="Lira MCP Gateway", version="1.0", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -71,13 +91,13 @@ async def health():
 
 @app.get("/mcp/status")
 async def mcp_status():
-    return pool.status()
+    return await asyncio.to_thread(pool.status)
 
 
 @app.get("/mcp/servers")
 async def mcp_servers():
     servers = load_servers()
-    st = pool.status()["servers"]
+    st = (await asyncio.to_thread(pool.status))["servers"]
     by_id = {s["id"]: s for s in st}
     items = []
     for sid, cfg in servers.items():
@@ -94,7 +114,7 @@ async def mcp_server_toggle(server_id: str, body: ServerToggle):
     servers[server_id]["enabled"] = body.enabled
     save_servers(servers)
     if not body.enabled:
-        pool.stop_server(server_id)
+        await asyncio.to_thread(pool.stop_server, server_id)
     return {"status": "ok", "server_id": server_id, "enabled": body.enabled}
 
 
@@ -102,11 +122,11 @@ async def mcp_server_toggle(server_id: str, body: ServerToggle):
 async def mcp_tools(server: str | None = None, refresh: bool = False):
     if server:
         try:
-            tools = pool.list_tools(server, refresh=refresh)
+            tools = await asyncio.to_thread(pool.list_tools, server, refresh)
         except Exception as e:
             raise HTTPException(400, str(e)) from e
         return {"server": server, "tools": tools}
-    return {"discovery": pool.discover_all()}
+    return {"discovery": await asyncio.to_thread(pool.discover_all)}
 
 
 @app.get("/mcp/allowlist")
@@ -134,7 +154,7 @@ async def mcp_call(body: McpCallRequest):
         if denied:
             raise PermissionError(denied[0])
 
-        text = pool.call(body.server, body.tool, body.arguments)
+        text = await asyncio.to_thread(pool.call, body.server, body.tool, body.arguments)
 
         if body.server.strip().lower() == "tavily":
             from lira_core.tools.mcp_access import spend_tavily_gems
@@ -160,7 +180,7 @@ def main():
     host = os.getenv("MCP_GATEWAY_HOST", "127.0.0.1")
     port = int(os.getenv("MCP_GATEWAY_PORT", "8045"))
     print(f"[MCP Gateway] http://{host}:{port}", flush=True)
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info", loop="asyncio")
 
 
 if __name__ == "__main__":

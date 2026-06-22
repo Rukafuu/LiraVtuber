@@ -47,6 +47,7 @@ class ToolExecutionResult:
     report: XmlActionReport
     stats: list[ToolRunStat] = field(default_factory=list)
     elapsed_ms: int = 0
+    terminal_feed: list[str] = field(default_factory=list)
 
 
 def _html_to_plain(text: str) -> str:
@@ -126,6 +127,50 @@ def format_tool_stats_line(stats: list[ToolRunStat], elapsed_ms: int) -> str:
     return f"\n\n🔧 *{primary.tool} · {sec_str}*"
 
 
+def build_synthesis_prompt(
+    sistema_prompt: str,
+    tool_report: XmlActionReport,
+    *,
+    synthesis_mode: str = "summary",
+) -> str:
+    """Monta system prompt da 2ª passada (pós-ferramenta)."""
+    blocks = "\n\n".join(tool_report.memory_injections).strip()
+    if not blocks:
+        return sistema_prompt
+
+    if len(blocks) > _SYNTHESIS_MAX_CHARS:
+        blocks = blocks[: _SYNTHESIS_MAX_CHARS - 20] + "\n… (truncado)"
+
+    if synthesis_mode == "implement":
+        instruction = (
+            "O usuario pediu IMPLEMENTAR/EDITAR codigo. Com base nos dados acima:\n"
+            "1) Abertura tsundere curta (1 frase), depois modo engenharia.\n"
+            "2) Plano acionavel (3-5 bullets) citando paths reais.\n"
+            "3) OBRIGATORIO: emitir <studio_patch> com JSON valido para cada arquivo alterado.\n"
+            "   Formato: <studio_patch>{\"path\":\"relativo\",\"search\":\"trecho exato\",\"replace\":\"novo\"}</studio_patch>\n"
+            "4) PROIBIDO perguntar ao usuario onde colocar codigo — decida e patch.\n"
+            "5) Nao despeje arquivo inteiro no texto visivel; patches carregam o codigo.\n"
+            "Responda em portugues do Brasil.\n"
+        )
+    else:
+        instruction = (
+            "Com base nos dados acima, responda ao pedido do usuário de forma natural e COMPLETA.\n"
+            "NÃO mostre tags XML, caminhos filesystem/..., JSON de tools nem cole o arquivo inteiro.\n"
+            "Resuma o que importa (várias frases se preciso), no seu tom habitual.\n"
+            "Se for leitura de arquivo, diga o que o arquivo é e o essencial do conteúdo.\n"
+            "Se o usuario pedir prioridades ou proximos passos, seja opinativa e concreta.\n"
+            "Responda em português do Brasil — sem kanji nem caracteres aleatórios.\n"
+        )
+
+    return (
+        sistema_prompt
+        + "\n\n=== [DADOS INTERNOS DA FERRAMENTA — NÃO REPRODUZA COMO DUMP] ===\n"
+        + blocks
+        + "\n=== [INSTRUÇÃO] ===\n"
+        + instruction
+    )
+
+
 def synthesize_after_tools(
     llm: Any,
     *,
@@ -136,23 +181,10 @@ def synthesize_after_tools(
     chat_history: list | None = None,
 ) -> str:
     """Segunda passada: resposta natural usando o resultado interno das tools."""
-    blocks = "\n\n".join(tool_report.memory_injections).strip()
-    if not blocks:
+    mode = "implement" if (request_context or {}).get("studio_synthesis_mode") == "implement" else "summary"
+    synthesis_prompt = build_synthesis_prompt(sistema_prompt, tool_report, synthesis_mode=mode)
+    if synthesis_prompt == sistema_prompt:
         return ""
-
-    if len(blocks) > _SYNTHESIS_MAX_CHARS:
-        blocks = blocks[: _SYNTHESIS_MAX_CHARS - 20] + "\n… (truncado)"
-
-    synthesis_prompt = (
-        sistema_prompt
-        + "\n\n=== [DADOS INTERNOS DA FERRAMENTA — NÃO REPRODUZA COMO DUMP] ===\n"
-        + blocks
-        + "\n=== [INSTRUÇÃO] ===\n"
-        "Com base nos dados acima, responda ao pedido do usuário de forma natural.\n"
-        "NÃO mostre tags XML, caminhos filesystem/..., JSON de tools nem cole o arquivo inteiro.\n"
-        "Resuma o que importa em poucas frases (2–8), no seu tom habitual.\n"
-        "Se for leitura de arquivo, diga o que o arquivo é e o essencial do conteúdo.\n"
-    )
 
     return llm.gerar_resposta(
         chat_history=chat_history or [],
@@ -281,9 +313,22 @@ def _synthesis_request_context(request_context: dict[str, Any] | None) -> dict[s
     override = os.getenv("CHAT_SYNTHESIS_MODEL", "").strip()
     if override:
         ctx["override_model"] = override
+    elif ctx.get("reflex_mode") and ctx.get("override_model"):
+        pass  # mantém modelo de código após leitura MCP (Reflex)
     elif not ctx.get("override_model"):
         ctx["override_model"] = "gemini-2.5-flash"
     return ctx
+
+
+def response_has_tool_tags(raw: str) -> bool:
+    """True quando o modelo emitiu tag de ferramenta (stream visível costuma cortar antes disso)."""
+    if not raw:
+        return False
+    lower = raw.lower()
+    if "<mcp>" in lower or "<studio_search>" in lower or "<studio_terminal>" in lower:
+        return True
+    actions = extract_xml_actions(raw, default_terminal_action_tags())
+    return any(actions.values())
 
 
 def quick_interim_after_tools(
@@ -291,9 +336,14 @@ def quick_interim_after_tools(
     tool_exec: ToolExecutionResult,
     *,
     clean_visible: Callable[[str], str] | None = None,
+    include_stats: bool = True,
 ) -> str:
-    """Texto imediato (sem 2ª chamada LLM): status de leitura + rascunho limpo."""
-    stats = format_tool_stats_line(tool_exec.stats, tool_exec.elapsed_ms)
+    """Texto imediato enquanto a 2ª passada (síntese) roda — evita frase cortada no <mcp>."""
+    stats = format_tool_stats_line(tool_exec.stats, tool_exec.elapsed_ms) if include_stats else ""
+    if response_has_tool_tags(ai_response):
+        labels = [s.tool for s in tool_exec.stats if s.tool]
+        hint = labels[0] if labels else "ferramenta"
+        return (f"_Consultando {hint}…_{stats}").strip()
     visible = clean_visible(ai_response) if clean_visible else ""
     if visible:
         return (visible + stats).strip()
@@ -310,7 +360,7 @@ def build_final_answer_after_tools(
     chat_history: list | None = None,
 ) -> str | None:
     """Resposta visível: só a Lira + linha de status (linhas/tempo)."""
-    if not tool_exec.report.memory_injections or not tool_exec.report.tools_ran:
+    if not tool_exec.report.memory_injections:
         return None
     raw = synthesize_after_tools(
         llm,

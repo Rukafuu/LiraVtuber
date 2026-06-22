@@ -23,6 +23,7 @@ class XmlActionHandlers:
 
     on_salvar_memoria: Callable[[str], None] | None = None
     on_gerar_imagem: Callable[[str], None] | None = None
+    on_gerar_imagem_avancada: Callable[[str], None] | None = None
     on_editar_imagem: Callable[[str], None] | None = None
     on_gerar_musica: Callable[[str], None] | None = None
     on_acao_pc: Callable[[str], Any] | None = None
@@ -43,6 +44,7 @@ def default_terminal_action_tags() -> tuple[str, ...]:
     return (
         "salvar_memoria",
         "gerar_imagem",
+        "gerar_imagem_avancada",
         "editar_imagem",
         "gerar_musica",
         "acao_pc",
@@ -51,6 +53,8 @@ def default_terminal_action_tags() -> tuple[str, ...]:
         "ler_tela_ocr",
         "ocr_tela",
         "mcp",
+        "registrar_transacao",
+        "obter_financas",
     )
 
 
@@ -90,6 +94,10 @@ def process_xml_actions(
     for prompt_img in actions.get("gerar_imagem", []):
         if prompt_img and handlers.on_gerar_imagem:
             handlers.on_gerar_imagem(prompt_img)
+
+    for prompt_img_adv in actions.get("gerar_imagem_avancada", []):
+        if prompt_img_adv and handlers.on_gerar_imagem_avancada:
+            handlers.on_gerar_imagem_avancada(prompt_img_adv)
 
     for prompt_edit in actions.get("editar_imagem", []):
         if prompt_edit and handlers.on_editar_imagem:
@@ -131,6 +139,9 @@ def process_xml_actions(
             args = _build_tool_args(tool_id, payload)
             if handlers.on_executando:
                 handlers.on_executando(tool_id)
+
+            if caller_context:
+                tool_manager.caller_context = caller_context
 
             try:
                 resultado_sis, resumo_tts = tool_manager.executar_tool(tool_id, args)
@@ -174,4 +185,21 @@ def _build_tool_args(tool_id: str, payload: str) -> dict:
         return {"prompt": text}
     if tool_id == "anotar_fato":
         return {"objeto": text}
+    if tool_id == "registrar_transacao":
+        parts = [p.strip() for p in text.split(";")]
+        while len(parts) < 5:
+            parts.append("")
+        return {
+            "tipo": parts[0],
+            "valor": parts[1],
+            "estabelecimento": parts[2],
+            "categoria": parts[3],
+            "descricao": parts[4],
+        }
+    if tool_id == "obter_financas":
+        try:
+            dias = int(text) if text.isdigit() else 30
+        except ValueError:
+            dias = 30
+        return {"dias": dias}
     return {"payload": text}

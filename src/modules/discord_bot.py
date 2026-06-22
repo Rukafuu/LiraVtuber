@@ -1,24 +1,21 @@
 import os
 import sys
-import logging
 
-# ── Configuração de Logging ──────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-    datefmt="%H:%M:%S",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-# Silencia logs muito verbosos do discord.py (gateway, voice, etc.)
-logging.getLogger("discord.gateway").setLevel(logging.WARNING)
-logging.getLogger("discord.client").setLevel(logging.WARNING)
-logging.getLogger("discord.http").setLevel(logging.WARNING)
-
-# ── Adiciona raiz do projeto ao sys.path ─────────────────────────────────────
+# Logging antes de qualquer import do discord/projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-# ── Carrega .env antes de qualquer import do projeto ─────────────────────────
+from src.modules.discord.logging_setup import configure_discord_bot_logging
+
+configure_discord_bot_logging()
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
 from src.modules.discord.bot import run_bot

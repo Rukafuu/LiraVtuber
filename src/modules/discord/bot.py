@@ -25,8 +25,14 @@ class LiraBot(commands.Bot):
         intents.message_content = True
         intents.members = True # Para o sistema de economia/social
         super().__init__(command_prefix="!", intents=intents)
+        from .logging_setup import dedupe_discord_loggers
+
+        dedupe_discord_loggers()
 
     async def setup_hook(self):
+        from .logging_setup import dedupe_discord_loggers
+
+        dedupe_discord_loggers()
         self.tree.on_error = handle_tree_error
         initial_extensions = [
             'src.modules.discord.cogs.chat',
@@ -56,11 +62,9 @@ class LiraBot(commands.Bot):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-                logger.info(f"[DISCORD] ✅ Cog carregada: {ext.split('.')[-1]}")
+                logger.info(f"[DISCORD]  Cog carregada: {ext.split('.')[-1]}")
             except Exception as e:
-                logger.error(f"[DISCORD] ❌ Erro ao carregar {ext}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error("[DISCORD]  Erro ao carregar %s: %s", ext, e)
 
     async def _sync_guild(self, guild: discord.Guild):
         """Sincroniza slash só de guild (sem copiar globais — evita /act duplicado)."""
@@ -70,7 +74,7 @@ class LiraBot(commands.Bot):
             synced = await self.tree.sync(guild=guild)
             purged = await purge_duplicate_guild_commands(self, guild)
             logger.info(
-                f"[DISCORD] 🌸 {len(synced)} cmds em {guild.name}"
+                f"[DISCORD] {len(synced)} cmds em {guild.name}"
                 + (f", {purged} duplicata(s) removida(s)" if purged else "")
             )
         except Exception as e:
@@ -85,7 +89,7 @@ class LiraBot(commands.Bot):
         if os.getenv("SYNC_GLOBAL_ON_START", "").lower() in ("1", "true", "yes"):
             try:
                 synced = await self.tree.sync()
-                logger.info(f'[DISCORD] ✅ {len(synced)} comandos sincronizados globalmente.')
+                logger.info(f'[DISCORD]  {len(synced)} comandos sincronizados globalmente.')
             except discord.HTTPException as e:
                 if e.status == 429:
                     retry = getattr(e, "retry_after", None)
@@ -94,12 +98,13 @@ class LiraBot(commands.Bot):
                         f' Aguarde {retry or "?"}s ou use !sync no servidor de teste.'
                     )
                 else:
-                    logger.error(f'[DISCORD] ❌ Falha ao sincronizar comandos: {e}')
+                    logger.error(f'[DISCORD] Falha ao sincronizar comandos: {e}')
             except Exception as e:
-                logger.error(f'[DISCORD] ❌ Falha ao sincronizar comandos: {e}')
+                logger.error(f'[DISCORD]  Falha ao sincronizar comandos: {e}')
         else:
             logger.info(
-                '[DISCORD] Sync global no startup desligado (use !sync global quando precisar).'
+                '[DISCORD] Sync global no startup desligado. '
+                'Novos /cmds (ex.: /imaginar_avancado) precisam de `!sync global` ou SYNC_GLOBAL_ON_START=1.'
             )
 
     async def on_guild_join(self, guild: discord.Guild):

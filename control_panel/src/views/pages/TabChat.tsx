@@ -23,15 +23,18 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import { getBackendBaseUrl } from "../../config/apiHost";
 
 function MediaRenderer({ media }: { media: any }) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Corrige os IPs "chumbados" que o backend envia (127.0.0.1) para o IP correto da rede
-  const HOST = window.location.hostname;
-  const BACKEND_URL = `http://${HOST}:8042`;
-  const mediaUrl = media.url ? media.url.replace("http://127.0.0.1:8042", BACKEND_URL).replace("http://localhost:8042", BACKEND_URL) : "";
+  const backendBase = getBackendBaseUrl() || window.location.origin;
+  const mediaUrl = media.url
+    ? media.url
+        .replace("http://127.0.0.1:8042", backendBase)
+        .replace("http://localhost:8042", backendBase)
+    : "";
 
   if (media.type === "image") {
     return (

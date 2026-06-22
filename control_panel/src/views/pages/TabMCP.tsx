@@ -18,7 +18,7 @@ type McpTool = {
   description?: string;
 };
 
-export function TabMCP() {
+export function TabMCP({ active = true }: { active?: boolean }) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<McpServerRow[]>([]);
   const [allowlist, setAllowlist] = useState<string[]>([]);
@@ -49,28 +49,30 @@ export function TabMCP() {
     setLoading(false);
   }, []);
 
-  const loadTools = useCallback(async (serverId: string) => {
+  const loadTools = useCallback(async (serverId: string, forceRefresh = false) => {
     setBusy(true);
-    const data = await ApiController.getMcpTools(serverId, true);
+    const data = await ApiController.getMcpTools(serverId, forceRefresh);
     setTools(data?.tools ?? []);
     setBusy(false);
   }, []);
 
   useEffect(() => {
+    if (!active) return;
     refresh();
-    const id = setInterval(refresh, 5000);
+    const id = setInterval(refresh, 15000);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [refresh, active]);
 
   useEffect(() => {
-    if (selectedServer) loadTools(selectedServer);
-  }, [selectedServer, loadTools]);
+    if (!active || !selectedServer) return;
+    loadTools(selectedServer, false);
+  }, [selectedServer, loadTools, active]);
 
   const toggleServer = async (id: string, enabled: boolean) => {
     setBusy(true);
     await ApiController.setMcpServerEnabled(id, enabled);
     await refresh();
-    if (enabled) await loadTools(id);
+    if (enabled) await loadTools(id, true);
     setBusy(false);
   };
 
@@ -153,7 +155,10 @@ export function TabMCP() {
         </span>
         <button
           type="button"
-          onClick={() => refresh()}
+          onClick={() => {
+            refresh();
+            if (selectedServer) loadTools(selectedServer, true);
+          }}
           className="ml-auto flex items-center gap-1 text-xs opacity-80 hover:opacity-100"
         >
           <RefreshCw size={14} /> {t("mcp.refresh")}

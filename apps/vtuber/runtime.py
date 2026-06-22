@@ -570,6 +570,10 @@ while True:
                     logging.info("[XML] Gerando imagem: %s...", p[:80]),
                     image_gen.generate_and_show(p),
                 ),
+                on_gerar_imagem_avancada=lambda p: (
+                    logging.info("[XML] Gerando imagem avançada: %s...", p[:80]),
+                    image_gen.generate_advanced_and_show(p),
+                ),
                 on_editar_imagem=lambda p: (
                     logging.info("[XML] Editando imagem: %s...", p[:80]),
                     image_gen.edit_and_show(p),

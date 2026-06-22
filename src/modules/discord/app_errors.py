@@ -36,7 +36,7 @@ async def handle_tree_error(interaction: discord.Interaction, error: app_command
         else:
             msg = f"❌ Erro do Discord ({original.status})."
     else:
-        logger.exception("[DISCORD] Erro no slash command: %s", original)
+        logger.error("[DISCORD] Erro no slash command: %s: %s", type(original).__name__, original)
         msg = f"❌ Erro: `{type(original).__name__}` — detalhe no log do bot."
 
     try:
@@ -44,5 +44,5 @@ async def handle_tree_error(interaction: discord.Interaction, error: app_command
             await interaction.followup.send(msg, ephemeral=ephemeral)
         else:
             await interaction.response.send_message(msg, ephemeral=ephemeral)
-    except discord.HTTPException:
-        logger.exception("[DISCORD] Falha ao enviar mensagem de erro do slash")
+    except discord.HTTPException as send_err:
+        logger.warning("[DISCORD] Falha ao enviar mensagem de erro do slash: %s", send_err)

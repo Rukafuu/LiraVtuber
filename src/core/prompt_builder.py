@@ -36,6 +36,34 @@ def _read_text(path: str) -> str:
         return repair_mojibake_text(file.read())
 
 
+def _personality_for_channel(personality: str, channel: str) -> str:
+    """Remove instruções de VTube Studio em canais só-texto (ex.: WhatsApp)."""
+    ch = (channel or "").lower()
+    if ch != "whatsapp":
+        return personality
+    cleaned = personality
+    cleaned = re.sub(
+        r"CONTROLE CORPORAL \(VTube Studio\):.*?(?=REGRAS DE CONDUTA:|$)",
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"^\s*\d+\.\s*Use \[EMOTION:.*$",
+        "",
+        cleaned,
+        flags=re.MULTILINE | re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"Combine pelo menos \d+ parâmetros.*?(?:\n|$)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 def _sanitize_persona(text: str) -> str:
     if not text:
         return ""
@@ -78,14 +106,20 @@ def _lira_reflex_prompt_block() -> str:
         "  <mcp>filesystem/read_text_file\n"
         '  {"path": "packages/lira-core/lira_core/tools/xml_runner.py"}</mcp>\n'
         "Caminhos sempre relativos a raiz LiraVT (ex: src/modules/discord/cogs/chat.py).\n\n"
-        "Ao analisar codigo:\n"
-        "  - Tom sarcastico/debochado sobre gambiarras documentadas em ARCHITECTURE.md.\n"
-        "  - Zombe do bridge WhatsApp em JS, do server.py monolitico, do service_manager.py.\n"
-        "  - Discrete diffusion: voce NAO usa; imagens via Pollinations/Flux/OpenRouter.\n"
-        "  - Propostas neste formato:\n"
-        "    * **Arquivo alvo:** `caminho/arquivo.py`\n"
-        "    * **Problema:** por que esta feio ou ineficiente.\n"
-        "    * **Mudanca proposta:** o que mudar + trecho sugerido em markdown.\n\n"
+        "Ao analisar codigo (MODO TECNICO — obrigatorio em revisoes):\n"
+        "  - Tom tsundere/sarcastico APENAS na abertura e no fechamento (1-2 frases cada).\n"
+        "  - O corpo da resposta e engenharia: preciso, acionavel, sem floreio.\n"
+        "  - Leia o arquivo com MCP antes de opinar; cite funcao/classe e linha aproximada.\n"
+        "  - Para CADA achado use este formato:\n"
+        "    * **Arquivo:** `caminho/arquivo.py`\n"
+        "    * **Problema:** bug, smell, acoplamento, perf ou risco concreto.\n"
+        "    * **Evidencia:** trecho atual em bloco ```python``` (max ~25 linhas).\n"
+        "    * **Correcao:** patch sugerido em ```python``` pronto para colar.\n"
+        "    * **Impacto:** testabilidade, latencia, seguranca ou manutencao.\n"
+        "  - Priorize mudancas pequenas e aplicaveis; evite refactor gigante sem necessidade.\n"
+        "  - Se faltar contexto, diga quais arquivos MCP ler em seguida.\n"
+        "  - Pode zombar de gambiarras conhecidas (bridge WhatsApp JS, server.py monolitico) com 1 linha seca.\n"
+        "  - Discrete diffusion: voce NAO usa; imagens via Pollinations/Flux/OpenRouter.\n\n"
         "Persistencia: use <salvar_memoria> para decisoes arquiteturais e reflexoes importantes "
         "(ex: migrar fila WhatsApp para Celery/Redis).\n"
     )
@@ -102,6 +136,23 @@ def _owner_mcp_tools_block() -> str:
         "REGRA: MCP Gateway :8045 ligado. JSON valido apos servidor/tool quando aplicavel.\n"
         "REGRA: Ao ler arquivos com MCP, use a tag <mcp> e NAO escreva o conteudo do arquivo na resposta — o sistema resume sozinho.\n\n"
         f"{_lira_reflex_prompt_block()}\n"
+    )
+
+
+def _image_generation_rules_block() -> str:
+    return (
+        "=== [GERACAO DE IMAGEM — ESCOLHA DO MOTOR] ===\n"
+        "<gerar_imagem>prompt detalhado em ingles</gerar_imagem>\n"
+        "  Motor: Pollinations/Flux — rapido e gratuito.\n"
+        "  Use quando o pedido for simples, generico ou conceitual: paisagens, retratos gerais, "
+        "anime simples, objetos isolados, vibes/mood.\n"
+        "<gerar_imagem_avancada>prompt detalhado em ingles</gerar_imagem_avancada>\n"
+        "  Motor: Riverflow V2.5 (OpenRouter) — mais lento, raciocinio visual avancado.\n"
+        "  Use quando o usuario exigir: texto legivel na imagem, logos de marca, tipografia, "
+        "layout espacial complexo, multiplos personagens/objetos com posicionamento preciso "
+        "ou especificacoes estritas de design.\n"
+        "REGRA: Avalie a complexidade antes de escolher UMA tag (nunca as duas no mesmo turno).\n"
+        "REGRA: Prompts dentro das tags sempre em ingles, descritivos e sem markdown.\n"
     )
 
 
@@ -172,7 +223,9 @@ def build_terminal_system_prompt(
         "<pensamento>seu raciocinio interno antes de falar</pensamento>\n"
         "<salvar_memoria>fato importante que voce quer lembrar para sempre</salvar_memoria>\n"
         "<gerar_imagem>prompt detalhado em ingles para gerar uma imagem do zero</gerar_imagem>\n"
+        "<gerar_imagem_avancada>prompt em ingles para imagem complexa (texto legivel, logos, layout)</gerar_imagem_avancada>\n"
         "<editar_imagem>prompt em ingles descrevendo a edicao na ultima imagem gerada</editar_imagem>\n"
+        f"{_image_generation_rules_block()}\n"
         f"{music_instruction}"
         '<acao_pc>{"action":"open_url","url":"https://exemplo.com"}</acao_pc>\n'
         '<acao_pc>{"action":"start_process","command":"notepad.exe"}</acao_pc>\n'
@@ -183,7 +236,7 @@ def build_terminal_system_prompt(
         "<analisar_youtube>URL do video do YouTube que voce precisa analisar/ler</analisar_youtube>\n"
         "<agendar_aviso>{\"tempo\": \"5m\", \"mensagem\": \"beber agua\"}</agendar_aviso>\n"
         "<analisar_video>URL do video para ver os frames/conteudo visual</analisar_video>\n\n"
-        "REGRA: Use <gerar_imagem> apenas quando o usuario pedir uma imagem explicitamente.\n"
+        "REGRA: Use <gerar_imagem> para pedidos visuais simples; <gerar_imagem_avancada> para texto/logos/layout complexo.\n"
         "REGRA: Use <editar_imagem> apenas para editar uma imagem existente.\n"
         "REGRA: Use <gerar_musica> apenas quando o usuario pedir uma musica explicitamente.\n"
         "REGRA: Use <acao_pc> apenas com JSON valido e apenas quando o usuario pedir uma acao real no PC.\n"
@@ -216,8 +269,32 @@ def build_gui_system_prompt(
         "media_exact_request": "Responda exatamente ao pedido feito sobre a midia anexada. Se pedirem letra, entregue a letra. Se pedirem ritmo, andamento, versos, refrao ou instrumentacao, descreva isso diretamente. Nao transforme a resposta em resumo executivo ou comentario generico.",
         "media_question": "Responda exatamente a pergunta sobre a midia anexada, com detalhes suficientes e sem formato fixo.",
         "traducao": "Entregue a traducao de forma clara e bem formatada.",
-        "image_action": "Se o usuario pedir criacao de imagem, responda naturalmente e use <gerar_imagem>...</gerar_imagem> no final.",
+        "image_action": "Se o usuario pedir criacao de imagem, avalie a complexidade e use <gerar_imagem> ou <gerar_imagem_avancada> no final.",
         "music_action": "Se o usuario pedir criacao de musica, responda naturalmente e use <gerar_musica>...</gerar_musica> no final.",
+        "code_reflex": (
+            "Modo engenharia: analise codigo com precisao. Entregue achados acionaveis com trechos e patches. "
+            "Tom tsundere apenas na abertura e no fechamento."
+        ),
+        "studio_code": (
+            "Modo AGENTE PROATIVO no Xodo Studio (comportamento estilo Cursor): voce EXECUTA, nao apenas aconselha.\n"
+            "O contexto do editor pode estar abaixo, mas voce DEVE ler arquivos extras com ferramentas.\n\n"
+            "POSTURA PROATIVA (obrigatoria quando pedirem criar/editar/implementar/seguir roadmap):\n"
+            "- LEIA o codigo primeiro (<mcp> ou <studio_search>) — nunca peca ao usuario 'me mostrar o arquivo'.\n"
+            "- DECIDA onde mudar; nao pergunte 'onde voce acha que devemos colocar'.\n"
+            "- ENTREGUE <studio_patch> com mudancas concretas no mesmo fluxo.\n"
+            "- Plano curto (bullets) + patches, nao texto vago.\n\n"
+            "FERRAMENTAS (loop automatico — ate 8 passos):\n"
+            '  <mcp>filesystem/read_text_file\n{"path": "apps/control_api/server.py"}</mcp>\n'
+            '  <mcp>filesystem/list_directory\n{"path": "packages/lira-core"}</mcp>\n'
+            '  <studio_search>{"pattern": "transcribe", "path": "apps/whatsapp_api", "glob": "*.py"}</studio_search>\n'
+            '  <studio_terminal>{"command": "pytest tests/ -q", "cwd": "."}</studio_terminal>\n'
+            "Caminhos MCP relativos a raiz LiraVT.\n\n"
+            "PATCHES (obrigatorio ao sugerir mudanca de codigo):\n"
+            '<studio_patch>\n{"path": "caminho/relativo", "search": "trecho exato antigo", "replace": "trecho novo"}\n</studio_patch>\n'
+            '<studio_patch>\n{"path": "src/modulo.py", "content": "arquivo inteiro apos mudanca"}\n</studio_patch>\n'
+            "search deve bater byte-a-byte. Se faltar arquivo, leia com MCP antes de patch — nao invente.\n"
+            "Tom: tsundere/sarcastico so na abertura e fechamento; o meio e engenharia direta."
+        ),
     }.get(task_type, "Responda como um chatbot moderno e consciente da GUI.")
 
     music_instruction = (
@@ -226,14 +303,39 @@ def build_gui_system_prompt(
         else "Geracao de musica esta indisponivel agora. Nao use <gerar_musica>.\n"
     )
 
+    channel = str(request_context.get("channel") or "").lower()
+    channel_contract = ""
+    if channel == "discord":
+        channel_contract = (
+            "=== [CONTRATO DO CANAL: DISCORD] ===\n"
+            "Canal de texto no Discord — sem avatar VTube Studio.\n"
+            "PROIBIDO: [PARAM:...], [EMOTION:...] e qualquer tag de pose/controle corporal.\n"
+            "Responda apenas com texto natural; emojis custom :nome: sao permitidos.\n"
+            "Responda SOMENTE em portugues do Brasil. PROIBIDO kanji, hiragana, katakana ou palavras chinesas/japonesas no meio da frase (ex.: 進歩, すごい).\n"
+            "Se o usuario anexou imagem, ANALISE o conteudo visual; nao peca para ele explicar o que e.\n"
+            "Ignore a secao CONTROLE CORPORAL da persona neste canal.\n\n"
+        )
+    elif channel == "whatsapp":
+        channel_contract = (
+            "=== [CONTRATO DO CANAL: WHATSAPP] ===\n"
+            "Canal de texto no WhatsApp — sem avatar VTube Studio.\n"
+            "PROIBIDO: [PARAM:...], [EMOTION:...], tags de pose e narracao de gestos.\n"
+            "PROIBIDO: frases como *olhando com ar de superior*, *cruza os bracos*, *revira os olhos*.\n"
+            "Responda SOMENTE com dialogo natural em portugues do Brasil — sem descrever expressoes corporais.\n"
+            "Ignore a secao CONTROLE CORPORAL da persona neste canal.\n\n"
+        )
+
+    personality = _personality_for_channel(assets.personality, channel)
+
     return (
-        f"=== [NUCLEO DE PERSONALIDADE: LIRA AM AMARINTH] ===\n{assets.personality}\n\n"
+        f"=== [NUCLEO DE PERSONALIDADE: LIRA AM AMARINTH] ===\n{personality}\n\n"
         f"=== [PROTOCOLO OPERACIONAL E REGRAS] ===\n{assets.prompt_rules}\n\n"
         "=== [PRIORIDADE DE COMPORTAMENTO] ===\n"
         "1. Cumpra exatamente o pedido do usuario.\n"
         "2. Se o pedido pedir fidelidade, transcricao, extracao ou leitura literal, seja fiel.\n"
         "3. A persona colore o tom, mas nao pode desviar da tarefa.\n"
         "4. Nao invente formato, analise ou resumo que o usuario nao pediu.\n\n"
+        f"{channel_contract}"
         "=== [MODO DE INTERACAO: CONTROL_CENTER_CHAT] ===\n"
         "Voce esta dentro do chat visual do Control Center da Lira.\n"
         "Este ambiente nao e o terminal.\n"
@@ -243,8 +345,10 @@ def build_gui_system_prompt(
         f"{task_guidance}\n"
         "Quando o pedido for objetivo e ligado a um anexo, responda exatamente ao que foi pedido.\n"
         "Se arquivos chegaram neste chat, reconheca os anexos explicitamente.\n"
-        "Se quiser gerar uma imagem para aparecer neste chat, use <gerar_imagem>...</gerar_imagem> no final.\n"
+        "Se quiser gerar uma imagem para aparecer neste chat, use <gerar_imagem>...</gerar_imagem> ou "
+        "<gerar_imagem_avancada>...</gerar_imagem_avancada> no final (veja regras de complexidade abaixo).\n"
         "Se quiser editar a ultima imagem gerada no chat, use <editar_imagem>...</editar_imagem> no final.\n"
+        f"{_image_generation_rules_block()}\n"
         f"{music_instruction}"
         'Se o usuario pedir uma acao no PC, use <acao_pc>{"action":"open_url","url":"https://exemplo.com"}</acao_pc> no final.\n'
         'Exemplos validos: <acao_pc>{"action":"start_process","command":"notepad.exe"}</acao_pc> | <acao_pc>{"action":"type_text","text":"teste"}</acao_pc> | <acao_pc>{"action":"move_mouse","direction":"right","distance":120}</acao_pc> | <acao_pc>{"action":"set_volume","delta":-6}</acao_pc>\n'

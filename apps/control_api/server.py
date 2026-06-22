@@ -1574,6 +1574,140 @@ async def speak_text_api(req: SpeakRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# === WATCHDOG & STATUS ENDPOINTS ===
+
+@app.get("/api/watchdog/heartbeat")
+async def get_watchdog_heartbeat():
+    from apps.control_api import watchdog_state
+    return watchdog_state.get_status()
+
+
+@app.post("/api/watchdog/heartbeat")
+async def post_watchdog_heartbeat(payload: dict):
+    from apps.control_api import watchdog_state
+    return watchdog_state.record_heartbeat(payload)
+
+
+@app.get("/api/status")
+async def get_status_api():
+    cpu = psutil.cpu_percent(interval=0)
+    ram = psutil.virtual_memory()
+    llm_provider = CONFIG.get("LLM_PROVIDER", "openai")
+    tts_provider = CONFIG.get("TTS_PROVIDER", "elevenlabs")
+    
+    providers = CONFIG.get("LLM_PROVIDERS", {})
+    provider_data = providers.get(llm_provider, {}) if isinstance(providers, dict) else {}
+    llm_model = provider_data.get("modelo", "gpt-4o") if isinstance(provider_data, dict) else "gpt-4o"
+    
+    svc = service_manager.status_all().get("services", [])
+    discord_up = next(
+        (s for s in svc if s["id"] == "discord" and s["state"] in ("running", "starting", "degraded")),
+        None,
+    )
+    wa_up = next(
+        (s for s in svc if s["id"] == "whatsapp_bridge" and s["state"] == "running"),
+        None,
+    )
+    return {
+        "cpu": cpu,
+        "ramPercent": ram.percent,
+        "ramUsedStr": f"{ram.used / (1024**3):.1f}",
+        "ramTotalStr": f"{ram.total / (1024**3):.1f}",
+        "llmProvider": llm_provider.upper(),
+        "llmModel": llm_model,
+        "ttsProvider": tts_provider.upper(),
+        "modules": {
+            "llm": True,
+            "tts": CONFIG.get("TTS_ATIVO", True),
+            "stt": CONFIG.get("STT_ATIVO", True),
+            "visao": CONFIG.get("VISAO_ATIVA", False),
+            "vtube_studio": CONFIG.get("VTUBESTUDIO_ATIVO", False),
+            "discord": bool(discord_up),
+            "whatsapp": bool(wa_up),
+        },
+        "services": svc,
+    }
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat() + "Z"}
+
+
+# === FINANCE ENDPOINTS ===
+from pydantic import BaseModel
+from typing import Optional
+from lira_core.economy import lira_finance
+
+class TransactionPayload(BaseModel):
+    id: Optional[int] = None
+    tipo: str  # 'receita' ou 'despesa'
+    valor: float
+    estabelecimento: Optional[str] = None
+    categoria: Optional[str] = None
+    descricao: Optional[str] = None
+
+def _get_finance_account() -> str:
+    owner = os.getenv("WPP_OWNER_JID") or os.getenv("WPP_OWNER_LID") or "5511981826659@s.whatsapp.net"
+    clean = owner.split(":")[0]
+    if "@" not in clean and "@" in owner:
+        clean = f"{clean}@{owner.split('@', 1)[1]}"
+    return f"whatsapp:{clean}"
+
+@app.get("/api/finance/summary")
+async def get_finance_summary(dias: int = 30):
+    account = _get_finance_account()
+    try:
+        summary = lira_finance.obter_resumo(account, dias=dias)
+        return {"status": "ok", "summary": summary}
+    except Exception as e:
+        logger.error(f"[API] Erro ao obter resumo financeiro: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/finance/transactions")
+async def save_finance_transaction(payload: TransactionPayload):
+    account = _get_finance_account()
+    try:
+        if payload.id:
+            success = lira_finance.atualizar_transacao(
+                transaction_id=payload.id,
+                account=account,
+                tipo=payload.tipo,
+                valor=payload.valor,
+                estabelecimento=payload.estabelecimento,
+                categoria=payload.categoria,
+                descricao=payload.descricao,
+            )
+            if success:
+                return {"status": "ok", "message": "Transacao atualizada."}
+            return {"status": "error", "message": "Falha ao atualizar transacao ou transacao nao encontrada."}
+        else:
+            res = lira_finance.registrar_transacao(
+                account=account,
+                tipo=payload.tipo,
+                valor=payload.valor,
+                estabelecimento=payload.estabelecimento,
+                categoria=payload.categoria,
+                descricao=payload.descricao,
+            )
+            return {"status": "ok", "transaction": res}
+    except Exception as e:
+        logger.error(f"[API] Erro ao salvar transacao: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/api/finance/transactions/{tx_id}")
+async def delete_finance_transaction(tx_id: int):
+    account = _get_finance_account()
+    try:
+        success = lira_finance.excluir_transacao(tx_id, account)
+        if success:
+            return {"status": "ok", "message": "Transacao excluida."}
+        return {"status": "error", "message": "Falha ao excluir transacao ou transacao nao encontrada."}
+    except Exception as e:
+        logger.error(f"[API] Erro ao excluir transacao: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 def start_server(host="0.0.0.0", port=8042, context=None):
     if context:
         app.state.lira.memory_manager = context.get("memory_manager")

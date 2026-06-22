@@ -325,53 +325,102 @@ class MotorSTTWhisper:
         return self.transcrever_arquivo(caminho_wav)
 
     def transcrever_arquivo(self, caminho_audio: str) -> str:
-        if not caminho_audio or not os.path.exists(caminho_audio):
-            return ""
-
-        ui.print_linha("PROCESSANDO", ui.C_STT, "WHISPER", "⚙️", "🎙️")
-
-        texto_transcrito = ""
         try:
-            groq_key = os.getenv("GROQ_API_KEY")
-            if groq_key and "nao-configurado" not in groq_key:
-                from openai import OpenAI
-                client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-                with open(caminho_audio, "rb") as audio_file:
-                    transcription = client.audio.transcriptions.create(
-                        model="whisper-large-v3-turbo", 
-                        file=audio_file,
-                        language=self.idioma
-                    )
-                texto_transcrito = transcription.text.strip()
-            else:
-                model = _get_whisper_model()
-                # O Whisper aceita vários formatos, mas WAV/MP3 são garantidos.
-                segments, _ = model.transcribe(
-                    caminho_audio,
-                    language=self.idioma,
-                    beam_size=5,
-                    vad_filter=True,
-                )
-                texto_transcrito = " ".join(seg.text.strip() for seg in segments).strip()
-
-            texto_limpo = texto_transcrito.lower().strip()
-
-            if texto_limpo in FRASES_FANTASMAS_STT or self._eh_frase_fantasma(texto_transcrito):
-                logger.info("[STT] Frase fantasma descartada: %s", texto_transcrito)
-                return ""
-
-            palavras_curtas_validas = ["oi", "oi.", "ok", "ok.", "aí", "aí.", "lá", "lá."]
-            if len(texto_limpo) < 3 and texto_limpo not in palavras_curtas_validas:
-                return ""
-
-            texto_transcrito = self._corrigir_texto(texto_transcrito)
-        except Exception as erro:
-            logger.error(f"[STT] Erro durante transcricao Whisper: {erro}")
+            return transcribe_file(caminho_audio, idioma=self.idioma, quiet=False)
         finally:
-            # Só remove se for um arquivo temporário gerado pela gravação local
-            # Se for do WhatsApp, o server.py lida com a limpeza.
-            if "tmp" in caminho_audio or "temp" in caminho_audio:
+            if caminho_audio and ("tmp" in caminho_audio or "temp" in caminho_audio):
                 if os.path.exists(caminho_audio):
                     os.remove(caminho_audio)
 
-        return texto_transcrito
+
+def _default_dicionario_path() -> str:
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    config_dir = os.path.join(base_dir, "config")
+    ascii_path = os.path.join(config_dir, "dicionario.json")
+    legacy_path = os.path.join(config_dir, "dicionário.json")
+    if os.path.exists(ascii_path):
+        return ascii_path
+    if os.path.exists(legacy_path):
+        return legacy_path
+    return ascii_path
+
+
+def _corrigir_texto_stt(texto: str) -> str:
+    caminho = _default_dicionario_path()
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            dicionario = json.load(f)
+        for errado, certo in dicionario.items():
+            padrao = re.compile(rf"\b{re.escape(errado)}\b", re.IGNORECASE | re.UNICODE)
+            texto = padrao.sub(certo, texto)
+        return texto
+    except Exception as e:
+        logger.warning("[STT] Falha ao aplicar dicionario de correcao: %s", e)
+        return texto
+
+
+def _finalize_transcript(texto_transcrito: str) -> str:
+    texto_limpo = texto_transcrito.lower().strip()
+    if texto_limpo in FRASES_FANTASMAS_STT or MotorSTTWhisper._eh_frase_fantasma(texto_transcrito):
+        logger.info("[STT] Frase fantasma descartada: %s", texto_transcrito)
+        return ""
+    palavras_curtas_validas = ["oi", "oi.", "ok", "ok.", "aí", "aí.", "lá", "lá."]
+    if len(texto_limpo) < 3 and texto_limpo not in palavras_curtas_validas:
+        return ""
+    return _corrigir_texto_stt(texto_transcrito)
+
+
+def transcribe_file(caminho_audio: str, *, idioma: str | None = None, quiet: bool = False) -> str:
+    """Transcreve um arquivo de áudio (WhatsApp, Discord, etc.) sem usar o microfone."""
+    if not caminho_audio or not os.path.exists(caminho_audio):
+        return ""
+
+    lang = idioma or CONFIG.get("STT_LANGUAGE", "pt")
+    if not quiet:
+        ui.print_linha("PROCESSANDO", ui.C_STT, "WHISPER", "⚙️", "🎙️")
+
+    texto_transcrito = ""
+    try:
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key and "nao-configurado" not in groq_key and "sua_chave" not in groq_key.lower():
+            from openai import OpenAI
+
+            client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            with open(caminho_audio, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=audio_file,
+                    language=lang,
+                )
+            texto_transcrito = transcription.text.strip()
+        else:
+            model = _get_whisper_model()
+            segments, _ = model.transcribe(
+                caminho_audio,
+                language=lang,
+                beam_size=5,
+                vad_filter=True,
+            )
+            texto_transcrito = " ".join(seg.text.strip() for seg in segments).strip()
+
+        return _finalize_transcript(texto_transcrito)
+    except Exception as erro:
+        logger.error("[STT] Erro durante transcricao: %s", erro)
+        return ""
+
+
+def transcribe_bytes(audio_bytes: bytes, *, suffix: str = ".ogg", idioma: str | None = None) -> str:
+    """Transcreve bytes de áudio gravando um arquivo temporário."""
+    if not audio_bytes or len(audio_bytes) < 32:
+        return ""
+
+    suffix = suffix if suffix.startswith(".") else f".{suffix}"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    path = tmp.name
+    try:
+        tmp.write(audio_bytes)
+        tmp.close()
+        return transcribe_file(path, idioma=idioma, quiet=True)
+    finally:
+        if os.path.exists(path):
+            os.remove(path)

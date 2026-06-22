@@ -174,7 +174,7 @@ class ChatCog(commands.Cog):
                 len(arquivos_multimidia) if arquivos_multimidia else 0,
             )
             if arquivos_multimidia:
-                is_video = any("temp/frames" in f or "video" in f.lower() for f in arquivos_multimidia)
+                is_video = any("temp/frames" in f.replace("\\", "/") or "video" in f.lower() for f in arquivos_multimidia)
                 if is_video:
                     video_instr = (
                         "\n[INSTRUÇÃO DO SISTEMA: O usuário enviou um vídeo ou GIF animado. "

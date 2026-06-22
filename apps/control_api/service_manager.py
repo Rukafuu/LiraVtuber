@@ -100,7 +100,7 @@ SERVICES: dict[str, ServiceSpec] = {
         command=[sys.executable, "-u", "apps/whatsapp_api/main.py"],
         health_url=os.getenv("WHATSAPP_API_URL", "http://127.0.0.1:8043").rstrip("/") + "/health",
         error_markers=("[ERROR]", "Traceback", "Address already in use"),
-        process_hint="whatsapp_api",
+        process_hint="whatsapp_api/main.py",
     ),
     "whatsapp_bridge": ServiceSpec(
         id="whatsapp_bridge",
@@ -169,12 +169,22 @@ class ServiceManager:
 
     def _find_external_pid(self, spec: ServiceSpec) -> int | None:
         hint = spec.process_hint.lower()
-        for proc in psutil.process_iter(["pid", "cmdline"]):
+        my_pid = os.getpid()
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
+                pid = proc.info["pid"]
+                if pid == my_pid:
+                    continue
                 cmdline = proc.info.get("cmdline") or []
                 joined = " ".join(cmdline).lower().replace("\\", "/")
+                # Ignore querying tools (like powershell/pwsh/cmd) or queries containing API path
+                name_lower = (proc.info.get("name") or "").lower()
+                if "powershell" in name_lower or "pwsh" in name_lower or "cmd.exe" in name_lower:
+                    continue
+                if "control_api" in joined or "invoke-restmethod" in joined or "curl" in joined:
+                    continue
                 if hint and hint in joined:
-                    return proc.info["pid"]
+                    return pid
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return None

@@ -101,7 +101,7 @@ export function TabGeral() {
   };
 
   return (
-    <div className="w-full h-full bg-[var(--bg-sidebar)] backdrop-blur-2xl border border-[var(--border-strong)] rounded-2xl p-8 overflow-y-auto custom-scrollbar shadow-2xl relative transition-all duration-500">
+    <div className="lira-tab-shell w-full min-h-full bg-[var(--bg-sidebar)] backdrop-blur-2xl border border-[var(--border-strong)] rounded-2xl p-4 md:p-8 overflow-y-auto custom-scrollbar shadow-2xl relative transition-all duration-500">
       {/* HEADER */}
       <div className="mb-8">
         <h2 className="flex items-center gap-3 text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[var(--purple-neon)] to-[var(--cyan-neon)] mb-2">

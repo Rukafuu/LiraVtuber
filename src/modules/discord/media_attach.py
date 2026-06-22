@@ -188,6 +188,10 @@ async def download_discord_sticker(sticker) -> str | None:
     import os
     import aiohttp
     
+    if hasattr(sticker, "format") and sticker.format.name == "lottie":
+        logger.info("[DISCORD] Sticker %s é Lottie/JSON — ignorando download visual.", sticker.name)
+        return None
+        
     temp_dir = os.path.abspath("temp/incoming_media")
     os.makedirs(temp_dir, exist_ok=True)
     

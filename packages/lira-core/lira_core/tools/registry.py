@@ -63,6 +63,21 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         description="Baixa transcricao de video do YouTube e injeta no contexto.",
         prompt_hint="<analisar_youtube>URL completa do video</analisar_youtube>",
     ),
+    "registrar_transacao": ToolSpec(
+        tool_id="registrar_transacao",
+        xml_tags=("registrar_transacao",),
+        description="Registra uma transacao financeira (despesa ou receita) do usuario.",
+        prompt_hint=(
+            "<registrar_transacao>tipo;valor;estabelecimento;categoria;descricao</registrar_transacao> "
+            "Ex: <registrar_transacao>despesa;42.50;Uber;transporte;corrida ate o trabalho</registrar_transacao>"
+        ),
+    ),
+    "obter_financas": ToolSpec(
+        tool_id="obter_financas",
+        xml_tags=("obter_financas",),
+        description="Obtem o resumo financeiro atualizado do usuario com saldo e historico recente.",
+        prompt_hint="<obter_financas>dias</obter_financas> (ex: <obter_financas>30</obter_financas>; padrao 30 se vazio)",
+    ),
 }
 
 # Tag XML -> tool_id (primeira tag de cada spec + aliases)
