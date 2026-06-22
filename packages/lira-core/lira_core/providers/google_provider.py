@@ -249,17 +249,34 @@ class GoogleProvider(BaseLLM):
             img_bytes = base64.b64decode(image_b64)
             contents[-1].parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
 
-        if arquivos_multimidia and contents and client:
+        if arquivos_multimidia and contents:
+            import mimetypes
             for filepath in arquivos_multimidia:
                 if not os.path.exists(filepath):
                     continue
                 try:
-                    logger.info("[GOOGLE] Uploading mídia: %s", filepath)
-                    uploaded_file = client.files.upload(file=filepath)
-                    file_part = types.Part.from_uri(file_uri=uploaded_file.uri, mime_type=uploaded_file.mime_type)
+                    logger.info("[GOOGLE] Carregando mídia inline: %s", filepath)
+                    with open(filepath, "rb") as f:
+                        file_bytes = f.read()
+
+                    mime_type, _ = mimetypes.guess_type(filepath)
+                    if not mime_type:
+                        lower = filepath.lower()
+                        if lower.endswith(".png"):
+                            mime_type = "image/png"
+                        elif lower.endswith((".jpg", ".jpeg")):
+                            mime_type = "image/jpeg"
+                        elif lower.endswith(".gif"):
+                            mime_type = "image/gif"
+                        elif lower.endswith(".webp"):
+                            mime_type = "image/webp"
+                        else:
+                            mime_type = "image/png"
+
+                    file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
                     contents[-1].parts.append(file_part)
                 except Exception as e:
-                    logger.error("[GOOGLE] Erro ao fazer upload de %s: %s", filepath, e)
+                    logger.error("[GOOGLE] Erro ao processar mídia inline %s: %s", filepath, e)
 
         return contents, system_instruction
 
