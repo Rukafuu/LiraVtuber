@@ -806,7 +806,7 @@ async function connectToWhatsApp() {
                     console.log(`[LOG] Vídeo salvo em: ${mediaPath}`);
                 }
                 else if (isSticker) {
-                    console.log(`[LOG] Figurinha recebida. Baixando e convertendo...`);
+                    console.log(`[LOG] Figurinha recebida. Baixando...`);
                     const stream = await downloadContentFromMessage(msg.message.stickerMessage, 'sticker');
                     let buffer = Buffer.from([]);
                     for await (const chunk of stream) {
@@ -814,22 +814,9 @@ async function connectToWhatsApp() {
                     }
 
                     const tempInput = path.join(tempMediaDir, `sticker_in_${msgId}.webp`);
-                    const tempOutput = path.join(tempMediaDir, `sticker_out_${msgId}.png`);
-                    
                     fs.writeFileSync(tempInput, buffer);
-
-                    const { execSync } = require('child_process');
-                    try {
-                        execSync(`ffmpeg -y -i "${tempInput}" "${tempOutput}"`, { stdio: 'pipe', timeout: 15000 });
-                        mediaPath = tempOutput;
-                        console.log(`[LOG] Sticker convertido para PNG e salvo em: ${mediaPath}`);
-                    } catch (ffmpegErr) {
-                        console.error(`❌ Erro no FFmpeg ao converter sticker:`, ffmpegErr.message);
-                    } finally {
-                        if (fs.existsSync(tempInput)) {
-                            try { fs.unlinkSync(tempInput); } catch (_) {}
-                        }
-                    }
+                    mediaPath = tempInput;
+                    console.log(`[LOG] Sticker salvo em WebP: ${mediaPath}`);
                 }
             } catch (imgErr) {
                 console.error(`❌ Erro ao baixar mídia do WhatsApp:`, imgErr.message);

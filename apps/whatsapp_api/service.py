@@ -69,11 +69,28 @@ async def handle_chat(payload: dict, state) -> dict:
     sender_name = payload.get("sender", "Usuário do WhatsApp")
     jid = payload.get("jid", sender_name)
     image_b64 = payload.get("image_b64")
-    
+    media_path = payload.get("media_path")
+    arquivos_multimidia = []
+
+    if media_path and os.path.exists(media_path):
+        if media_path.lower().endswith((".mp4", ".mov", ".webm", ".mkv")):
+            print(f"[WHATSAPP] Vídeo detectado em media_path: {media_path}", flush=True)
+            from src.modules.vision.video_analyzer import VideoAnalyzer
+            try:
+                analyzer = VideoAnalyzer()
+                frames = analyzer.extrair_frames(media_path, max_frames=5)
+                if frames:
+                    arquivos_multimidia.extend(frames)
+            except Exception as e:
+                print(f"[WHATSAPP] Erro ao extrair frames do vídeo: {e}", flush=True)
+        else:
+            print(f"[WHATSAPP] Anexo de imagem/figurinha em media_path: {media_path}", flush=True)
+            arquivos_multimidia.append(media_path)
+
     if image_b64:
         print("[WHATSAPP] Imagem detectada no anexo!", flush=True)
     
-    if not user_message:
+    if not user_message and not image_b64 and not arquivos_multimidia:
         return {"status": "error", "message": "Mensagem vazia"}
 
     # --- SISTEMA VIP / PREMIUM ---
@@ -383,8 +400,32 @@ async def handle_chat(payload: dict, state) -> dict:
         jid=jid,
         is_owner=is_creator,
     )
+    task_type = "media_question" if (image_b64 or arquivos_multimidia) else "chat_normal"
+    attachments_overview = (
+        "Nenhum anexo."
+        if not (image_b64 or arquivos_multimidia)
+        else (
+            "Vários frames sequenciais extraídos de um vídeo enviado pelo usuário."
+            if arquivos_multimidia and any("temp/frames" in f.replace("\\", "/") or "video" in f.lower() for f in arquivos_multimidia)
+            else "Imagens/Figurinhas anexadas — ANALISE O CONTEÚDO VISUAL antes de responder."
+        )
+    )
+
+    if image_b64 or arquivos_multimidia:
+        from src.modules.discord.media_attach import enrich_media_prompt
+        user_message = enrich_media_prompt(user_message, has_image=True)
+        if arquivos_multimidia:
+            is_video = any("temp/frames" in f.replace("\\", "/") or "video" in f.lower() for f in arquivos_multimidia)
+            if is_video:
+                video_instr = (
+                    "\n[INSTRUÇÃO DO SISTEMA: O usuário enviou um vídeo ou GIF animado. "
+                    "Os frames sequenciais foram extraídos e anexados a esta mensagem em ordem cronológica. "
+                    "Analise as imagens com atenção para entender e descrever a ação/conteúdo do vídeo.]"
+                )
+                user_message = user_message + video_instr
+
     sistema_prompt = build_gui_system_prompt(
-        task_type="chat_normal",
+        task_type=task_type,
         memory_context=(
             f"Canal: WhatsApp. {treatment_instruction}\n"
             f"{capabilities_info}\n"
@@ -397,8 +438,9 @@ async def handle_chat(payload: dict, state) -> dict:
             "response_mode": "normal",
             "markdown_enabled": True,
             "mcp_caller": wa_mcp_caller,
+            "task_type": task_type,
         },
-        attachments_overview="Nenhum anexo."
+        attachments_overview=attachments_overview
     )
 
     messages = [
@@ -587,5 +629,32 @@ async def synthesize_tts(payload: dict) -> dict:
         return {"status": "error", "message": "TTS timeout"}
     except Exception as exc:
         logger.exception("[WHATSAPP API] Erro TTS: %s", exc)
+        return {"status": "error", "message": str(exc)}
+
+
+async def handle_transcribe(payload: dict) -> dict:
+    import base64
+    audio_b64 = payload.get("audio_b64")
+    suffix = payload.get("suffix", ".ogg")
+    if not audio_b64:
+        return {"status": "error", "message": "Nenhum áudio enviado."}
+    
+    try:
+        audio_bytes = base64.b64decode(audio_b64)
+    except Exception as e:
+        return {"status": "error", "message": f"Erro de base64: {e}"}
+        
+    from src.modules.voice.stt_whisper import transcribe_bytes
+    
+    stt_timeout = float(os.getenv("STT_TRANSCRIBE_TIMEOUT", "90"))
+    try:
+        text = await asyncio.wait_for(
+            asyncio.to_thread(transcribe_bytes, audio_bytes, suffix=suffix),
+            timeout=stt_timeout,
+        )
+        text = (text or "").strip()
+        return {"status": "ok", "text": text}
+    except Exception as exc:
+        logger.error("[WHATSAPP STT] Falha ao transcrever: %s", exc)
         return {"status": "error", "message": str(exc)}
 
