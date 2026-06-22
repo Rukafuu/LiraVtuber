@@ -264,6 +264,11 @@ class BaseLLM(ABC):
         except Exception as e:
             logger.error(f"[{self.provedor.upper()}] Erro de API: {e}")
             msg = str(e)
+            if "503" in msg or "unavailable" in msg.lower() or "high demand" in msg.lower():
+                return (
+                    "💜 O modelo Gemini está sobrecarregado (503). Tenta de novo em alguns segundos — "
+                    "o fallback automático deve alternar provedor."
+                )
             if "429" in msg or "rate" in msg.lower() or "quota" in msg.lower():
                 return (
                     "💜 Limite da API atingido (429). Espera ~30 segundos e tenta de novo."

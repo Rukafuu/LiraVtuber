@@ -179,60 +179,79 @@ class LiraGamification:
 
     def bank_action(self, user_id, platform, action, amount):
         conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT coins, bank_coins FROM user_stats WHERE user_id = ? AND platform = ?", (user_id, platform))
-        row = cursor.fetchone()
-        if not row: return {"success": False, "message": "Usuário não encontrado."}
-        
-        coins, bank_coins = row
-        
-        if action == "deposit":
-            if amount > coins: return {"success": False, "message": "Você não tem moedas suficientes."}
-            cursor.execute("UPDATE user_stats SET coins = coins - ?, bank_coins = bank_coins + ? WHERE user_id = ? AND platform = ?", (amount, amount, user_id, platform))
-        elif action == "withdraw":
-            if amount > bank_coins: return {"success": False, "message": "Você não tem isso tudo no banco."}
-            cursor.execute("UPDATE user_stats SET coins = coins + ?, bank_coins = bank_coins - ? WHERE user_id = ? AND platform = ?", (amount, amount, user_id, platform))
-            
-        conn.commit()
-        conn.close()
-        return {"success": True}
+        try:
+            conn.execute("BEGIN")
+            cursor = conn.cursor()
+            cursor.execute("SELECT coins, bank_coins FROM user_stats WHERE user_id = ? AND platform = ?", (user_id, platform))
+            row = cursor.fetchone()
+            if not row:
+                conn.rollback()
+                return {"success": False, "message": "Usuário não encontrado."}
+
+            coins, bank_coins = row
+
+            if action == "deposit":
+                if amount > coins:
+                    conn.rollback()
+                    return {"success": False, "message": "Você não tem moedas suficientes."}
+                cursor.execute("UPDATE user_stats SET coins = coins - ?, bank_coins = bank_coins + ? WHERE user_id = ? AND platform = ?", (amount, amount, user_id, platform))
+            elif action == "withdraw":
+                if amount > bank_coins:
+                    conn.rollback()
+                    return {"success": False, "message": "Você não tem isso tudo no banco."}
+                cursor.execute("UPDATE user_stats SET coins = coins + ?, bank_coins = bank_coins - ? WHERE user_id = ? AND platform = ?", (amount, amount, user_id, platform))
+
+            conn.commit()
+            return {"success": True}
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"[Gamification] Erro em bank_action: {e}")
+            return {"success": False, "message": "Erro interno."}
+        finally:
+            conn.close()
 
     def steal(self, attacker_id, target_id, platform):
         import random
-        if attacker_id == target_id: return {"success": False, "message": "Você não pode roubar a si mesmo!"}
-        
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Pega dados do alvo
-        cursor.execute("SELECT coins, shields, username FROM user_stats WHERE user_id = ? AND platform = ?", (target_id, platform))
-        target = cursor.fetchone()
-        if not target or target[0] < 50: return {"success": False, "message": "O alvo está muito pobre para ser roubado!"}
-        
-        t_coins, t_shields, t_name = target
-        
-        # Se o alvo tiver escudo, o roubo falha e consome 1 escudo
-        if t_shields > 0:
-            cursor.execute("UPDATE user_stats SET shields = shields - 1 WHERE user_id = ? AND platform = ?", (target_id, platform))
-            conn.commit()
-            conn.close()
-            return {"success": False, "message": f"O roubo falhou! **{t_name}** estava com um escudo ativado! 🛡️"}
+        if attacker_id == target_id:
+            return {"success": False, "message": "Você não pode roubar a si mesmo!"}
 
-        # Chance de sucesso: 45%
-        success = random.random() < 0.45
-        if success:
-            stolen = int(t_coins * random.uniform(0.1, 0.3))
-            cursor.execute("UPDATE user_stats SET coins = coins - ? WHERE user_id = ? AND platform = ?", (stolen, target_id, platform))
-            cursor.execute("UPDATE user_stats SET coins = coins + ? WHERE user_id = ? AND platform = ?", (stolen, attacker_id, platform))
-            res = {"success": True, "stolen": stolen, "target_name": t_name}
-        else:
-            penalty = 50
-            cursor.execute("UPDATE user_stats SET coins = MAX(0, coins - ?) WHERE user_id = ? AND platform = ?", (penalty, attacker_id, platform))
-            res = {"success": False, "message": f"Você foi pego e pagou uma multa de **{penalty}** moedas! 🚔"}
-            
-        conn.commit()
-        conn.close()
-        return res
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            conn.execute("BEGIN")
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT coins, shields, username FROM user_stats WHERE user_id = ? AND platform = ?", (target_id, platform))
+            target = cursor.fetchone()
+            if not target or target[0] < 50:
+                conn.rollback()
+                return {"success": False, "message": "O alvo está muito pobre para ser roubado!"}
+
+            t_coins, t_shields, t_name = target
+
+            # Se o alvo tiver escudo, o roubo falha e consome 1 escudo (atomicamente)
+            if t_shields > 0:
+                cursor.execute("UPDATE user_stats SET shields = shields - 1 WHERE user_id = ? AND platform = ?", (target_id, platform))
+                conn.commit()
+                return {"success": False, "message": f"O roubo falhou! **{t_name}** estava com um escudo ativado! 🛡️"}
+
+            # Chance de sucesso: 45%
+            if random.random() < 0.45:
+                stolen = int(t_coins * random.uniform(0.1, 0.3))
+                cursor.execute("UPDATE user_stats SET coins = coins - ? WHERE user_id = ? AND platform = ?", (stolen, target_id, platform))
+                cursor.execute("UPDATE user_stats SET coins = coins + ? WHERE user_id = ? AND platform = ?", (stolen, attacker_id, platform))
+                conn.commit()
+                return {"success": True, "stolen": stolen, "target_name": t_name}
+            else:
+                penalty = 50
+                cursor.execute("UPDATE user_stats SET coins = MAX(0, coins - ?) WHERE user_id = ? AND platform = ?", (penalty, attacker_id, platform))
+                conn.commit()
+                return {"success": False, "message": f"Você foi pego e pagou uma multa de **{penalty}** moedas! 🚔"}
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"[Gamification] Erro em steal: {e}")
+            return {"success": False, "message": "Erro interno."}
+        finally:
+            conn.close()
 
     def can_play_game(self, user_id, platform, game_name):
         conn = sqlite3.connect(DB_PATH)

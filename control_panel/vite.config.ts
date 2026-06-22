@@ -8,6 +8,15 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          monaco: ["monaco-editor"],
+        },
+      },
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -17,8 +26,13 @@ export default defineConfig(async () => ({
   server: {
     port: 1425,
     strictPort: true,
-    // Tauri usa http://localhost:1425 (127.0.0.1) — nao apenas [::1]
-    host: host || "127.0.0.1",
+    // 0.0.0.0 = IPv4 (127.0.0.1) + evita Vite ficar só em [::1] após HMR restart (Tauri quebra)
+    host: host || "0.0.0.0",
+    proxy: {
+      "/api": { target: "http://127.0.0.1:8042", changeOrigin: true },
+      "/ws": { target: "ws://127.0.0.1:8042", ws: true },
+      "/media": { target: "http://127.0.0.1:8042", changeOrigin: true },
+    },
     hmr: host
       ? {
           protocol: "ws",

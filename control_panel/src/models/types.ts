@@ -3,7 +3,8 @@
  */
 
 export interface MenuOption {
-  icon: React.ReactNode | string;
+  icon?: React.ReactNode | string;
+  iconPath?: string;
   label: string;
   id: string;
 }
@@ -139,3 +140,41 @@ export interface EmotionState {
   history: EmotionEvent[];
   updated_at: number;
 }
+
+export type WatchdogQueuePhase =
+  | "Healthy"
+  | "Alerted"
+  | "Backoff"
+  | "Restarting"
+  | "Verifying"
+  | string;
+
+export interface WatchdogQueueStatus {
+  Phase: WatchdogQueuePhase;
+  InRecovery: boolean;
+  FailureCount: number;
+  CircuitOpen: boolean;
+  Healthy?: boolean;
+  ServiceState?: string;
+  Connection?: string;
+}
+
+export interface WatchdogHistoryPoint {
+  ts: number;
+  age_sec: number | null;
+  queues: Record<string, WatchdogQueueStatus>;
+}
+
+export interface WatchdogHeartbeatStatus {
+  status: string;
+  last_heartbeat: string | null;
+  age_sec: number | null;
+  stale: boolean;
+  stale_threshold_sec: number;
+  watchdog_pid: number | null;
+  uptime_sec: number | null;
+  watchdog_version: number | string | null;
+  queues: Record<string, WatchdogQueueStatus>;
+  history: WatchdogHistoryPoint[];
+}
+

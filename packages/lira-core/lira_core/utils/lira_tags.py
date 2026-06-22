@@ -11,6 +11,7 @@ LEGACY_IGNORED_XML_TAGS = ("gerar_video",)
 SILENT_XML_TAGS = (
     "salvar_memoria",
     "gerar_imagem",
+    "gerar_imagem_avancada",
     "editar_imagem",
     "gerar_musica",
     "acao_pc",
@@ -23,6 +24,8 @@ SILENT_XML_TAGS = (
     "ler_tela_ocr",
     "ocr_tela",
     "mcp",
+    "studio_terminal",
+    "studio_search",
 )
 
 # Tags que disparam ToolManager.executar_tool (ver lira_core.tools.registry)
@@ -40,6 +43,7 @@ TOOL_XML_TAGS = tuple(
 DISPLAY_XML_TAGS = THOUGHT_TAGS + SILENT_XML_TAGS + LEGACY_IGNORED_XML_TAGS
 MEDIA_XML_TAGS = (
     "gerar_imagem",
+    "gerar_imagem_avancada",
     "editar_imagem",
     "gerar_musica",
 )

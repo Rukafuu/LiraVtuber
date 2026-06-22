@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "monaco-editor": "^0.52.0",
+    "@tauri-apps/plugin-global-shortcut": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "i18next": "^26.0.10",
     "i18next-browser-languagedetector": "^8.2.1",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MonitorPlay, Settings, Power, RefreshCcw, Activity } from "lucide-react";
+import { getBackendBaseUrl } from "../../config/apiHost";
 
 interface VtsState {
   status: string;
@@ -26,8 +27,8 @@ export function TabVTube() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const HOST = window.location.hostname;
-        const res = await fetch(`http://${HOST}:8042/api/vts/state`);
+        const base = getBackendBaseUrl();
+        const res = await fetch(base ? `${base}/api/vts/state` : "/api/vts/state");
         if (res.ok) {
            const data = await res.json();
            setState(data);
@@ -159,8 +160,8 @@ export function TabVTube() {
         <div className="md:col-span-3 flex justify-end gap-3 mt-4">
            <button 
              onClick={async () => {
-                const HOST = window.location.hostname;
-                await fetch(`http://${HOST}:8042/api/config/conexoes`, {
+                const base = getBackendBaseUrl();
+                await fetch(base ? `${base}/api/config/conexoes` : "/api/config/conexoes", {
                    method: "POST",
                    headers: { "Content-Type": "application/json" },
                    body: JSON.stringify({ vts: true })

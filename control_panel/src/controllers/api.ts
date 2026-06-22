@@ -2,7 +2,7 @@
  * Controller principal da API (Camada de Controle - MVC)
  * Gerencia a comunicação entre a View (React) e o Backend (Rust/Python)
  */
-import type { ServiceStatus, WhatsAppSession } from "../models/types";
+import type { ServiceStatus, WatchdogHeartbeatStatus, WhatsAppSession } from "../models/types";
 // Em ambiente Tauri, window.location.hostname pode ser tauri.localhost ou similar.
 // Forçamos 127.0.0.1 para conectar ao backend Python local.
 const HOST = "127.0.0.1";
@@ -208,6 +208,83 @@ export const ApiController = {
     }
   },
 
+  // === PERSONA & PROMPTS ===
+  getPersona: async (): Promise<{ text: string; path?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/config/persona`);
+      if (res.ok) return await res.json();
+      throw new Error("Falha na API");
+    } catch (error) {
+      console.error("Erro ao carregar persona:", error);
+      return { text: "" };
+    }
+  },
+
+  savePersona: async (text: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/config/persona`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      return res.ok && data.status === "ok";
+    } catch (error) {
+      console.error("Erro ao salvar persona:", error);
+      return false;
+    }
+  },
+
+  getPromptRules: async (): Promise<{ rules: Record<string, string>; path?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/config/prompt`);
+      if (res.ok) return await res.json();
+      throw new Error("Falha na API");
+    } catch (error) {
+      console.error("Erro ao carregar prompts:", error);
+      return { rules: {} };
+    }
+  },
+
+  savePromptRules: async (rules: Record<string, string>): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/config/prompt`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rules }),
+      });
+      const data = await res.json();
+      return res.ok && data.status === "ok";
+    } catch (error) {
+      console.error("Erro ao salvar prompts:", error);
+      return false;
+    }
+  },
+
+  getMemoryStatus: async (): Promise<{
+    sqlite_messages: number;
+    graph_facts: number;
+    rag_memories: number;
+    chroma_ready: boolean;
+    chroma_env: boolean;
+    memory_ready: boolean;
+  }> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/memory/status`);
+      if (res.ok) return await res.json();
+      throw new Error("Falha na API");
+    } catch (error) {
+      return {
+        sqlite_messages: 0,
+        graph_facts: 0,
+        rag_memories: 0,
+        chroma_ready: false,
+        chroma_env: false,
+        memory_ready: false,
+      };
+    }
+  },
+
   // === MEMORIA (KNOWLEDGE GRAPH E RAG) ===
   getMemoryGraph: async (): Promise<{facts: {subject: string, relation: string, object: string}[]}> => {
     try {
@@ -339,6 +416,17 @@ export const ApiController = {
     } catch (error) {
       console.error("Erro ao remover modelo customizado:", error);
       return false;
+    }
+  },
+
+  getWatchdogHeartbeat: async (): Promise<WatchdogHeartbeatStatus | null> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/watchdog/heartbeat`);
+      if (!res.ok) throw new Error("Falha na API");
+      return await res.json();
+    } catch (error) {
+      console.error("Erro ao carregar watchdog:", error);
+      return null;
     }
   },
 
@@ -476,4 +564,45 @@ export const ApiController = {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   },
+
+  // === FINANCE ===
+  getFinanceSummary: async (dias: number = 30) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/finance/summary?dias=${dias}`);
+      if (res.ok) return await res.json();
+      throw new Error("Falha na API de Finanças");
+    } catch (error) {
+      console.error("Erro ao carregar resumo financeiro:", error);
+      return { status: "error", message: String(error) };
+    }
+  },
+
+  saveFinanceTransaction: async (payload: { id?: number; tipo: string; valor: number; estabelecimento?: string; categoria?: string; descricao?: string }) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/finance/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) return await res.json();
+      throw new Error("Falha ao salvar transação");
+    } catch (error) {
+      console.error("Erro ao salvar transação:", error);
+      return { status: "error", message: String(error) };
+    }
+  },
+
+  deleteFinanceTransaction: async (txId: number) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/finance/transactions/${txId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) return await res.json();
+      throw new Error("Falha ao excluir transação");
+    } catch (error) {
+      console.error("Erro ao excluir transação:", error);
+      return { status: "error", message: String(error) };
+    }
+  },
 };
+

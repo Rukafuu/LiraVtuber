@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
+  History,
+  MessageSquare,
   Network,
   Pencil,
   Plus,
@@ -22,14 +24,27 @@ type RagMemory = { id: string; text: string; metadata: any };
 const EMPTY_FACT: GraphFact = { subject: "", relation: "", object: "" };
 const MEMORY_PREVIEW_LIMIT = 420;
 
+type ChatMessage = { role: string; content: string };
+
+type MemoryStatus = {
+  sqlite_messages: number;
+  graph_facts: number;
+  rag_memories: number;
+  chroma_ready: boolean;
+  chroma_env: boolean;
+  memory_ready: boolean;
+};
+
 export function TabMemoria() {
-  const [activeTab, setActiveTab] = useState<"graph" | "rag">("graph");
+  const [activeTab, setActiveTab] = useState<"graph" | "rag" | "history">("history");
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [memStatus, setMemStatus] = useState<MemoryStatus | null>(null);
 
   const [facts, setFacts] = useState<GraphFact[]>([]);
   const [memories, setMemories] = useState<RagMemory[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [expandedMemories, setExpandedMemories] = useState<Set<string>>(() => new Set());
 
   const [factForm, setFactForm] = useState<GraphFact>(EMPTY_FACT);
@@ -41,12 +56,18 @@ export function TabMemoria() {
     setIsLoading(true);
     setStatusMessage("");
     try {
+      const status = await ApiController.getMemoryStatus();
+      setMemStatus(status);
+
       if (activeTab === "graph") {
         const { facts } = await ApiController.getMemoryGraph();
         setFacts(facts || []);
-      } else {
+      } else if (activeTab === "rag") {
         const { memories } = await ApiController.getMemoryRag();
         setMemories(memories || []);
+      } else {
+        const { messages } = await ApiController.getChatHistory(120);
+        setChatHistory(messages || []);
       }
     } catch (e) {
       console.error("Erro ao carregar dados:", e);
@@ -156,6 +177,11 @@ export function TabMemoria() {
     m.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredHistory = chatHistory.filter(m =>
+    (m.content || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (m.role || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="w-full h-full bg-[rgba(15,15,20,0.5)] backdrop-blur-2xl border border-[var(--border-strong)] rounded-2xl overflow-hidden shadow-2xl relative flex flex-col">
       <div className="bg-[rgba(10,10,15,0.85)] border-b border-[var(--border-strong)] p-6 z-10 shadow-lg backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -173,7 +199,17 @@ export function TabMemoria() {
           </div>
         </div>
 
-        <div className="flex bg-black/40 p-1.5 rounded-xl border border-white/5">
+        <div className="flex bg-black/40 p-1.5 rounded-xl border border-white/5 flex-wrap">
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${
+              activeTab === "history"
+                ? "bg-emerald-900/40 text-emerald-300 border border-emerald-500/50 shadow-lg"
+                : "text-[var(--text-muted)] hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <History size={14} /> Historico
+          </button>
           <button
             onClick={() => setActiveTab("graph")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${
@@ -198,12 +234,42 @@ export function TabMemoria() {
       </div>
 
       <div className="px-6 py-4 border-b border-[var(--border-strong)] bg-black/20 flex flex-col gap-4">
+        {memStatus && (
+          <div className="flex flex-wrap gap-2 text-[10px] font-mono">
+            <span className="px-2 py-1 rounded border border-emerald-500/30 bg-emerald-900/20 text-emerald-300">
+              SQLite: {memStatus.sqlite_messages}
+            </span>
+            <span className="px-2 py-1 rounded border border-[var(--purple-neon)]/30 bg-[var(--purple-dark)]/30 text-[var(--purple-neon)]">
+              Grafo: {memStatus.graph_facts}
+            </span>
+            <span className="px-2 py-1 rounded border border-blue-500/30 bg-blue-900/20 text-blue-300">
+              RAG: {memStatus.rag_memories}
+            </span>
+            {!memStatus.memory_ready && (
+              <span className="px-2 py-1 rounded border border-amber-500/30 bg-amber-900/20 text-amber-300">
+                Control API ainda carregando memoria...
+              </span>
+            )}
+            {!memStatus.chroma_ready && memStatus.rag_memories === 0 && (
+              <span className="px-2 py-1 rounded border border-white/10 bg-white/5 text-[var(--text-muted)]">
+                Chroma inativo — use CONTROL_API_RAG_CHROMA=1 no .env para listar vetores
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-4">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="text"
-              placeholder={activeTab === "graph" ? "Buscar por entidade ou relacao..." : "Buscar nos textos de memoria..."}
+              placeholder={
+                activeTab === "graph"
+                  ? "Buscar por entidade ou relacao..."
+                  : activeTab === "rag"
+                    ? "Buscar nos textos de memoria..."
+                    : "Buscar no historico de conversas..."
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-black/40 border border-white/5 rounded-xl py-2 pl-9 pr-4 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--purple-neon)]/50 transition-colors"
@@ -234,7 +300,7 @@ export function TabMemoria() {
               )}
             </div>
           </div>
-        ) : (
+        ) : activeTab === "rag" ? (
           <div className="bg-black/30 border border-white/5 rounded-xl p-3">
             <textarea
               className="w-full min-h-[100px] bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 resize-y custom-scrollbar"
@@ -258,7 +324,7 @@ export function TabMemoria() {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {statusMessage && (
           <div className="text-xs text-[var(--cyan-neon)] font-mono">{statusMessage}</div>
@@ -271,11 +337,39 @@ export function TabMemoria() {
             <div className="w-10 h-10 border-4 border-[var(--purple-neon)] border-t-transparent rounded-full animate-spin"></div>
             <p className="text-[var(--text-muted)] font-mono text-sm">Acessando redes neurais...</p>
           </div>
+        ) : activeTab === "history" ? (
+          filteredHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] opacity-50">
+              <MessageSquare size={64} className="mb-4" />
+              <p>Nenhuma conversa no SQLite ainda. Use o Chat do Controle ou o terminal.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {[...filteredHistory].reverse().map((msg, i) => {
+                const isLira = (msg.role || "").toLowerCase() === "lira";
+                return (
+                  <div
+                    key={`hist-${i}-${msg.role}`}
+                    className={`rounded-xl p-4 border ${
+                      isLira
+                        ? "bg-[var(--purple-dark)]/20 border-[var(--purple-neon)]/30 ml-8"
+                        : "bg-black/40 border-white/10 mr-8"
+                    }`}
+                  >
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isLira ? "text-[var(--purple-neon)]" : "text-emerald-400"}`}>
+                      {msg.role || "?"}
+                    </span>
+                    <p className="mt-2 text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : activeTab === "graph" ? (
           filteredFacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] opacity-50">
               <Network size={64} className="mb-4" />
-              <p>Nenhum fato logico encontrado no Knowledge Graph.</p>
+              <p>Nenhum fato logico no grafo. Crie acima ou converse com a Lira.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -4,6 +4,7 @@ import re
 
 from lira_core.providers.provider_selector import ProviderSelector
 from lira_core.tools.registry import TOOL_REGISTRY, resolve_tool_id
+from lira_core.economy import account_from_caller, lira_finance
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +16,9 @@ _LIRA_HTTP_HEADERS = {
 
 
 class ToolManager:
-    def __init__(self, memory_manager=None):
+    def __init__(self, memory_manager=None, caller_context=None):
         self.memory_manager = memory_manager
+        self.caller_context = caller_context
         self._tavily = None
         self._setup_tavily()
 
@@ -51,6 +53,10 @@ class ToolManager:
             return self._despachar_ocr(args)
         if tool_id == "gerar_imagem":
             return self._despachar_imagem(args)
+        if tool_id == "registrar_transacao":
+            return self._despachar_registrar_transacao(args)
+        if tool_id == "obter_financas":
+            return self._despachar_obter_financas(args)
 
         logger.warning("[TOOL MANAGER] Tool desconhecida: %s (resolvido: %s)", nome_tool, tool_id)
         return ("Tool nao reconhecida pelo sistema.", "Nao reconheci essa acao.")
@@ -382,4 +388,115 @@ class ToolManager:
             return (
                 f"Erro Youtube API: {e}",
                 "Nao consegui ler as legendas desse video. Talvez ele nao tenha legendas automaticas ou seja privado.",
+            )
+
+    def _despachar_registrar_transacao(self, args: dict) -> tuple[str, str]:
+        acc = account_from_caller(self.caller_context)
+        if not acc:
+            acc = "whatsapp:default_user"
+
+        tipo = args.get("tipo", "despesa")
+        valor_str = args.get("valor", "0")
+        estabelecimento = args.get("estabelecimento", "Nao especificado")
+        categoria = args.get("categoria", "Outros")
+        descricao = args.get("descricao", "")
+
+        try:
+            valor_limpo = re.sub(r"[^\d.,-]", "", valor_str)
+            if "," in valor_limpo and "." in valor_limpo:
+                valor_limpo = valor_limpo.replace(".", "").replace(",", ".")
+            elif "," in valor_limpo:
+                valor_limpo = valor_limpo.replace(",", ".")
+            valor = float(valor_limpo)
+        except Exception as e:
+            return (
+                f"Erro: Valor invalido '{valor_str}': {e}",
+                "Nao consegui entender o valor dessa transacao. Pode me falar o numero claramente?",
+            )
+
+        try:
+            res = lira_finance.registrar_transacao(
+                account=acc,
+                tipo=tipo,
+                valor=valor,
+                estabelecimento=estabelecimento,
+                categoria=categoria,
+                descricao=descricao,
+            )
+            
+            bloco_retorno = (
+                f"--- TRANSACAO REGISTRADA ---\n"
+                f"ID: {res['id']}\n"
+                f"Tipo: {res['tipo'].upper()}\n"
+                f"Valor: R$ {res['valor']:.2f}\n"
+                f"Estabelecimento: {res['estabelecimento']}\n"
+                f"Categoria: {res['categoria']}\n"
+                f"Descricao: {res['descricao']}\n"
+                f"Data/Hora: {res['timestamp']}\n"
+                f"--- FIM ---"
+            )
+
+            resumo_tts = (
+                f"Registrei sua {res['tipo']} de R$ {res['valor']:.2f} no estabelecimento {res['estabelecimento']} "
+                f"sob a categoria {res['categoria']}."
+            )
+            return (bloco_retorno, resumo_tts)
+        except Exception as e:
+            logger.error("[TOOL FINANCE] Erro ao registrar transacao: %s", e)
+            return (
+                f"Erro tecnico ao registrar transacao: {e}",
+                "Tive um problema no meu banco de dados de financas ao tentar registrar isso.",
+            )
+
+    def _despachar_obter_financas(self, args: dict) -> tuple[str, str]:
+        acc = account_from_caller(self.caller_context)
+        if not acc:
+            acc = "whatsapp:default_user"
+
+        dias = args.get("dias", 30)
+
+        try:
+            res = lira_finance.obter_resumo(acc, dias=dias)
+            
+            cats_lines = []
+            for cat, val in res["despesas_por_categoria"].items():
+                cats_lines.append(f"  - {cat}: R$ {val:.2f}")
+            cats_text = "\n".join(cats_lines) if cats_lines else "  (Sem gastos no periodo)"
+
+            estabs_lines = []
+            for r in res["principais_gastos"]:
+                estabs_lines.append(f"  - {r['nome']}: R$ {r['total']:.2f} ({r['quantidade']}x)")
+            estabs_text = "\n".join(estabs_lines) if estabs_lines else "  (Sem gastos no periodo)"
+
+            hist_lines = []
+            for r in res["ultimas_transacoes"][:5]:
+                desc_part = f" ({r['descricao']})" if r["descricao"] else ""
+                hist_lines.append(
+                    f"  - [{r['timestamp'][:10]}] {r['tipo'].upper()} R$ {r['valor']:.2f} em {r['estabelecimento']}{desc_part}"
+                )
+            hist_text = "\n".join(hist_lines) if hist_lines else "  (Nenhuma transacao recente)"
+
+            bloco_retorno = (
+                f"--- RESUMO FINANCEIRO ({dias} dias) ---\n"
+                f"Usuario: {acc}\n"
+                f"Saldo Geral no Banco: R$ {res['saldo_geral']:.2f}\n"
+                f"Saldo do Periodo: R$ {res['saldo_periodo']:.2f}\n"
+                f"Receitas no Periodo: R$ {res['total_receitas']:.2f}\n"
+                f"Despesas no Periodo: R$ {res['total_despesas']:.2f}\n\n"
+                f"Gastos por Categoria:\n{cats_text}\n\n"
+                f"Onde mais gastou:\n{estabs_text}\n\n"
+                f"Historico Recente (Ultimas 5):\n{hist_text}\n"
+                f"--- FIM ---"
+            )
+
+            resumo_tts = (
+                f"Seu saldo geral esta em R$ {res['saldo_geral']:.2f}. "
+                f"Nos ultimos {dias} dias voce teve R$ {res['total_receitas']:.2f} em receitas e R$ {res['total_despesas']:.2f} em despesas."
+            )
+            return (bloco_retorno, resumo_tts)
+        except Exception as e:
+            logger.error("[TOOL FINANCE] Erro ao obter resumo financeiro: %s", e)
+            return (
+                f"Erro tecnico ao obter resumo: {e}",
+                "Nao consegui acessar os dados das suas financas agora.",
             )

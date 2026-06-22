@@ -83,6 +83,13 @@ class McpStdioSession:
         self._tools_cache = None
         self._handshake()
 
+    def _invalidate(self, reason: str | None = None) -> None:
+        if reason:
+            self.last_error = reason
+        self._proc = None
+        self._initialized = False
+        self._tools_cache = None
+
     def _drain_stderr(self) -> None:
         assert self._proc and self._proc.stderr
         try:
@@ -108,9 +115,7 @@ class McpStdioSession:
                     self._proc.kill()
         except Exception:
             pass
-        self._proc = None
-        self._initialized = False
-        self._tools_cache = None
+        self._invalidate()
 
     def _next_id(self) -> int:
         self._request_id += 1
@@ -150,7 +155,16 @@ class McpStdioSession:
 
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
-                msg = _read_message(self._proc.stdout)
+                if self._proc.poll() is not None:
+                    code = self._proc.returncode
+                    tail = "; ".join(self._stderr_lines[-3:])
+                    self._invalidate(f"processo MCP encerrou (code={code})")
+                    raise RuntimeError(f"processo MCP '{self.server_id}' morreu: {tail or code}")
+                try:
+                    msg = _read_message(self._proc.stdout)
+                except (ConnectionResetError, BrokenPipeError, ValueError) as pipe_err:
+                    self._invalidate(str(pipe_err))
+                    raise RuntimeError(f"pipe MCP '{self.server_id}' quebrou: {pipe_err}") from pipe_err
                 if not msg:
                     continue
                 if msg.get("id") == req_id:

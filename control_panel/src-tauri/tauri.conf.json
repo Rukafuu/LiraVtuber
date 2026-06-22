@@ -5,27 +5,67 @@
   "identifier": "com.reskyume.lira.controlcenter",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://127.0.0.1:1425",
+    "devUrl": "http://localhost:1425",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "LIRA — Control Center",
-        "width": 1200,
-        "height": 750,
-        "minWidth": 950,
-        "minHeight": 650,
+        "width": 1400,
+        "height": 860,
+        "minWidth": 1000,
+        "minHeight": 700,
         "transparent": false,
         "decorations": true,
         "backgroundColor": "#060609",
         "visible": true,
         "center": true
+      },
+      {
+        "label": "radial",
+        "title": "LIRA Radial",
+        "width": 1080,
+        "height": 1080,
+        "resizable": false,
+        "fullscreen": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "visible": false
+      },
+      {
+        "label": "radial-settings",
+        "title": "LIRA Radial — Configuracoes",
+        "width": 1160,
+        "height": 680,
+        "minWidth": 980,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "transparent": false,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/**",
+          "$PICTURE/**",
+          "$DOCUMENT/**",
+          "$DESKTOP/**",
+          "$DOWNLOAD/**",
+          "$APPLOCALDATA/**"
+        ]
+      }
     }
   },
   "bundle": {

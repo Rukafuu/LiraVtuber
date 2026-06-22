@@ -72,8 +72,9 @@ def build_request_context(
 
     channel_key = (channel or "terminal_voice").strip().lower()
     task_key = (task_type or "chat_normal").strip().lower()
+    gui_channels = {"control_center_chat", "discord", "whatsapp"}
 
-    if channel_key == "control_center_chat":
+    if channel_key in gui_channels:
         is_media_task = task_key in {"analise_midia_estruturada", "media_summary", "media_exact_request", "media_question", "resumo_detalhado"}
         is_structured_task = task_key in {"analise_midia_estruturada"}
         profile = RequestProfile(

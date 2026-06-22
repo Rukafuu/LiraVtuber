@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.whatsapp_api.service import handle_chat, synthesize_tts
+from apps.whatsapp_api.service import handle_chat, handle_transcribe, synthesize_tts
 from apps.whatsapp_api.state import WhatsAppState, ensure_state
 
 load_dotenv(encoding="utf-8-sig")
@@ -44,3 +44,8 @@ async def whatsapp_chat(payload: dict):
 @app.post("/api/whatsapp/tts")
 async def whatsapp_tts(payload: dict):
     return await synthesize_tts(payload)
+
+
+@app.post("/api/whatsapp/transcribe")
+async def whatsapp_transcribe(payload: dict):
+    return await handle_transcribe(payload)

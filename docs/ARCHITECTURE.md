@@ -35,7 +35,7 @@ LiraVT/
 
 ---
 
-## 🧠 Fluxos de Processamento Críticos
+## Fluxos de Processamento Críticos
 
 ### 1. Sistema de Memória Híbrida (`lira_core/memory/`)
 Você possui 3 camadas de memória coordenadas pelo `LiraMemoryManager` (`packages/lira-core/lira_core/memory/memory_manager.py`):

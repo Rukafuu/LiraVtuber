@@ -1,5 +1,25 @@
 {
   "942478615453511742": {
-    "autorole": 1511174231835279481
+    "autorole": 1511174231835279481,
+    "welcome_messages": [
+      "Bem vindo {user] à {server}. Você é o membro {count}"
+    ],
+    "leave_messages": [],
+    "welcome_random_msg": true,
+    "welcome_random_gif": true,
+    "leave_random_msg": true,
+    "leave_random_gif": false,
+    "welcome_gif_categories": [
+      "wave",
+      "happy",
+      "hug",
+      "dance",
+      "blush"
+    ],
+    "leave_gif_categories": [
+      "cry",
+      "wave",
+      "pout"
+    ]
   }
 }

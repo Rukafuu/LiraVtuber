@@ -53,7 +53,37 @@ class EmotionEngine:
         self._on_emotion_callbacks: List[Callable[[str], None]] = []
         self._on_thought_callbacks: List[Callable[[str], None]] = []
 
+        # Restaura estado da sessão anterior, se existir
+        self._load_state()
+
         logger.info("[EMOTION ENGINE] Motor de emoções inicializado.")
+
+    def _load_state(self):
+        """Restaura mood, emoção e turno do arquivo JSON persistido."""
+        try:
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                self.mood = float(state.get("mood", 0.0))
+                self.current_emotion = str(state.get("current_emotion", "NEUTRAL"))
+                self.last_thought = str(state.get("last_thought", ""))
+                self._turno = int(state.get("turno", 0))
+                history_raw = state.get("history", [])
+                self.history = [
+                    EmotionEvent(
+                        emotion=e.get("emotion", "NEUTRAL"),
+                        timestamp=e.get("timestamp", 0.0),
+                        turno=e.get("turno", 0),
+                    )
+                    for e in history_raw if isinstance(e, dict)
+                ]
+                logger.info(
+                    "[EMOTION ENGINE] Estado restaurado: %s | mood=%.2f | turno=%d",
+                    self.current_emotion, self.mood, self._turno
+                )
+        except Exception as e:
+            logger.warning("[EMOTION ENGINE] Não foi possível restaurar estado: %s", e)
+
 
     def registrar_callback_emocao(self, callback: Callable[[str], None]):
         """Registra callback chamado quando uma emoção é detectada."""

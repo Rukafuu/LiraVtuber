@@ -46,6 +46,13 @@ class McpGatewayPool:
 
     def _session(self, server_id: str) -> McpStdioSession:
         with self._lock:
+            stale = self._sessions.get(server_id)
+            if stale and not stale.running:
+                try:
+                    stale.stop()
+                except Exception:
+                    pass
+                self._sessions.pop(server_id, None)
             if server_id in self._sessions and self._sessions[server_id].running:
                 return self._sessions[server_id]
 
@@ -95,8 +102,14 @@ class McpGatewayPool:
         return {"servers": out, "gateway": "ok"}
 
     def list_tools(self, server_id: str, refresh: bool = False) -> list[dict]:
-        sess = self._session(server_id)
-        tools = sess.list_tools(refresh=refresh)
+        try:
+            sess = self._session(server_id)
+            tools = sess.list_tools(refresh=refresh)
+        except Exception as e:
+            logger.warning("[MCP] list_tools %s falhou, reiniciando sessao: %s", server_id, e)
+            self.stop_server(server_id)
+            sess = self._session(server_id)
+            tools = sess.list_tools(refresh=refresh)
         normalized = []
         for t in tools:
             name = t.get("name", "")
