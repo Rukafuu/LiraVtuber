@@ -41,21 +41,15 @@ class XmlActionReport:
 
 def default_terminal_action_tags() -> tuple[str, ...]:
     registry_tags = tool_ids_for_xml_tags()
-    return (
+    core_tags = (
         "salvar_memoria",
         "gerar_imagem",
         "gerar_imagem_avancada",
         "editar_imagem",
         "gerar_musica",
         "acao_pc",
-        "analisar_youtube",
-        "ferramenta_web",
-        "ler_tela_ocr",
-        "ocr_tela",
-        "mcp",
-        "registrar_transacao",
-        "obter_financas",
     )
+    return tuple(sorted(set(registry_tags + core_tags)))
 
 
 def process_xml_actions(
@@ -175,6 +169,17 @@ def process_xml_actions(
 
 def _build_tool_args(tool_id: str, payload: str) -> dict:
     text = (payload or "").strip()
+
+    # 1. Tenta carregar como JSON
+    try:
+        import json
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    # 2. Fallback de texto plano
     if tool_id == "pesquisa_web":
         return {"query": text}
     if tool_id == "analisar_youtube":
