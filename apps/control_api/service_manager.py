@@ -84,7 +84,7 @@ SERVICES: dict[str, ServiceSpec] = {
     "discord": ServiceSpec(
         id="discord",
         label="Discord Bot",
-        command=[sys.executable, "-u", "src/modules/discord_bot.py"],
+        command=[sys.executable, "-u", "-m", "src.modules.discord.bot"],
         online_markers=("[DISCORD] ✦ Online como",),
         error_markers=(
             "[DISCORD] ❌",
@@ -92,7 +92,7 @@ SERVICES: dict[str, ServiceSpec] = {
             "Improper token",
             "LoginFailure",
         ),
-        process_hint="discord_bot",
+        process_hint="src.modules.discord.bot",
     ),
     "whatsapp_api": ServiceSpec(
         id="whatsapp_api",

@@ -23,9 +23,9 @@ class ToolSpec:
 TOOL_REGISTRY: dict[str, ToolSpec] = {
     "anotar_fato": ToolSpec(
         tool_id="anotar_fato",
-        xml_tags=(),
+        xml_tags=("anotar_fato",),
         description="Grava fato permanente no grafo de conhecimento (sujeito, relacao, objeto).",
-        prompt_hint="Use via memoria estruturada quando o usuario pedir para lembrar um fato com sujeito/relacao/objeto.",
+        prompt_hint="<anotar_fato>{\"sujeito\":\"usuario\",\"relacao\":\"gosta_de\",\"objeto\":\"Monster Energy\"}</anotar_fato>",
     ),
     "pesquisa_web": ToolSpec(
         tool_id="pesquisa_web",
@@ -68,15 +68,18 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         xml_tags=("registrar_transacao",),
         description="Registra uma transacao financeira (despesa ou receita) do usuario.",
         prompt_hint=(
-            "<registrar_transacao>tipo;valor;estabelecimento;categoria;descricao</registrar_transacao> "
-            "Ex: <registrar_transacao>despesa;42.50;Uber;transporte;corrida ate o trabalho</registrar_transacao>"
+            "<registrar_transacao>{\"tipo\":\"despesa\",\"valor\":42.50,\"estabelecimento\":\"Uber\",\"categoria\":\"transporte\",\"descricao\":\"corrida\"}</registrar_transacao> "
+            "Ex legado: <registrar_transacao>despesa;42.50;Uber;transporte;corrida</registrar_transacao>"
         ),
     ),
     "obter_financas": ToolSpec(
         tool_id="obter_financas",
         xml_tags=("obter_financas",),
         description="Obtem o resumo financeiro atualizado do usuario com saldo e historico recente.",
-        prompt_hint="<obter_financas>dias</obter_financas> (ex: <obter_financas>30</obter_financas>; padrao 30 se vazio)",
+        prompt_hint=(
+            "<obter_financas>{\"dias\":30}</obter_financas> "
+            "Ex legado: <obter_financas>30</obter_financas>"
+        ),
     ),
 }
 

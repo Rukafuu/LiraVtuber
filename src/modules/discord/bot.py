@@ -113,6 +113,9 @@ class LiraBot(commands.Bot):
         await self._sync_guild(guild)
 
 def run_bot():
+    from .logging_setup import configure_discord_bot_logging
+    configure_discord_bot_logging()
+
     bot = LiraBot()
     token = os.getenv("DISCORD_TOKEN")
     if token:

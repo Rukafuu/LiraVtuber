@@ -133,10 +133,7 @@ def interruption_monitor():
 threading.Thread(target=interruption_monitor, daemon=True, name="LiraInterruptionMonitor").start()
 
 stt_motor = MotorSTTWhisper()
-llm_selector = ProviderSelector()
-memory_manager = LiraMemoryManager("data/lira_memory.db")
-start_awareness(memory_manager) # Inicia a consciência de tela em segundo plano
-tool_manager = ToolManager(memory_manager=memory_manager)
+start_awareness() # Inicia a consciência de tela em segundo plano
 visao = VisaoNyra()
 
 # === Motor de Emoções ===
@@ -272,7 +269,7 @@ _llm_model = CONFIG.get("LLM_PROVIDERS", {}).get(_ultimo_provedor, {}).get("mode
 ui.set_banner(
     stt_info="WHISPER LOCAL",
     tts_info=f"{tts.provedor.upper()} TTS",
-    provider_info=llm_selector.provedor_atual.upper(),
+    provider_info=_ultimo_provedor.upper(),
     model_info=_llm_model
 )
 
@@ -373,7 +370,6 @@ while True:
         if CONFIG.reload():
             novo_prov = CONFIG.get("LLM_PROVIDER", "ollama")
             if novo_prov != _ultimo_provedor:
-                llm_selector = ProviderSelector()
                 _ultimo_provedor = novo_prov
                 logging.info(f"[MAIN] Provedor LLM trocado para: {novo_prov}")
 
@@ -458,33 +454,13 @@ while True:
             ui.print_info_livre("Lira: Desligando... Até logo, Amarinth-sama!")
             break
 
-        # --- MEMÓRIA HÍBRIDA ---
-        mem_context = memory_manager.get_context(user_message)
-        terminal_state = memory_manager.get_terminal_context_state(history_limit=30, stale_after_minutes=45)
-        raw_history = terminal_state["history"]
-
-        current_datetime = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
-        terminal_task_type = _classify_terminal_task(user_message)
-        
+        # --- ANATOMIA E VISÃO ---
         vts_anatomy = ""
         if vts_controller and vts_controller.authenticated:
             vts_anatomy = "\n[ANATOMIA DO SEU CORPO DIGITAL (VTube Studio)]:\n"
             vts_anatomy += vts_controller.get_anatomy_detailed()
             vts_anatomy += "\nUse [PARAM:Nome=Valor] para poses. Use os limites informados."
 
-        sistema_prompt = build_terminal_system_prompt(
-            memory_context=mem_context,
-            current_datetime=current_datetime,
-            vts_anatomy=vts_anatomy,
-            conversation_timing=terminal_state["timing_text"],
-        )
-
-        llm = llm_selector.get_provider()
-        if not llm:
-            ui.print_info_livre("Erro: o provedor LLM não conseguiu ser inicializado.")
-            continue
-
-        # --- VISÃO SOB DEMANDA ---
         image_b64 = None
         if CONFIG.get("VISAO_ATIVA", False):
             try:
@@ -495,107 +471,87 @@ while True:
                 logging.error(f"[VISAO] Erro ao capturar tela: {e}")
 
         # ==============================================================
-        # STREAMING DIRETO: uma única chamada à LLM.
-        # O stream aparece no terminal em tempo real.
-        # A voz sai inteira no final, sem cortes.
+        # Chamada HTTP Streaming para o cérebro central (Control API)
         # ==============================================================
-        ui.print_pensando(llm.provedor.upper())
+        ui.print_pensando(_ultimo_provedor.upper())
 
-        full_raw_response = []
-        full_tts_text = []  # Acumula tudo para falar uma vez só.
-        divider = SentenceDivider(faster_first_response=True)
-        displayed_lira_prefix = False
+        import httpx
+        try:
+            payload = {
+                "message": user_message,
+                "channel": "terminal",
+                "image_b64": image_b64,
+                "vts_anatomy": vts_anatomy,
+                "history": [],  # A API central busca e monta o histórico/timing
+                "provider": _ultimo_provedor,
+            }
 
-        token_stream = llm.gerar_resposta_stream(
-            chat_history=raw_history,
-            sistema_prompt=sistema_prompt,
-            user_message=user_message,
-            image_b64=image_b64,
-            request_context=build_request_context(channel="terminal_voice", task_type=terminal_task_type),
-        )
+            def stream_adapter():
+                with httpx.stream("POST", "http://127.0.0.1:8042/api/brain/chat", json=payload, timeout=60.0) as r:
+                    if r.status_code != 200:
+                        logging.error(f"[CLIENT] Central API erro status {r.status_code}")
+                        return
+                    for line in r.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            event = json.loads(line)
+                            if event["type"] == "chunk":
+                                yield event["content"]
+                            elif event["type"] == "emotions":
+                                for emo in event["emotions"]:
+                                    emotion_engine.processar_emocao(emo)
+                            elif event["type"] == "media_actions":
+                                # Executa ações de imagem/música locais
+                                actions = event["actions"]
+                                for img in actions.get("gerar_imagem", []):
+                                    logging.info("[XML Client] Gerando imagem...")
+                                    image_gen.generate_and_show(img)
+                                for img_adv in actions.get("gerar_imagem_personagem", []) or actions.get("gerar_imagem_avancada", []):
+                                    logging.info("[XML Client] Gerando imagem avançada...")
+                                    image_gen.generate_advanced_and_show(img_adv)
+                                for img_edit in actions.get("editar_imagem", []):
+                                    logging.info("[XML Client] Editando imagem...")
+                                    image_gen.edit_and_show(img_edit)
+                                for music in actions.get("gerar_musica", []):
+                                    logging.info("[XML Client] Gerando música...")
+                                    _start_terminal_media_job("music", music)
+                        except Exception as e:
+                            logging.debug(f"[STREAM] Erro parsing chunk: {e}")
 
-        for chunk in divider.process_stream(token_stream):
-            if chunk.is_thought:
-                # Pensamento interno: não fala, só serve para parser/GUI.
-                emotion_engine.processar_pensamento(chunk.thought)
-                full_raw_response.append(chunk.raw)
-            else:
-                # Processar emoções e parâmetros do VTS em tempo real.
-                for emo in chunk.emotions:
-                    emotion_engine.processar_emocao(emo)
-                
-                if vts_controller and chunk.params:
-                    for p_str in chunk.params:
-                        if "=" in p_str:
-                            p_name, p_val = p_str.split("=", 1)
-                            try:
-                                vts_controller.set_parameter(p_name.strip(), float(p_val.strip()))
-                            except: pass
+            full_raw_response = []
+            divider = SentenceDivider(faster_first_response=True)
+            displayed_lira_prefix = False
 
-                # Imprimir no terminal em tempo real.
-                if chunk.text.strip():
-                    ui.print_lira_text(chunk.text, first_chunk=not displayed_lira_prefix)
-                    displayed_lira_prefix = True
-                full_raw_response.append(chunk.raw)
+            for chunk in divider.process_stream(stream_adapter()):
+                if chunk.is_thought:
+                    emotion_engine.processar_pensamento(chunk.thought)
+                    full_raw_response.append(chunk.raw)
+                else:
+                    for emo in chunk.emotions:
+                        emotion_engine.processar_emocao(emo)
 
-                # ENVIAR PARA FILA DE FALA IMEDIATAMENTE (Audio Streaming/Chunking)
-                texto_chunk_tts = limpar_texto_tts(chunk.text)
-                if texto_chunk_tts.strip() and CONFIG.get("TTS_ATIVO", True):
-                    # Se for o primeiro pedaço, avisa que começou a falar
-                    if not signals.LIRA_SPEAKING and tts_queue.empty():
-                        ui.print_falando(tts.provedor)
-                    tts_queue.put(texto_chunk_tts.strip())
+                    if vts_controller and chunk.params:
+                        for p_str in chunk.params:
+                            if "=" in p_str:
+                                p_name, p_val = p_str.split("=", 1)
+                                try:
+                                    vts_controller.set_parameter(p_name.strip(), float(p_val.strip()))
+                                except: pass
 
-        ai_response_falada = divider.complete_response or "".join(full_raw_response)
-        actions = extract_xml_actions(ai_response_falada, default_terminal_action_tags())
+                    if chunk.text.strip():
+                        ui.print_lira_text(chunk.text, first_chunk=not displayed_lira_prefix)
+                        displayed_lira_prefix = True
+                    full_raw_response.append(chunk.raw)
 
-        def _on_falar_resumo(resumo: str):
-            if not CONFIG.get("TTS_ATIVO", True):
-                return
-            texto = limpar_texto_tts(resumo)
-            if texto.strip():
-                if not signals.LIRA_SPEAKING and tts_queue.empty():
-                    ui.print_falando(tts.provedor)
-                tts_queue.put(texto.strip())
-
-        xml_report = process_xml_actions(
-            actions,
-            tool_manager=tool_manager,
-            handlers=XmlActionHandlers(
-                on_salvar_memoria=lambda c: (
-                    memory_manager.rag.add_memory(c, metadata={"role": "lira", "source": "xml_tag"}),
-                    memory_manager.graph.add_fact("lira_nota", "deve_lembrar", c[:200]),
-                ),
-                on_gerar_imagem=lambda p: (
-                    logging.info("[XML] Gerando imagem: %s...", p[:80]),
-                    image_gen.generate_and_show(p),
-                ),
-                on_gerar_imagem_avancada=lambda p: (
-                    logging.info("[XML] Gerando imagem avançada: %s...", p[:80]),
-                    image_gen.generate_advanced_and_show(p),
-                ),
-                on_editar_imagem=lambda p: (
-                    logging.info("[XML] Editando imagem: %s...", p[:80]),
-                    image_gen.edit_and_show(p),
-                ),
-                on_gerar_musica=lambda p: (
-                    logging.info("[XML] Gerando musica: %s...", p[:80]),
-                    _start_terminal_media_job("music", p),
-                ),
-                on_acao_pc=lambda payload: _handle_acao_pc_terminal(payload),
-                on_executando=ui.print_executando,
-                on_falar_resumo=_on_falar_resumo,
-            ),
-        )
-        for bloco in xml_report.memory_injections:
-            memory_manager.add_interaction("System", bloco)
-
-        if not ai_response_falada:
-            continue
-
-        # Salva na memória
-        memory_manager.add_interaction("Amarinth", user_message)
-        memory_manager.add_interaction("Lira", ai_response_falada)
+                    texto_chunk_tts = limpar_texto_tts(chunk.text)
+                    if texto_chunk_tts.strip() and CONFIG.get("TTS_ATIVO", True):
+                        if not signals.LIRA_SPEAKING and tts_queue.empty():
+                            ui.print_falando(tts.provedor)
+                        tts_queue.put(texto_chunk_tts.strip())
+        except Exception as api_err:
+            logging.error("[API CLIENT] Falha de comunicação com a API de Controle: %s", api_err)
+            ui.print_info_livre(f"Desculpe, Amarinth-sama. Não consegui me conectar ao meu núcleo (API) na porta 8042.")
 
     except KeyboardInterrupt:
         print("\n")

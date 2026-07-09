@@ -27,3 +27,4 @@ pytest>=8.0
 fastapi>=0.110.0
 uvicorn>=0.29.0
 websockets>=12.0
+discord.py>=2.3.2

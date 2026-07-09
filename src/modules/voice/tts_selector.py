@@ -27,7 +27,8 @@ def _ensure_tts_settings() -> dict:
     eleven_cfg = tts_settings.get("elevenlabs", {})
     if not isinstance(eleven_cfg, dict):
         eleven_cfg = {}
-    eleven_cfg.setdefault("voice_id", str(eleven_cfg.get("voice") or CONFIG.get("ELEVENLABS_VOICE_ID", "UqJBeKrjGrdsP4JSZ7w6")).strip())
+    if not str(eleven_cfg.get("voice_id") or "").strip():
+        eleven_cfg["voice_id"] = str(eleven_cfg.get("voice") or CONFIG.get("ELEVENLABS_VOICE_ID", "UqJBeKrjGrdsP4JSZ7w6")).strip()
     eleven_cfg.setdefault("voice", eleven_cfg.get("voice_id", ""))
     if not str(eleven_cfg.get("model_id") or "").strip() or str(eleven_cfg.get("model_id")).strip() == "eleven_turbo_v2_5":
         eleven_cfg["model_id"] = "eleven_flash_v2_5"
