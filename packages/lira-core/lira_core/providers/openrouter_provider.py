@@ -2,6 +2,10 @@
 Provider LLM: OpenRouter
 Suporta múltiplas API keys (OPENROUTER_API_KEY, OPENROUTER_API_KEY_1..N)
 com rotação automática em caso de 429 / RESOURCE_EXHAUSTED.
+
+A classe também serve de base para gateways OpenAI-compatible (ver
+demonroute_provider.py): basta sobrescrever BASE_URL, API_KEY_ENV_PREFIX,
+os timeouts e a fila de fallback.
 """
 
 import logging
@@ -15,26 +19,26 @@ from lira_core.config.config_loader import CONFIG
 logger = logging.getLogger(__name__)
 
 
-def _carregar_api_keys() -> list[str]:
+def _carregar_api_keys(env_prefix: str = "OPENROUTER_API_KEY") -> list[str]:
     """
-    Coleta todas as API keys do OpenRouter disponíveis no ambiente.
+    Coleta todas as API keys do gateway disponíveis no ambiente.
     Aceita:
-      - OPENROUTER_API_KEY        (key principal / legacy)
-      - OPENROUTER_API_KEY_1..N   (keys extras para rotação)
+      - <PREFIX>        (key principal / legacy)
+      - <PREFIX>_1..N   (keys extras para rotação)
     Retorna lista sem duplicatas, preservando ordem.
     """
     vistas = set()
     keys = []
 
     # key principal (sem sufixo)
-    k = os.getenv("OPENROUTER_API_KEY", "").strip()
+    k = os.getenv(env_prefix, "").strip()
     if k and k not in vistas:
         keys.append(k)
         vistas.add(k)
 
     # keys numeradas (_1, _2, ...)
     for i in range(1, 20):
-        k = os.getenv(f"OPENROUTER_API_KEY_{i}", "").strip()
+        k = os.getenv(f"{env_prefix}_{i}", "").strip()
         if not k:
             break
         if k not in vistas:
@@ -101,53 +105,64 @@ def resolve_openrouter_model_queue(modelo_exec: str, prov_cfg: dict | None = Non
     return [modelo_exec] + [m for m in extra if m != modelo_exec]
 
 
-def _criar_cliente_com_key(api_key: str) -> OpenAI:
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-        max_retries=1,
-        timeout=25.0,
-        default_headers={
-            "HTTP-Referer": "https://github.com/Rukafuu/LiraVtuber",
-            "X-Title": "Lira Amarinth",
-        },
-    )
-
-
 class OpenRouterProvider(BaseLLM):
+    provedor = "openrouter"
+    BASE_URL = "https://openrouter.ai/api/v1"
+    API_KEY_ENV_PREFIX = "OPENROUTER_API_KEY"
+    DEFAULT_HEADERS: dict[str, str] = {
+        "HTTP-Referer": "https://github.com/Rukafuu/LiraVtuber",
+        "X-Title": "Lira Amarinth",
+    }
+    CLIENT_TIMEOUT = 25.0
+    REQUEST_TIMEOUT = 25.0
+    STREAM_TIMEOUT = 20.0
+    DEFAULT_CHAT_MODEL = "openrouter/owl-alpha"
+    DEFAULT_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+    DEFAULT_FALLBACK_MODELS: tuple[str, ...] = ()
+
     def __init__(self):
-        self.provedor = "openrouter"
+        self.log_tag = self.provedor.upper()
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-        self.modelo_chat = prov_cfg.get("modelo", prov_cfg.get("modelo_chat", "openrouter/owl-alpha"))
-        self.modelo_vision = prov_cfg.get("modelo_vision", "nvidia/nemotron-nano-12b-v2-vl:free")
-        self.modelo_fallback_vision = prov_cfg.get("modelo_fallback_vision", "nvidia/nemotron-nano-12b-v2-vl:free")
+        self.modelo_chat = prov_cfg.get("modelo", prov_cfg.get("modelo_chat", self.DEFAULT_CHAT_MODEL))
+        self.modelo_vision = prov_cfg.get("modelo_vision", self.DEFAULT_VISION_MODEL)
+        self.modelo_fallback_vision = prov_cfg.get("modelo_fallback_vision", self.DEFAULT_VISION_MODEL)
 
         # ── Multi-key setup ──────────────────────────────────────────────
-        self._api_keys = _carregar_api_keys()
+        self._api_keys = _carregar_api_keys(self.API_KEY_ENV_PREFIX)
         self._idx_key = 0  # índice da key ativa
 
         if len(self._api_keys) > 1:
             logger.info(
-                "[OPENROUTER] %d API keys carregadas — rotação automática ativada.",
+                "[%s] %d API keys carregadas — rotação automática ativada.",
+                self.log_tag,
                 len(self._api_keys),
             )
         elif len(self._api_keys) == 1:
-            logger.info("[OPENROUTER] 1 API key carregada (sem rotação).")
+            logger.info("[%s] 1 API key carregada (sem rotação).", self.log_tag)
         else:
-            logger.error("[OPENROUTER] Nenhuma OPENROUTER_API_KEY encontrada no .env!")
+            logger.error("[%s] Nenhuma %s encontrada no .env!", self.log_tag, self.API_KEY_ENV_PREFIX)
 
         super().__init__()
 
     # ── Criação de cliente ───────────────────────────────────────────────
 
+    def _criar_cliente_com_key(self, api_key: str) -> OpenAI:
+        return OpenAI(
+            base_url=self.BASE_URL,
+            api_key=api_key,
+            max_retries=1,
+            timeout=self.CLIENT_TIMEOUT,
+            default_headers=self.DEFAULT_HEADERS,
+        )
+
     def _criar_cliente(self):
         if not self._api_keys:
-            logger.error("[OPENROUTER] OPENROUTER_API_KEY não encontrada no .env")
+            logger.error("[%s] %s não encontrada no .env", self.log_tag, self.API_KEY_ENV_PREFIX)
             return None
         try:
-            return _criar_cliente_com_key(self._api_keys[self._idx_key])
+            return self._criar_cliente_com_key(self._api_keys[self._idx_key])
         except Exception as e:
-            logger.error(f"[OPENROUTER] Erro ao criar cliente: {e}")
+            logger.error(f"[{self.log_tag}] Erro ao criar cliente: {e}")
             return None
 
     def _rotacionar_key(self) -> bool:
@@ -160,23 +175,29 @@ class OpenRouterProvider(BaseLLM):
         self._idx_key += 1
         nova_key = self._api_keys[self._idx_key]
         logger.warning(
-            "[OPENROUTER] Quota esgotada — rotacionando para key %d/%d.",
+            "[%s] Quota esgotada — rotacionando para key %d/%d.",
+            self.log_tag,
             self._idx_key + 1,
             len(self._api_keys),
         )
         try:
-            self.cliente = _criar_cliente_com_key(nova_key)
+            self.cliente = self._criar_cliente_com_key(nova_key)
             return True
         except Exception as e:
-            logger.error(f"[OPENROUTER] Erro ao criar cliente com nova key: {e}")
+            logger.error(f"[{self.log_tag}] Erro ao criar cliente com nova key: {e}")
             return False
+
+    # ── Fila de modelos ──────────────────────────────────────────────────
+
+    def _resolve_model_queue(self, modelo_exec: str, prov_cfg: dict | None) -> list[str]:
+        return resolve_openrouter_model_queue(modelo_exec, prov_cfg)
 
     # ── Preparação de payload ────────────────────────────────────────────
 
     def _prepare_messages(self, modelo, mensagens, image_b64: str = None, arquivos_multimidia: list = None):
         modelo_exec = modelo
         payload_messages = list(mensagens)
-        
+
         has_media = bool(image_b64 or arquivos_multimidia)
         if has_media:
             prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
@@ -225,13 +246,13 @@ class OpenRouterProvider(BaseLLM):
                                 "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}
                             })
                         except Exception as e:
-                            logger.error(f"[OPENROUTER] Erro ao carregar arquivo de multimidia {filepath}: {e}")
+                            logger.error(f"[{self.log_tag}] Erro ao carregar arquivo de multimidia {filepath}: {e}")
 
             payload_messages[-1] = {
                 "role": "user",
                 "content": content_list,
             }
-            logger.info(f"[OPENROUTER] Ativando modo VISÃO com modelo: {modelo_exec}")
+            logger.info(f"[{self.log_tag}] Ativando modo VISÃO com modelo: {modelo_exec}")
         return modelo_exec, payload_messages
 
     # ── Chamada principal com fallback de key + modelo ───────────────────
@@ -251,7 +272,7 @@ class OpenRouterProvider(BaseLLM):
         )
 
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-        modelos = resolve_openrouter_model_queue(modelo_exec, prov_cfg)
+        modelos = self._resolve_model_queue(modelo_exec, prov_cfg)
         ultimo_erro = None
 
         for idx_modelo, m_tentativa in enumerate(modelos):
@@ -259,15 +280,18 @@ class OpenRouterProvider(BaseLLM):
             tentativas_key = 0
             while True:
                 logger.info(
-                    "[OPENROUTER] Modelo %s | Key %d/%d",
-                    m_tentativa, self._idx_key + 1, len(self._api_keys),
+                    "[%s] Modelo %s | Key %d/%d",
+                    self.log_tag,
+                    m_tentativa,
+                    self._idx_key + 1,
+                    len(self._api_keys),
                 )
                 kwargs = {
                     "model": m_tentativa,
                     "messages": payload_messages,
                     "temperature": self.temperatura,
                     "max_tokens": (request_context or {}).get("max_output_tokens", 8192),
-                    "timeout": 25.0,
+                    "timeout": self.REQUEST_TIMEOUT,
                 }
                 if ferramentas:
                     kwargs["tools"] = ferramentas
@@ -276,13 +300,13 @@ class OpenRouterProvider(BaseLLM):
                 self.last_request_meta = {
                     "provider": self.provedor,
                     "model": m_tentativa,
-                    "backend": "openrouter_api",
+                    "backend": f"{self.provedor}_api",
                     "routed": m_tentativa == OPENROUTER_FREE_ROUTER,
                     "api_key_index": self._idx_key,
                 }
                 try:
                     resposta = self.cliente.chat.completions.create(**kwargs)
-                    logger.info(f"[OPENROUTER] ✅ Sucesso: {m_tentativa} (key {self._idx_key + 1})")
+                    logger.info(f"[{self.log_tag}] ✅ Sucesso: {m_tentativa} (key {self._idx_key + 1})")
                     return resposta
 
                 except Exception as e:
@@ -296,20 +320,21 @@ class OpenRouterProvider(BaseLLM):
                         else:
                             # Esgotou todas as keys — reseta o índice e vai pro próximo modelo
                             logger.warning(
-                                "[OPENROUTER] Todas as keys esgotadas para %s — tentando próximo modelo.",
+                                "[%s] Todas as keys esgotadas para %s — tentando próximo modelo.",
+                                self.log_tag,
                                 m_tentativa,
                             )
                             self._idx_key = 0
-                            self.cliente = _criar_cliente_com_key(self._api_keys[0])
+                            self.cliente = self._criar_cliente_com_key(self._api_keys[0])
                             break  # sai do while, continua o for
 
                     elif _is_model_error(e):
-                        logger.warning(f"[OPENROUTER] Modelo indisponível: {m_tentativa} — {e}")
+                        logger.warning(f"[{self.log_tag}] Modelo indisponível: {m_tentativa} — {e}")
                         break  # vai pro próximo modelo
 
                     else:
                         # Erro genérico (timeout, 500, etc.) — tenta o próximo modelo direto
-                        logger.warning(f"[OPENROUTER] Erro em {m_tentativa}: {e}")
+                        logger.warning(f"[{self.log_tag}] Erro em {m_tentativa}: {e}")
                         break
 
         raise ultimo_erro
@@ -329,19 +354,22 @@ class OpenRouterProvider(BaseLLM):
         )
 
         prov_cfg = CONFIG.get("LLM_PROVIDERS", {}).get(self.provedor, {})
-        modelos = resolve_openrouter_model_queue(modelo_exec, prov_cfg)
+        modelos = self._resolve_model_queue(modelo_exec, prov_cfg)
         ultimo_erro = None
 
         for m_tentativa in modelos:
             while True:
                 logger.info(
-                    "[OPENROUTER STREAM] Modelo %s | Key %d/%d",
-                    m_tentativa, self._idx_key + 1, len(self._api_keys),
+                    "[%s STREAM] Modelo %s | Key %d/%d",
+                    self.log_tag,
+                    m_tentativa,
+                    self._idx_key + 1,
+                    len(self._api_keys),
                 )
                 self.last_request_meta = {
                     "provider": self.provedor,
                     "model": m_tentativa,
-                    "backend": "openrouter_api",
+                    "backend": f"{self.provedor}_api",
                     "routed": m_tentativa == OPENROUTER_FREE_ROUTER,
                     "api_key_index": self._idx_key,
                 }
@@ -352,7 +380,7 @@ class OpenRouterProvider(BaseLLM):
                         temperature=self.temperatura,
                         max_tokens=(request_context or {}).get("max_output_tokens", 8192),
                         stream=True,
-                        timeout=20.0,
+                        timeout=self.STREAM_TIMEOUT,
                     )
                     for chunk in stream:
                         delta = chunk.choices[0].delta if chunk.choices else None
@@ -368,10 +396,10 @@ class OpenRouterProvider(BaseLLM):
                             continue
                         else:
                             self._idx_key = 0
-                            self.cliente = _criar_cliente_com_key(self._api_keys[0])
+                            self.cliente = self._criar_cliente_com_key(self._api_keys[0])
                             break
                     else:
-                        logger.warning(f"[OPENROUTER STREAM] Falha no modelo {m_tentativa}: {e}")
+                        logger.warning(f"[{self.log_tag} STREAM] Falha no modelo {m_tentativa}: {e}")
                         break
 
         raise ultimo_erro

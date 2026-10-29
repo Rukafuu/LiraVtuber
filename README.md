@@ -91,7 +91,7 @@ The project is more than just a chatbot: it combines a voice runtime, a GUI pane
 | --- | --- |
 | Voice | STT via Whisper, TTS via F5-TTS / XTTS v2 (Colab), ElevenLabs, Google, Azure, OpenAI and Edge, global stop via F8 |
 | Agency | **Autonomous ReAct Loops** (Think-Action-Observe), proactive reminders and task scheduling |
-| Brain | Providers `google_cloud`, `groq`, `openrouter`, `openai` and `cerebras` |
+| Brain | Providers `google_cloud`, `groq`, `openrouter`, `openai`, `cerebras` and `demonroute` |
 | GUI | Control Center in CustomTkinter, visual chat, attachments, markdown, audio cards and media preview |
 | Multimodality | **Video Understanding** (frame extraction), image generation/editing, screen awareness and OCR |
 | Memory | Chronological SQLite, Vector RAG and Knowledge Graph |
@@ -379,7 +379,7 @@ O projeto nao e so um chatbot: ele combina runtime de voz, painel GUI, memoria h
 | --- | --- |
 | Voz | STT por Whisper, TTS via F5-TTS / XTTS v2 (Colab), ElevenLabs, Google, Azure, OpenAI e Edge, stop global por F8 |
 | Agência | **Loops ReAct Autônomos** (Pensa-Age-Observa), lembretes proativos e agendamentos |
-| Cerebro | Providers `google_cloud`, `groq`, `openrouter`, `openai` e `cerebras` |
+| Cerebro | Providers `google_cloud`, `groq`, `openrouter`, `openai`, `cerebras` e `demonroute` |
 | GUI | Control Center em CustomTkinter, chat visual, anexos, markdown, cards de audio e preview de midia |
 | Multimodalidade | **Entendimento de Vídeo** (extração de frames), geração de imagem, visão de tela e OCR |
 | Memoria | SQLite cronologico, RAG vetorial e grafo de conhecimento |
@@ -632,6 +632,7 @@ Exemplo:
 GROQ_API_KEY=sua_chave
 GEMINI_API_KEY=sua_chave
 OPENROUTER_API_KEY=sua_chave
+DEMONROUTE_API_KEY=sua_chave
 OPENAI_API_KEY=sua_chave
 CEREBRAS_API_KEY=sua_chave
 ELEVENLABS_API_KEY=sua_chave
@@ -731,6 +732,7 @@ Blocos importantes:
 | `openrouter` | acesso a varios modelos por gateway |
 | `openai` | modelos OpenAI diretos |
 | `cerebras` | inferencia rapida quando configurado |
+| `demonroute` | gateway OpenAI-compatible com modelos de roleplay (opcional) |
 
 O provider Google trabalha em modo:
 

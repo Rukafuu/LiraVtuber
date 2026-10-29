@@ -111,6 +111,14 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
     ModelSpec("meta-llama/llama-4-scout", "Llama 4 Scout", "openrouter", "openrouter_api", "llama", 131072, "fast", supports_vision=True),
     ModelSpec("meta-llama/llama-4-maverick", "Llama 4 Maverick", "openrouter", "openrouter_api", "llama", 131072, "medium", supports_vision=True),
     ModelSpec("qwen/qwen3-32b", "Qwen3 32B", "openrouter", "openrouter_api", "qwen", 131072, "fast"),
+    # DemonRoute (roleplay / open-weight)
+    ModelSpec("TheDrummer/Cydonia-24B-v4.1", "Cydonia 24B v4.1", "demonroute", "demonroute_api", "roleplay", 131072, "medium"),
+    ModelSpec("knifeayumu/Cydonia-v4.1-MS3.2-Magnum-Diamond-24B", "Cydonia Magnum Diamond 24B", "demonroute", "demonroute_api", "roleplay", 131072, "medium"),
+    ModelSpec("TheDrummer/Artemis-31B-v1.2", "Artemis 31B v1.2", "demonroute", "demonroute_api", "roleplay", 32768, "medium"),
+    ModelSpec("DavidAU/Rocinante-X-12B-v1-Heretic-Uncensored", "Rocinante X 12B Heretic", "demonroute", "demonroute_api", "roleplay", 32768, "fast"),
+    ModelSpec("0xA50C1A1/MN-12B-Nymphaea-RP", "Nymphaea RP 12B", "demonroute", "demonroute_api", "roleplay", 32768, "fast"),
+    ModelSpec("NousResearch/Hermes-3-Llama-3.1-8B", "Hermes 3 Llama 3.1 8B", "demonroute", "demonroute_api", "llama", 131072, "fast"),
+    ModelSpec("mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated", "Llama 3.1 8B Abliterated", "demonroute", "demonroute_api", "llama", 131072, "fast"),
 )
 
 
@@ -180,7 +188,7 @@ VOICE_CATALOG: tuple[VoiceSpec, ...] = (
 
 
 def get_llm_providers() -> list[str]:
-    return ["ollama", "groq", "google_cloud", "cerebras", "openrouter", "openai"]
+    return ["ollama", "groq", "google_cloud", "cerebras", "openrouter", "openai", "demonroute"]
 
 
 def get_tts_providers() -> list[str]:

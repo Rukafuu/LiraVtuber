@@ -25,6 +25,7 @@ Providers selecionaveis:
 - `openrouter`
 - `openai`
 - `cerebras`
+- `demonroute`
 
 ## STT
 

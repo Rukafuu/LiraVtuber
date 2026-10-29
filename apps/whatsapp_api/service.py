@@ -7,6 +7,7 @@ import os
 import re
 
 from lira_core.config.config_loader import CONFIG
+from lira_core.providers.demonroute_provider import DemonRouteProvider
 from src.core.prompt_builder import build_gui_system_prompt
 from src.modules import vip_manager
 from src.modules.automod import lira_automod
@@ -44,6 +45,9 @@ def _resolve_whatsapp_llm() -> tuple[str, str, float]:
     elif provider == "openrouter":
         if not model:
             model = "openrouter/free"
+    elif provider == "demonroute":
+        if not model:
+            model = DemonRouteProvider.DEFAULT_CHAT_MODEL
     else:
         model = model or prov_cfg.get("modelo_chat") or "gemini-2.5-flash"
     temp = float(chat_cfg.get("LLM_TEMPERATURE") or CONFIG.get("LLM_TEMPERATURE", 0.85))

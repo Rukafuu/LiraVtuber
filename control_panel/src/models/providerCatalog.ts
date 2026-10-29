@@ -15,7 +15,7 @@ export interface VoiceSpec {
   pitchMode?: string;
 }
 
-export const LLM_PROVIDERS = ["groq", "google_cloud", "cerebras", "openrouter", "openai"];
+export const LLM_PROVIDERS = ["groq", "google_cloud", "cerebras", "openrouter", "openai", "demonroute"];
 export const TTS_PROVIDERS = ["elevenlabs", "google", "azure", "openai", "edge"];
 
 export const MODEL_CATALOG: ModelSpec[] = [
@@ -63,7 +63,16 @@ export const MODEL_CATALOG: ModelSpec[] = [
   { id: "x-ai/grok-4", label: "Grok 4", provider: "openrouter", supportsVision: true },
   { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6", provider: "openrouter", supportsVision: false },
   { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", provider: "openrouter", supportsVision: false },
-  { id: "meta-llama/llama-4-scout", label: "Llama 4 Scout", provider: "openrouter", supportsVision: true }
+  { id: "meta-llama/llama-4-scout", label: "Llama 4 Scout", provider: "openrouter", supportsVision: true },
+
+  // DemonRoute
+  { id: "TheDrummer/Cydonia-24B-v4.1", label: "Cydonia 24B v4.1", provider: "demonroute", supportsVision: false },
+  { id: "knifeayumu/Cydonia-v4.1-MS3.2-Magnum-Diamond-24B", label: "Cydonia Magnum Diamond 24B", provider: "demonroute", supportsVision: false },
+  { id: "TheDrummer/Artemis-31B-v1.2", label: "Artemis 31B v1.2", provider: "demonroute", supportsVision: false },
+  { id: "DavidAU/Rocinante-X-12B-v1-Heretic-Uncensored", label: "Rocinante X 12B Heretic", provider: "demonroute", supportsVision: false },
+  { id: "0xA50C1A1/MN-12B-Nymphaea-RP", label: "Nymphaea RP 12B", provider: "demonroute", supportsVision: false },
+  { id: "NousResearch/Hermes-3-Llama-3.1-8B", label: "Hermes 3 Llama 3.1 8B", provider: "demonroute", supportsVision: false },
+  { id: "mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated", label: "Llama 3.1 8B Abliterated", provider: "demonroute", supportsVision: false }
 ];
 
 export const VOICE_CATALOG: VoiceSpec[] = [

@@ -42,6 +42,10 @@ class ProviderSelector:
                 from lira_core.providers.openrouter_provider import OpenRouterProvider
 
                 self.instancias[prov] = OpenRouterProvider()
+            elif prov == "demonroute":
+                from lira_core.providers.demonroute_provider import DemonRouteProvider
+
+                self.instancias[prov] = DemonRouteProvider()
             elif prov == "claude":
                 from lira_core.providers.claude_provider import ClaudeProvider
 

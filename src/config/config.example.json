@@ -23,6 +23,11 @@
             "modelo_chat": "openrouter/owl-alpha",
             "modelo_vision": "nvidia/nemotron-3-nano-omni-30B-a3b-reasoning:free"
         },
+        "demonroute": {
+            "modelo": "TheDrummer/Cydonia-24B-v4.1",
+            "modelo_chat": "TheDrummer/Cydonia-24B-v4.1",
+            "modelo_vision": ""
+        },
         "openai": {
             "modelo": "gpt-4.1-mini",
             "modelo_chat": "gpt-4.1-mini",
